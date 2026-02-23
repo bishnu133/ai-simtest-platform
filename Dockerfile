@@ -1,24 +1,40 @@
 FROM python:3.11-slim
 
+# Set environment
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1
+
 WORKDIR /app
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends gcc g++ && \
+    rm -rf /var/lib/apt/lists/*
 
-# Copy project files
+# Copy dependency definition first (Docker layer caching)
 COPY pyproject.toml README.md ./
+
+# Install Python dependencies
+RUN pip install --no-cache-dir .
+
+# Copy source code
 COPY src/ src/
 COPY configs/ configs/
+COPY scripts/ scripts/
 
-# Install package (non-editable for production)
-RUN pip install --no-cache-dir ".[dev]"
+# Re-install to register entry points with source code present
+RUN pip install --no-cache-dir .
 
-# Download NLTK data for Presidio
-RUN python -c "import nltk; nltk.download('punkt')" 2>/dev/null || true
+# Create output directory
+RUN mkdir -p /app/output
 
+# Expose API port
 EXPOSE 8000
 
-# Default: run the API server
-CMD ["simtest", "serve"]
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import httpx; r = httpx.get('http://localhost:8000/health'); r.raise_for_status()" || exit 1
+
+# Default command: start API server
+CMD ["simtest", "serve", "--host", "0.0.0.0", "--port", "8000"]
