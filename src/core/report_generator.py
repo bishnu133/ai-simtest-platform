@@ -5,7 +5,7 @@ Report Generator - Creates comprehensive simulation test reports.
 from __future__ import annotations
 
 from datetime import datetime
-
+from src.core.semantic_clustering import SemanticFailureClusterer, FailureMessage
 from src.core.logging import get_logger
 from src.models import (
     FailurePattern,
@@ -103,60 +103,43 @@ class ReportGenerator:
     def _find_failure_patterns(
         self, judged: list[JudgedConversation]
     ) -> list[FailurePattern]:
-        """Identify recurring failure patterns with semantic deduplication."""
-        # Collect all failure messages with their conversation IDs
-        raw_issues: list[tuple[str, str]] = []  # (issue_text, conversation_id)
-        for jc in judged:
-            for fm in jc.failure_modes:
-                raw_issues.append((fm, jc.conversation.id))
+        """Identify recurring failure patterns using Sentence-BERT semantic clustering.
 
-        if not raw_issues:
+        Groups similar failure messages by meaning (not just shared words).
+        Falls back to Jaccard word-overlap if Sentence-BERT is unavailable.
+
+        Example improvement over Jaccard:
+          "Bot hallucinated a return policy" + "Made up fake refund rules"
+          → Jaccard: SEPARATE clusters (different words)
+          → Semantic: SAME cluster (same meaning) ✓
+        """
+        # Collect all failure messages with metadata
+        failure_messages: list[FailureMessage] = []
+        for jc in judged:
+            conv_id = jc.conversation.id
+            for fm in jc.failure_modes:
+                failure_messages.append(FailureMessage(
+                    message=fm,
+                    conversation_id=conv_id,
+                ))
+
+        if not failure_messages:
             return []
 
-        # Group similar issues together using simple word-overlap similarity
-        groups: list[dict] = []  # [{canonical, issues, conv_ids}]
+        # Cluster using semantic similarity (auto-falls back to Jaccard)
+        clusterer = SemanticFailureClusterer(similarity_threshold=0.65)
+        clusters = clusterer.cluster_failures(failure_messages)
 
-        for issue_text, conv_id in raw_issues:
-            matched = False
-            issue_words = set(issue_text.lower().split())
-
-            for group in groups:
-                canonical_words = set(group["canonical"].lower().split())
-                # Jaccard similarity
-                if not canonical_words or not issue_words:
-                    continue
-                intersection = canonical_words & issue_words
-                union = canonical_words | issue_words
-                similarity = len(intersection) / len(union) if union else 0
-
-                if similarity > 0.5:  # Similar enough to group together
-                    group["count"] += 1
-                    group["conv_ids"].add(conv_id)
-                    # Keep the longer description as canonical
-                    if len(issue_text) > len(group["canonical"]):
-                        group["canonical"] = issue_text
-                    matched = True
-                    break
-
-            if not matched:
-                groups.append({
-                    "canonical": issue_text,
-                    "count": 1,
-                    "conv_ids": {conv_id},
-                })
-
-        # Sort by frequency and build patterns
-        groups.sort(key=lambda g: g["count"], reverse=True)
-
+        # Convert clusters to FailurePattern models (top 10)
         patterns = []
-        for group in groups[:10]:
-            freq = group["count"]
+        for cluster in clusters[:10]:
+            freq = cluster.count
             patterns.append(FailurePattern(
-                pattern_name=group["canonical"][:80],
-                description=group["canonical"],
+                pattern_name=cluster.representative[:80],
+                description=cluster.representative,
                 frequency=freq,
                 severity=Severity.HIGH if freq > len(judged) * 0.2 else Severity.MEDIUM,
-                example_conversation_ids=list(group["conv_ids"])[:3],
+                example_conversation_ids=cluster.conversation_ids[:3],
             ))
 
         return patterns

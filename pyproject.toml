@@ -4,22 +4,32 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ai-simtest"
-version = "0.1.0"
-description = "Open-source AI simulation testing platform - Test your chatbots with 100+ personas in minutes"
+version = "0.2.0"
+description = "Open-source AI simulation testing platform — Test your chatbots with 100+ personas in minutes"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
 authors = [
-    { name = "AI SimTest Contributors" }
+    { name = "Bishnu Prasad Panda" }
 ]
-keywords = ["ai", "testing", "chatbot", "simulation", "qa", "llm", "evaluation"]
+keywords = [
+    "ai", "testing", "chatbot", "simulation", "qa", "llm",
+    "evaluation", "personas", "guardrails", "bot-testing",
+    "conversation-testing", "ai-safety", "prompt-testing"
+]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Software Development :: Testing",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Framework :: FastAPI",
+    "Typing :: Typed",
 ]
 
 dependencies = [
@@ -37,30 +47,21 @@ dependencies = [
     "sentence-transformers>=2.3.0",
     "presidio-analyzer>=2.2.0",
     "presidio-anonymizer>=2.2.0",
-    "detoxify>=0.5.2",
+    "detoxify>=0.5.0",
 
-    # Database
-    "sqlalchemy[asyncio]>=2.0.25",
-    "asyncpg>=0.29.0",
-    "alembic>=1.13.0",
-    "aiosqlite>=0.19.0",
+    # NLP (required by presidio)
+    "spacy>=3.7.0",
 
-    # Cache
-    "redis>=5.0.0",
+    # CLI & output
+    "click>=8.1.0",
+    "rich>=13.7.0",
 
-    # Task queue
-    "celery[redis]>=5.3.0",
+    # Logging
+    "structlog>=24.1.0",
 
     # Utilities
-    "structlog>=24.1.0",
-    "rich>=13.7.0",
-    "click>=8.1.0",
     "python-dotenv>=1.0.0",
-    "tenacity>=8.2.0",
     "jinja2>=3.1.0",
-
-    # Data export
-    "pandas>=2.2.0",
 ]
 
 [project.optional-dependencies]
@@ -70,33 +71,37 @@ dev = [
     "pytest-cov>=4.1.0",
     "ruff>=0.2.0",
     "mypy>=1.8.0",
-    "pre-commit>=3.6.0",
-]
-docs = [
-    "PyPDF2>=3.0.0",
-    "python-docx>=1.1.0",
-]
-ui = [
-    "streamlit>=1.31.0",
-    "plotly>=5.18.0",
-]
-all = [
-    "ai-simtest[docs,ui,dev]",
 ]
 
 [project.scripts]
 simtest = "src.cli:main"
 
+[project.urls]
+Homepage = "https://github.com/bishnu133/ai-simtest"
+Repository = "https://github.com/bishnu133/ai-simtest"
+Issues = "https://github.com/bishnu133/ai-simtest/issues"
+Documentation = "https://github.com/bishnu133/ai-simtest#readme"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src"]
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests requiring external services",
+]
+
 [tool.ruff]
 target-version = "py311"
-line-length = 100
+line-length = 120
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "W", "UP"]
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]
 
-[tool.pytest.ini_options]
-asyncio_mode = "auto"
-testpaths = ["tests"]
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true

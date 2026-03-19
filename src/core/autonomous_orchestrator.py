@@ -111,6 +111,7 @@ class AutonomousOrchestrator:
         num_personas: int | None = None,
         max_turns: int | None = None,
         min_turns: int = 1,
+        max_parallel: int = 3,
     ):
         self.bot_endpoint = bot_endpoint
         self.doc_dir = doc_dir
@@ -124,6 +125,7 @@ class AutonomousOrchestrator:
         self.num_personas = num_personas
         self.max_turns = max_turns
         self.min_turns = min_turns
+        self.max_parallel = max_parallel
 
         # Gate setup
         if gate:
