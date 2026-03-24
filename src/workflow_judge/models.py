@@ -1,15 +1,25 @@
 """
-Functional / Workflow Judge Models v2 — With review improvements.
+Functional / Workflow Judge Models v3 — Production-grade workflow evaluation.
 
-V2 additions: Severity enum, MatchType, ConditionStatus, OrderMode,
-EvaluationMode, activation_hints, TurnViolation, critical_failure fields,
-weight normalization, workflow applicability.
+V3 additions over v2:
+- WorkflowStatus enum (PASSED/FAILED/SKIPPED_NOT_APPLICABLE/NEEDS_REVIEW)
+- ScoreBreakdown model (full mathematical trace of scoring)
+- StepEvidence model (turn-grounded step detection proof)
+- BotTurn dataclass (indexed bot message for evaluation)
+- FailureCategory enum (classify workflow failures)
+- Applicability enforcement fields (skip_if_not_applicable, confidence, reason)
+- Needs-review threshold and per-component confidence
+- Placeholder adjudication fields (reviewer_verdict, reviewer_notes)
+- Efficiency score (resolution quality)
 """
 from __future__ import annotations
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
+
+# ─── Enums ────────────────────────────────────────────────────────────────────
 
 class WorkflowStepStatus(str, Enum):
     COMPLETED = "completed"
@@ -53,6 +63,75 @@ class HardRuleType(str, Enum):
     MUST_ESCALATE = "must_escalate"
     MUST_NOT_ESCALATE = "must_not_escalate"
 
+# V3: Workflow-level status (replaces bare boolean `passed`)
+class WorkflowStatus(str, Enum):
+    PASSED = "passed"
+    FAILED = "failed"
+    SKIPPED_NOT_APPLICABLE = "skipped_not_applicable"
+    NEEDS_REVIEW = "needs_review"
+
+# V3: Failure taxonomy — classifies *why* a workflow failed
+class FailureCategory(str, Enum):
+    MISSED_STEP = "missed_step"
+    UNSAFE_DATA_COLLECTION = "unsafe_data_collection"
+    PREMATURE_RESOLUTION = "premature_resolution"
+    WRONG_ORDER = "wrong_order"
+    VAGUE_HANDOFF = "vague_handoff"
+    RULE_VIOLATION = "rule_violation"
+    INCOMPLETE_GUIDANCE = "incomplete_guidance"
+    ESCALATION_FAILURE = "escalation_failure"
+
+# V3: How a step was matched
+class StepMatchMethod(str, Enum):
+    LLM = "llm"
+    KEYWORD = "keyword"
+    RULE = "rule"
+    HYBRID = "hybrid"
+    UNMATCHED = "unmatched"
+
+# V3: Topic evaluation mode for hard rules
+class TopicEvalMode(str, Enum):
+    KEYWORD = "keyword"
+    SEMANTIC = "semantic"
+
+
+# ─── V3: Turn-level data structures ──────────────────────────────────────────
+
+@dataclass
+class BotTurn:
+    """Indexed bot message preserving original conversation position."""
+    turn_index: int       # Position in the full conversation (0-based)
+    message: str          # Bot's response text
+
+
+class StepEvidence(BaseModel):
+    """V3: Turn-grounded proof of step detection."""
+    first_detected_turn: int = Field(default=-1, description="Turn index where step was first detected (-1 = not detected)")
+    matched_by: str = Field(default="unmatched", description="How the step was matched: llm, keyword, rule, hybrid, unmatched")
+    matched_evidence: str = Field(default="", description="Exact quote or description from the bot turn")
+
+
+# ─── V3: Score transparency ──────────────────────────────────────────────────
+
+class ScoreBreakdown(BaseModel):
+    """V3: Full mathematical trace of how the final score was computed."""
+    raw_step_score: float = Field(default=0.0)
+    raw_rule_score: float = Field(default=0.0)
+    raw_condition_score: float = Field(default=0.0)
+    normalized_weights: List[float] = Field(default_factory=lambda: [0.5, 0.3, 0.2],
+                                            description="[step_weight, rule_weight, condition_weight] after normalization")
+    weighted_score: float = Field(default=0.0, description="step*sw + rule*rw + condition*cw before penalties")
+    order_score: float = Field(default=1.0)
+    order_penalty_applied: float = Field(default=0.0, description="Multiplier reduction from order penalty (0.0 = no penalty)")
+    post_order_score: float = Field(default=0.0, description="Score after order penalty")
+    critical_cap_applied: bool = Field(default=False)
+    critical_cap_score: float = Field(default=0.0, description="Score after critical cap (if applied)")
+    final_score: float = Field(default=0.0)
+    pass_threshold: float = Field(default=0.7)
+    threshold_met: bool = Field(default=False)
+
+
+# ─── Core models (updated from v2) ───────────────────────────────────────────
 
 class WorkflowStep(BaseModel):
     id: str = Field(..., description="Unique step identifier")
@@ -74,6 +153,8 @@ class HardRule(BaseModel):
     case_sensitive: bool = Field(default=False)
     match_type: str = Field(default="phrase", description="phrase, whole_word, or regex")
     description: str = Field(default="")
+    # V3: optional semantic topic evaluation mode
+    topic_eval_mode: str = Field(default="keyword", description="keyword or semantic (for topic rules)")
     model_config = {"extra": "allow"}
 
     @property
@@ -85,6 +166,11 @@ class HardRule(BaseModel):
     def match_type_enum(self) -> MatchType:
         try: return MatchType(self.match_type.lower())
         except ValueError: return MatchType.PHRASE
+
+    @property
+    def topic_eval_mode_enum(self) -> TopicEvalMode:
+        try: return TopicEvalMode(self.topic_eval_mode.lower())
+        except ValueError: return TopicEvalMode.KEYWORD
 
 
 class SuccessCondition(BaseModel):
@@ -111,6 +197,10 @@ class WorkflowDefinition(BaseModel):
     activation_hints: List[str] = Field(default_factory=list, description="Keywords for applicability check")
     tags: List[str] = Field(default_factory=list)
     metadata: Dict[str, Any] = Field(default_factory=dict)
+    # V3: Applicability enforcement
+    skip_if_not_applicable: bool = Field(default=True, description="Skip evaluation when workflow doesn't match conversation")
+    # V3: Needs-review threshold
+    needs_review_threshold: float = Field(default=0.5, description="Below this confidence → NEEDS_REVIEW status")
     model_config = {"extra": "allow"}
 
     @property
@@ -136,6 +226,21 @@ class WorkflowDefinition(BaseModel):
         text_lower = conversation_text.lower()
         return any(h.lower() in text_lower for h in self.activation_hints)
 
+    def applicability_detail(self, conversation_text: str) -> tuple:
+        """V3: Return (applicable: bool, confidence: float, reason: str, matched_hints: list)."""
+        if not self.activation_hints:
+            return True, 1.0, "No activation hints defined — applies to all conversations", []
+        text_lower = conversation_text.lower()
+        matched = [h for h in self.activation_hints if h.lower() in text_lower]
+        total = len(self.activation_hints)
+        confidence = len(matched) / total if total > 0 else 0.0
+        applicable = len(matched) > 0
+        if applicable:
+            reason = f"Matched {len(matched)}/{total} activation hints: {matched}"
+        else:
+            reason = f"No activation hints matched (checked: {self.activation_hints})"
+        return applicable, round(confidence, 4), reason, matched
+
 
 class StepResult(BaseModel):
     step_id: str
@@ -144,6 +249,8 @@ class StepResult(BaseModel):
     confidence: float = Field(default=0.0)
     evidence: str = Field(default="")
     required: bool = Field(default=True)
+    # V3: Turn-grounded evidence
+    evidence_detail: Optional[StepEvidence] = Field(default=None)
 
 
 class TurnViolation(BaseModel):
@@ -181,7 +288,9 @@ class WorkflowResult(BaseModel):
     workflow_id: str = Field(default="")
     workflow_name: str = Field(default="")
     domain: str = Field(default="")
+    # V3: status enum replaces bare boolean (passed kept for backward compat)
     passed: bool = Field(default=False)
+    status: str = Field(default="failed", description="passed, failed, skipped_not_applicable, needs_review")
     score: float = Field(default=0.0)
     severity: str = Field(default="medium")
     step_score: float = Field(default=0.0)
@@ -204,15 +313,35 @@ class WorkflowResult(BaseModel):
     conversation_id: str = Field(default="")
     persona_name: str = Field(default="")
     total_turns: int = Field(default=0)
+    # V3: Score transparency
+    score_breakdown: Optional[ScoreBreakdown] = Field(default=None)
+    # V3: Applicability detail
+    applicability_confidence: float = Field(default=1.0)
+    applicability_reason: str = Field(default="")
+    # V3: Per-component confidence
+    step_confidence: float = Field(default=0.0)
+    rule_confidence: float = Field(default=1.0, description="Always 1.0 for deterministic rules")
+    condition_confidence: float = Field(default=0.0)
+    # V3: Failure taxonomy
+    failure_categories: List[str] = Field(default_factory=list, description="List of FailureCategory values")
+    # V3: Efficiency
+    efficiency_score: float = Field(default=0.0, description="required_steps_completed / total_turns")
+    # V3: Placeholder adjudication fields (for future human review)
+    reviewer_verdict: Optional[str] = Field(default=None, description="Human reviewer override: passed/failed/needs_more_info")
+    reviewer_notes: Optional[str] = Field(default=None, description="Human reviewer notes")
 
     def to_summary_dict(self) -> Dict[str, Any]:
         return {
             "workflow": self.workflow_name, "domain": self.domain,
-            "passed": self.passed, "score": round(self.score, 3),
+            "passed": self.passed, "status": self.status,
+            "score": round(self.score, 3),
             "step_score": round(self.step_score, 3), "rule_score": round(self.rule_score, 3),
             "condition_score": round(self.condition_score, 3), "order_score": round(self.order_score, 3),
             "completed_steps": self.completed_steps, "missed_steps": self.missed_steps,
             "violations": self.violations, "reasoning": self.reasoning,
             "evaluation_mode": self.evaluation_mode, "critical_failure": self.critical_failure,
-            "critical_failures_count": self.critical_failures_count, "workflow_applicable": self.workflow_applicable,
+            "critical_failures_count": self.critical_failures_count,
+            "workflow_applicable": self.workflow_applicable,
+            "failure_categories": self.failure_categories,
+            "efficiency_score": round(self.efficiency_score, 3),
         }

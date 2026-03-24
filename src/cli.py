@@ -67,6 +67,8 @@ def main():
 @click.option("--min-coverage", default=None, type=float, help="Minimum coverage score (0.0-1.0). Fails run if coverage below threshold (CI/CD gate).")
 @click.option("--tag", "run_tags", multiple=True, default=(), help="Tag this run with key=value metadata (repeatable, e.g. --tag env=staging --tag sprint=24)")
 @click.option("--policy", default=None, help="Policy to evaluate: built-in name (general, healthcare, finance, airline) or path to YAML file. Use 'simtest policies' to list.")
+@click.option("--policy-mode", "policy_mode", default=None, type=click.Choice(["critical_only", "strict", "severity_aware", "weighted", "threshold", "soft"]), help="Override the policy gate mode (default: use mode from policy file)")
+@click.option("--policy-strict", is_flag=True, default=False, help="Fail on unknown judge names in policy validation")
 @click.option("--workflow", default=None, help="Workflow judge: comma-separated built-in names or YAML paths. Use 'all' for all built-ins, or 'simtest workflows' to list. Default: auto-detect applicable workflows.")
 @click.option("--no-workflow", is_flag=True, default=False, help="Disable workflow evaluation entirely.")
 @click.option("--expand-failures", is_flag=True, default=False, help="Enable adaptive expansion: auto-generate failure variations and confirm reproducibility")
@@ -84,6 +86,13 @@ def main():
 @click.option("--filter-max-turns", default=None, type=int, help="Skip imported conversations with more turns than this")
 @click.option("--contains", "filter_contains", default=None, help="Only evaluate imported conversations containing this text")
 @click.option("--min-conversations-for-gate", default=1, type=int, help="Minimum conversations before CI/CD gates are enforced (default: 1)")
+@click.option("--signature/--no-signature", default=True, help="Enable/disable behavioral signature analysis (default: enabled)")
+@click.option("--rag-eval/--no-rag-eval", default=False, help="Enable RAG/Tool evaluation on bot responses (evaluates retrieval accuracy, tool usage, citation quality)")
+@click.option("--eval-speed", "rag_eval_speed", type=click.Choice(["deterministic", "fast", "standard", "full"]), default="standard", help="RAG eval speed: deterministic (free) | fast | standard | full (all metrics)")
+@click.option("--rag-threshold", type=float, default=0.7, help="RAG/Tool evaluation pass threshold (0.0-1.0, default 0.7)")
+@click.option("--rag-gate", type=float, default=None, help="CI/CD gate: exit code 1 if RAG overall score below this value")
+@click.option("--tool-defs", type=click.Path(exists=True), default=None, help="Path to tool definitions JSON/YAML for tool metric validation (schema: [{name, required_params, ...}])")
+@click.option("--rag-demo", default=None, help="Run RAG eval on a built-in demo pack instead of simulation (faq_rag, finance_tools, healthcare_citations, failure_injection)")
 def run(
     bot_endpoint: str,
     bot_api_key: str | None,
@@ -117,6 +126,8 @@ def run(
     min_coverage: float | None,
     run_tags: tuple[str, ...],
     policy: str | None,
+    policy_mode: str | None,
+    policy_strict: bool,
     workflow: str | None,
     no_workflow: bool,
     expand_failures: bool,
@@ -134,6 +145,13 @@ def run(
     filter_max_turns: int | None,
     filter_contains: str | None,
     min_conversations_for_gate: int,
+    signature: bool,
+    rag_eval: bool,
+    rag_eval_speed: str,
+    rag_threshold: float,
+    rag_gate: float | None,
+    tool_defs: str | None,
+    rag_demo: str | None,
 ):
     """Run a simulation test against your AI chatbot."""
     from src.core.logging import setup_logging
@@ -143,6 +161,73 @@ def run(
         "[bold blue]AI SimTest[/] - Simulation Testing Platform",
         subtitle="v0.2.0",
     ))
+
+    # ── RAG Demo Mode (--rag-demo) ──────────────────────────────
+    if rag_demo:
+        try:
+            import asyncio as _aio
+            from src.rag_eval.demo_packs import load_demo_pack, list_demo_packs
+            from src.rag_eval.engine import RAGEvalEngine, RAGEvalReport
+            from src.rag_eval.models import RAGEvalConfig, EvalSpeed
+            from src.rag_eval.tool_metrics import ToolDefinition
+            from src.rag_eval.rag_eval_html import inject_rag_eval_into_report
+
+            speed_map = {
+                "deterministic": EvalSpeed.DETERMINISTIC,
+                "fast": EvalSpeed.FAST,
+                "standard": EvalSpeed.STANDARD,
+                "full": EvalSpeed.FULL,
+            }
+
+            console.print(f"\n  🔬 [bold]RAG/Tool Demo Pack[/]: {rag_demo}")
+            convs, ctx_doc, raw_tool_defs = load_demo_pack(rag_demo)
+            console.print(f"    Loaded {len(convs)} test conversations")
+
+            tdefs = [ToolDefinition.from_dict(d) for d in raw_tool_defs]
+            config = RAGEvalConfig(
+                eval_speed=speed_map.get(rag_eval_speed, EvalSpeed.STANDARD),
+                default_rag_threshold=rag_threshold,
+                default_tool_threshold=rag_threshold,
+                fail_if_below=rag_gate,
+            )
+            engine = RAGEvalEngine(config, tool_definitions=tdefs)
+
+            async def _run_demo():
+                return await engine.evaluate_conversations(convs, ctx_doc)
+
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(lambda: _aio.run(_run_demo()))
+                rag_report = future.result()
+
+            _print_rag_eval_report(rag_report)
+
+            # Export
+            out_path = Path(output)
+            out_path.mkdir(parents=True, exist_ok=True)
+            saved = RAGEvalEngine.save_report(rag_report, str(out_path))
+            console.print(f"\n  📁 RAG eval report saved: [bold]{saved}[/]")
+
+            # CI/CD gate
+            if rag_gate is not None and not rag_report.gate_passed:
+                console.print(f"\n  [bold red]❌ RAG GATE FAILED:[/] Overall score {rag_report.overall_score:.3f} < {rag_gate}")
+                import sys
+                sys.exit(1)
+
+            return  # Demo mode exits here — no simulation
+
+        except ValueError as ve:
+            console.print(f"[red]❌ {ve}[/]")
+            packs = list_demo_packs()
+            console.print("\nAvailable demo packs:")
+            for p in packs:
+                console.print(f"  • [bold]{p['name']}[/] — {p['description']} ({p['cases']} cases)")
+            return
+        except Exception as e:
+            console.print(f"[red]❌ RAG demo error: {e}[/]")
+            import traceback
+            console.print(f"[dim]{traceback.format_exc()[-400:]}[/]")
+            return
 
     # ── Conversation Replay (--input) ───────────────────────────
     # If --input provided, load and evaluate real conversations.
@@ -346,6 +431,12 @@ def run(
             expand_failures=expand_failures,
             expand_variants=expand_variants,
             expand_top=expand_top,
+            signature=signature,
+            rag_eval=rag_eval,
+            rag_eval_speed=rag_eval_speed,
+            rag_threshold=rag_threshold,
+            rag_gate=rag_gate,
+            tool_defs=tool_defs,
         ))
         return
 
@@ -390,6 +481,13 @@ def run(
             expand_failures=expand_failures,
             expand_variants=expand_variants,
             expand_top=expand_top,
+            signature=signature,
+            rag_eval=rag_eval,
+            rag_eval_speed=rag_eval_speed,
+            rag_threshold=rag_threshold,
+            rag_gate=rag_gate,
+            tool_defs=tool_defs,
+            documentation=documentation,
         ))
         return
 
@@ -545,11 +643,19 @@ def run(
         stress_enabled=stress_memory,
         run_tags=run_tags,
         policy=policy,
+        policy_mode=policy_mode,
+        policy_strict=policy_strict,
         workflow=workflow,
         no_workflow=no_workflow,
         expand_failures=expand_failures,
         expand_variants=expand_variants,
         expand_top=expand_top,
+        signature=signature,
+        rag_eval=rag_eval,
+        rag_eval_speed=rag_eval_speed,
+        rag_threshold=rag_threshold,
+        rag_gate=rag_gate,
+        tool_defs=tool_defs,
     ))
 
 
@@ -577,6 +683,13 @@ async def _run_partial_autonomous(
     expand_failures: bool = False,
     expand_variants: int = 5,
     expand_top: int = 5,
+    signature: bool = True,
+    rag_eval: bool = False,
+    rag_eval_speed: str = "standard",
+    rag_threshold: float = 0.7,
+    rag_gate: float | None = None,
+    tool_defs: str | None = None,
+    documentation: str = "",
 ):
     """Run the partial autonomous pipeline."""
     from src.core.autonomous_orchestrator import AutonomousOrchestrator
@@ -653,6 +766,9 @@ async def _run_partial_autonomous(
                 run_fingerprint=fp,
                 tags_dict={"mode": "partial"},
                 mode_label="partial",
+                policy=policy,
+                policy_mode=policy_mode,
+                policy_strict=policy_strict,
                 workflow=workflow,
                 no_workflow=no_workflow,
                 expand_failures=expand_failures,
@@ -661,6 +777,13 @@ async def _run_partial_autonomous(
                 bot_endpoint=bot_endpoint,
                 bot_api_key=bot_api_key,
                 bot_format=bot_format or "openai",
+                signature=signature,
+                rag_eval=rag_eval,
+                rag_eval_speed=rag_eval_speed,
+                rag_threshold=rag_threshold,
+                rag_gate=rag_gate,
+                tool_defs=tool_defs,
+                documentation=documentation,
             )
             console.print(f"\n  📁 Results exported to: [bold]{output_dir}[/]")
 
@@ -688,6 +811,12 @@ async def _run_full_autonomous(
     expand_failures: bool = False,
     expand_variants: int = 5,
     expand_top: int = 5,
+    signature: bool = True,
+    rag_eval: bool = False,
+    rag_eval_speed: str = "standard",
+    rag_threshold: float = 0.7,
+    rag_gate: float | None = None,
+    tool_defs: str | None = None,
 ):
     """Run the fully autonomous pipeline: discovery → approval → partial pipeline."""
     from src.core.llm_client import LLMClientFactory
@@ -826,6 +955,9 @@ async def _run_full_autonomous(
                     run_fingerprint=fp,
                     tags_dict={"mode": "auto"},
                     mode_label="auto",
+                    policy=policy,
+                    policy_mode=policy_mode,
+                    policy_strict=policy_strict,
                     workflow=workflow,
                     no_workflow=no_workflow,
                     expand_failures=expand_failures,
@@ -834,6 +966,12 @@ async def _run_full_autonomous(
                     bot_endpoint=bot_endpoint,
                     bot_api_key=bot_api_key,
                     bot_format=bot_format or "openai",
+                    signature=signature,
+                    rag_eval=rag_eval,
+                    rag_eval_speed=rag_eval_speed,
+                    rag_threshold=rag_threshold,
+                    rag_gate=rag_gate,
+                    tool_defs=tool_defs,
                 )
                 console.print(f"\n  📁 Results exported to: [bold]{output_dir}[/]")
             else:
@@ -863,10 +1001,14 @@ async def _run_full_autonomous(
             )
         except (ImportError, Exception):
             pass
-        _print_auto_result(result, output_dir, run_fingerprint=_auto_fp, workflow=workflow, no_workflow=no_workflow)
+        _print_auto_result(result, output_dir, run_fingerprint=_auto_fp, workflow=workflow, no_workflow=no_workflow,
+                           signature=signature, rag_eval=rag_eval, rag_eval_speed=rag_eval_speed,
+                           rag_threshold=rag_threshold, rag_gate=rag_gate, tool_defs=tool_defs)
 
 
-def _print_auto_result(result, output_dir: str, run_fingerprint=None, workflow: str | None = None, no_workflow: bool = False):
+def _print_auto_result(result, output_dir: str, run_fingerprint=None, workflow: str | None = None, no_workflow: bool = False,
+                        signature: bool = True, rag_eval: bool = False, rag_eval_speed: str = "standard",
+                        rag_threshold: float = 0.7, rag_gate: float | None = None, tool_defs: str | None = None):
     """Display the fully autonomous mode results."""
     console.print("\n" + "=" * 60)
     console.print("[bold magenta]🤖 Fully Autonomous Mode Results[/]")
@@ -929,8 +1071,17 @@ def _print_auto_result(result, output_dir: str, run_fingerprint=None, workflow: 
                 run_fingerprint=run_fingerprint,
                 tags_dict={"mode": "auto"},
                 mode_label="auto",
+                policy=policy,
+                policy_mode=policy_mode,
+                policy_strict=policy_strict,
                 workflow=workflow,
                 no_workflow=no_workflow,
+                signature=signature,
+                rag_eval=rag_eval,
+                rag_eval_speed=rag_eval_speed,
+                rag_threshold=rag_threshold,
+                rag_gate=rag_gate,
+                tool_defs=tool_defs,
             )
         elif sim_result and hasattr(sim_result, "aborted") and sim_result.aborted:
             console.print(f"[yellow]  Pipeline was aborted: {sim_result.abort_reason}[/]")
@@ -1081,6 +1232,8 @@ def _post_simulation_analysis(
     tags_dict: dict[str, str] | None = None,
     mode_label: str = "manual",
     policy: str | None = None,
+    policy_mode: str | None = None,
+    policy_strict: bool = False,
     workflow: str | None = None,
     no_workflow: bool = False,
     expand_failures: bool = False,
@@ -1089,9 +1242,16 @@ def _post_simulation_analysis(
     bot_endpoint: str = "",
     bot_api_key: str | None = None,
     bot_format: str = "openai",
+    signature: bool = True,
+    rag_eval: bool = False,
+    rag_eval_speed: str = "standard",
+    rag_threshold: float = 0.7,
+    rag_gate: float | None = None,
+    tool_defs: str | None = None,
+    documentation: str = "",
 ):
     """
-    Run post-simulation analysis — coverage, versioning, compliance, workflow, and history.
+    Run post-simulation analysis — coverage, versioning, compliance, workflow, expansion, RAG/tool eval, and signature.
 
     Called from all 3 modes (manual, partial, auto) to ensure
     consistent outputs regardless of execution path.
@@ -1179,6 +1339,30 @@ def _post_simulation_analysis(
         except Exception:
             pass
 
+        # ── Inject workflow coverage as 5th dimension ─────────
+        try:
+            from src.coverage.workflow_coverage import (
+                load_workflow_coverage_from_exports,
+                inject_workflow_coverage_into_report,
+            )
+            wf_coverage = load_workflow_coverage_from_exports(output_dir)
+            if wf_coverage:
+                inject_workflow_coverage_into_report(coverage_report, wf_coverage)
+                console.print(
+                    f"  📊 Workflow coverage: {wf_coverage.score:.0%} ({wf_coverage.steps_exercised}/{wf_coverage.total_steps_defined} steps exercised)")
+
+                # Update coverage.json with workflow dimension
+                try:
+                    coverage_path = Path(output_dir) / "coverage.json"
+                    with open(coverage_path, "w") as f:
+                        coverage_dict = coverage_report.to_dict()
+                        coverage_dict["workflow_coverage"] = wf_coverage.to_dict()
+                        json.dump(coverage_dict, f, indent=2)
+                except Exception:
+                    pass
+        except Exception as _wfc_err:
+            pass  # Silently skip — workflow coverage is optional
+
         if min_coverage is not None:
             if coverage_report.overall_coverage < min_coverage:
                 console.print(
@@ -1196,10 +1380,10 @@ def _post_simulation_analysis(
     except Exception as e:
         console.print(f"\n  [dim]Coverage analysis skipped: {e}[/]")
 
-    # ── Policy-as-Code compliance ─────────────────────────────
+    # ── Policy-as-Code compliance (v2 — evidence-aware) ───────
     if policy:
         try:
-            from src.policy import PolicyEngine, PolicyLoader
+            from src.policy import PolicyEngine, PolicyLoader, ComplianceGateMode
 
             # Load policy set: YAML file or built-in name
             policy_path = Path(policy)
@@ -1211,7 +1395,20 @@ def _post_simulation_analysis(
                     console.print(f"  [red]⚠ Unknown policy: '{policy}'. Use 'simtest policies' to list available.[/]")
                     return
 
-            # Build report_data dict from SimulationReport
+            # CLI override: gate mode
+            if policy_mode:
+                try:
+                    policy_set.mode = ComplianceGateMode(policy_mode)
+                except ValueError:
+                    console.print(f"  [yellow]⚠ Invalid policy mode '{policy_mode}', using default[/]")
+
+            # Validate
+            warnings = PolicyLoader.validate_policy_set(policy_set, strict=policy_strict)
+            if warnings:
+                for w in warnings:
+                    console.print(f"  [yellow]⚠ Policy warning: {w}[/]")
+
+            # Build v2 report_data dict from SimulationReport
             report_data = {}
             if hasattr(report, 'summary'):
                 s = report.summary
@@ -1225,6 +1422,87 @@ def _post_simulation_analysis(
             if hasattr(report, 'score_by_judge'):
                 report_data["score_by_judge"] = dict(report.score_by_judge)
 
+            # v2: Wire judged_conversations for evidence-level evaluation
+            if hasattr(report, 'judged_conversations') and report.judged_conversations:
+                judged_convs = []
+                for jc in report.judged_conversations:
+                    conv = jc.conversation if hasattr(jc, 'conversation') else jc
+                    persona_name = ""
+                    persona_type = ""
+                    if hasattr(jc, 'persona') and jc.persona:
+                        persona_name = jc.persona.name if hasattr(jc.persona, 'name') else str(jc.persona)
+                        persona_type = getattr(jc.persona, 'persona_type', persona_name)
+                    scenario = getattr(jc, 'scenario', '') or ''
+                    source = getattr(jc, 'source', 'synthetic') or 'synthetic'
+                    conv_id = getattr(conv, 'id', '') or persona_name
+
+                    # Build turns list
+                    turns = []
+                    if hasattr(jc, 'judged_turns'):
+                        for idx, jt in enumerate(jc.judged_turns):
+                            turn_data = {
+                                "turn_number": idx + 1,
+                                "bot_response": getattr(jt, 'bot_response', '') or (
+                                    jt.turn.message if hasattr(jt, 'turn') and hasattr(jt.turn, 'message') else ''
+                                ),
+                                "judgments": [],
+                            }
+                            if hasattr(jt, 'judgments'):
+                                for j in jt.judgments:
+                                    turn_data["judgments"].append({
+                                        "judge_name": getattr(j, 'judge_name', ''),
+                                        "score": getattr(j, 'score', 0.0),
+                                        "issues": getattr(j, 'issues', []),
+                                        "label": getattr(j, 'label', ''),
+                                    })
+                            turns.append(turn_data)
+
+                    judged_convs.append({
+                        "conversation_id": conv_id,
+                        "persona_name": persona_name,
+                        "persona_type": persona_type,
+                        "scenario": scenario,
+                        "source": source,
+                        "tags": getattr(jc, 'tags', []) or [],
+                        "workflow": getattr(jc, 'workflow', '') or '',
+                        "judged_turns": turns,
+                    })
+
+                report_data["judged_conversations"] = judged_convs
+
+            # v2: Wire workflow results if available
+            try:
+                import glob as _glob
+                import json as _json_wf
+                for wf_file in _glob.glob(str(Path(output_dir) / "workflow_*.json")):
+                    with open(wf_file) as f:
+                        wf_data = _json_wf.load(f)
+                    if "results" in wf_data:
+                        if "workflow_results" not in report_data:
+                            report_data["workflow_results"] = []
+                        for r in wf_data["results"]:
+                            report_data["workflow_results"].append({
+                                "workflow": wf_data.get("workflow", ""),
+                                "passed": r.get("passed", False),
+                                "score": r.get("score", 0.0),
+                            })
+            except Exception:
+                pass
+
+            # v2: Wire RAG results if available
+            try:
+                import json as _json_rag
+                rag_path = Path(output_dir) / "rag_eval_report.json"
+                if rag_path.exists():
+                    with open(rag_path) as f:
+                        rag_data = _json_rag.load(f)
+                    if "metrics" in rag_data:
+                        report_data["rag_results"] = rag_data["metrics"]
+                    elif "overall_score" in rag_data:
+                        report_data["rag_results"] = {"overall": rag_data["overall_score"]}
+            except Exception:
+                pass
+
             # Evaluate
             engine = PolicyEngine(policy_set)
             scorecard = engine.evaluate(report_data)
@@ -1232,27 +1510,48 @@ def _post_simulation_analysis(
             # Display
             _print_compliance_scorecard(scorecard)
 
-            # Save compliance.json
+            # Save compliance.json (summary)
             try:
                 import json as _json
                 compliance_path = Path(output_dir) / "compliance.json"
                 with open(compliance_path, "w") as f:
                     _json.dump(scorecard.to_summary_dict(), f, indent=2)
                 console.print(f"  📋 Compliance report: {compliance_path}")
+
+                # Also save full evidence export
+                evidence_path = Path(output_dir) / "compliance_evidence.json"
+                with open(evidence_path, "w") as f:
+                    _json.dump(scorecard.to_full_evidence_dict(), f, indent=2)
+                console.print(f"  🔍 Full evidence: {evidence_path}")
             except Exception:
                 pass
 
-            # CI/CD gate: fail if non-compliant (critical violations)
+            # Inject into HTML report
+            try:
+                from src.policy.policy_html import inject_compliance_into_report
+                html_path = exported.get("html") if exported else None
+                if not html_path:
+                    candidate = Path(output_dir) / "report.html"
+                    if candidate.exists():
+                        html_path = str(candidate)
+                if html_path:
+                    if inject_compliance_into_report(scorecard, html_path):
+                        console.print(f"  📊 Compliance section added to HTML report")
+            except Exception:
+                pass
+
+            # CI/CD gate
             if not scorecard.overall_compliant:
                 console.print(
-                    f"\n  [bold red]✗ COMPLIANCE GATE FAILED:[/] "
+                    f"\n  [bold red]✗ COMPLIANCE GATE FAILED ({scorecard.gate_mode} mode):[/] "
                     f"{scorecard.failed_rules} rule(s) failed, "
-                    f"{len(scorecard.critical_violations)} critical violation(s)"
+                    f"{len(scorecard.critical_violations)} critical, "
+                    f"{len(scorecard.high_violations)} high violation(s)"
                 )
                 sys.exit(1)
             else:
                 console.print(
-                    f"\n  [bold green]✓ COMPLIANCE GATE PASSED:[/] "
+                    f"\n  [bold green]✓ COMPLIANCE GATE PASSED ({scorecard.gate_mode} mode):[/] "
                     f"{scorecard.compliance_score:.0f}% compliant"
                 )
 
@@ -1374,9 +1673,24 @@ def _post_simulation_analysis(
                     console.print(f"  [red]⚠ Workflow HTML injection error: {_wf_html_err}[/]")
                     console.print(f"  [dim]{traceback.format_exc()[-400:]}[/]")
 
+                # ── Inject workflow summary into top-level report ──────
+                try:
+                    from src.workflow_judge.workflow_summary_panel import inject_workflow_summary_into_report
+                    html_path = exported.get("html") if exported else None
+                    if not html_path:
+                        candidate = Path(output_dir) / "report.html"
+                        if candidate.exists():
+                            html_path = str(candidate)
+                    if html_path and all_workflow_exports:
+                        if inject_workflow_summary_into_report(html_path, all_workflow_exports):
+                            console.print(f"  📊 Workflow summary panel added to report header")
+                except Exception as _wsp_err:
+                    console.print(f"  [dim]Workflow summary panel skipped: {_wsp_err}[/]")
+
                 # Gate check
                 if total_critical_all > 0:
                     console.print(f"\n  [bold red]✗ WORKFLOW GATE FAILED:[/] {total_critical_all} critical violation(s) across {len(workflow_defs)} workflow(s)")
+                    import sys
                     sys.exit(1)
                 elif workflow_defs:
                     total_results = sum(len(pair[1]) for pair in html_injection_pairs)
@@ -1491,6 +1805,204 @@ def _post_simulation_analysis(
             console.print(f"  [red]⚠ Expansion error: {e}[/]")
             console.print(f"  [dim]{traceback.format_exc()[-500:]}[/]")
 
+    # ── Step 6: RAG/Tool Evaluation ───────────────────────────
+    if rag_eval and report and hasattr(report, 'judged_conversations'):
+        try:
+            import asyncio as _aio
+            import json as _json
+            from src.rag_eval.engine import RAGEvalEngine, RAGEvalReport
+            from src.rag_eval.models import RAGEvalConfig, EvalSpeed
+            from src.rag_eval.tool_metrics import ToolDefinition
+            from src.rag_eval.rag_eval_html import inject_rag_eval_into_report
+
+            conversations = report.judged_conversations if hasattr(report, 'judged_conversations') else []
+            if not conversations:
+                console.print("  [dim]RAG/Tool eval skipped: no conversations[/]")
+            else:
+                console.print(f"\n  🔬 [bold]RAG/Tool Evaluation[/] — {len(conversations)} conversations")
+
+                # Build config
+                speed_map = {
+                    "deterministic": EvalSpeed.DETERMINISTIC,
+                    "fast": EvalSpeed.FAST,
+                    "standard": EvalSpeed.STANDARD,
+                    "full": EvalSpeed.FULL,
+                }
+                rag_config = RAGEvalConfig(
+                    eval_speed=speed_map.get(rag_eval_speed, EvalSpeed.STANDARD),
+                    default_rag_threshold=rag_threshold,
+                    default_tool_threshold=rag_threshold,
+                    fail_if_below=rag_gate,
+                )
+
+                # Load tool definitions if provided
+                tool_definitions = []
+                if tool_defs:
+                    try:
+                        td_path = Path(tool_defs)
+                        if td_path.suffix in ('.yaml', '.yml'):
+                            import yaml
+                            with open(td_path) as f:
+                                raw_defs = yaml.safe_load(f)
+                        else:
+                            with open(td_path) as f:
+                                raw_defs = _json.load(f)
+                        if isinstance(raw_defs, list):
+                            tool_definitions = [ToolDefinition.from_dict(d) for d in raw_defs]
+                        console.print(f"    Loaded {len(tool_definitions)} tool definitions from {tool_defs}")
+                    except Exception as tde:
+                        console.print(f"    [yellow]⚠ Failed to load tool definitions: {tde}[/]")
+
+                # Build context document
+                context_doc = documentation or ""
+                if not context_doc:
+                    doc_file_path = exported.get("doc_file") or ""
+                    if doc_file_path and Path(doc_file_path).exists():
+                        try:
+                            context_doc = Path(doc_file_path).read_text(encoding="utf-8")[:50000]
+                        except Exception:
+                            pass
+
+                engine = RAGEvalEngine(
+                    config=rag_config,
+                    tool_definitions=tool_definitions,
+                    progress_callback=lambda msg: console.print(f"    [dim]{msg}[/]"),
+                )
+
+                # Run evaluation (sync context — need to run async in a thread)
+                async def _run_rag_eval():
+                    return await engine.evaluate_conversations(conversations, context_doc)
+
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                    future = pool.submit(lambda: _aio.run(_run_rag_eval()))
+                    rag_report = future.result()
+
+                # Display results
+                _print_rag_eval_report(rag_report)
+
+                # Save rag_eval_report.json
+                rag_path = RAGEvalEngine.save_report(rag_report, output_dir)
+                console.print(f"    📄 RAG eval report: [bold]{rag_path}[/]")
+
+                # Append to summary.json
+                summary_path = Path(output_dir) / "summary.json"
+                RAGEvalEngine.append_to_summary(rag_report, str(summary_path))
+
+                # Inject into HTML report
+                html_path = Path(output_dir) / "report.html"
+                if html_path.exists():
+                    if inject_rag_eval_into_report(rag_report, str(html_path)):
+                        console.print("    ✅ Injected into HTML report")
+
+                # CI/CD gate
+                if rag_gate is not None:
+                    if rag_report.gate_passed:
+                        console.print(
+                            f"\n  [bold green]✓ RAG GATE:[/] "
+                            f"Overall score {rag_report.overall_score:.3f} ≥ {rag_gate}"
+                        )
+                    else:
+                        console.print(
+                            f"\n  [bold red]✗ RAG GATE FAILED:[/] "
+                            f"Overall score {rag_report.overall_score:.3f} < {rag_gate}"
+                        )
+                        import sys
+                        sys.exit(1)
+
+        except ImportError as ie:
+            console.print(f"  [yellow]⚠ RAG eval module not available: {ie}[/]")
+        except Exception as e:
+            import traceback
+            console.print(f"  [red]⚠ RAG eval error: {e}[/]")
+            console.print(f"  [dim]{traceback.format_exc()[-500:]}[/]")
+
+    # ── Behavioral Signature Analysis ─────────────────────────
+    if signature:
+        try:
+            import json as _json
+            from src.signature import SignatureEngine, inject_signature_into_report
+
+            conversations = report.judged_conversations if hasattr(report, 'judged_conversations') else []
+            if not conversations:
+                console.print("  [dim]Signature analysis skipped: no conversations[/]")
+            else:
+                sig_engine = SignatureEngine()
+                bot_signature = sig_engine.analyze(
+                    judged_conversations=conversations,
+                    run_id=getattr(report, 'summary', None) and getattr(report.summary, 'simulation_id', '') or '',
+                )
+
+                # Display summary
+                console.print(f"\n  🧬 [bold cyan]Behavioral Signature[/] — {bot_signature.turn_count} bot responses analyzed")
+                if bot_signature.summary_text:
+                    console.print(f"    {bot_signature.summary_text}")
+
+                # Key metrics one-liner
+                tone_lbl = bot_signature.tone.derived.formality_level.value
+                verb_lbl = bot_signature.verbosity.derived.verbosity_level.value
+                cons_score = bot_signature.consistency.derived.overall_consistency_score
+                rep_score = bot_signature.patterns.derived.repetition_score
+                console.print(
+                    f"    Tone: [bold]{tone_lbl}[/] | "
+                    f"Verbosity: [bold]{verb_lbl}[/] | "
+                    f"Consistency: [bold]{cons_score:.2f}[/] | "
+                    f"Repetition: [bold]{rep_score:.2f}[/] | "
+                    f"Anomalies: [bold]{bot_signature.anomaly_count}[/]"
+                )
+
+                # Reliability note
+                if bot_signature.reliability.confidence.value != "high":
+                    console.print(
+                        f"    [yellow]⚠ Reliability: {bot_signature.reliability.confidence.value}[/]"
+                        f" — {', '.join(bot_signature.reliability.notes[:2])}"
+                    )
+
+                # Save signature.json
+                try:
+                    sig_path = Path(output_dir) / "signature.json"
+                    with open(sig_path, "w") as f:
+                        _json.dump(bot_signature.to_dict(), f, indent=2)
+                    console.print(f"  🧬 Signature: {sig_path}")
+                except Exception:
+                    pass
+
+                # Append to summary.json
+                try:
+                    summary_path = Path(output_dir) / "summary.json"
+                    if summary_path.exists():
+                        with open(summary_path, "r") as f:
+                            summary_data = _json.load(f)
+                        summary_data["behavioral_signature"] = bot_signature.to_summary_dict()
+                        with open(summary_path, "w") as f:
+                            _json.dump(summary_data, f, indent=2)
+                except Exception:
+                    pass
+
+                # Inject into HTML report
+                try:
+                    html_path = exported.get("html") if exported else None
+                    if not html_path:
+                        candidate = Path(output_dir) / "report.html"
+                        if candidate.exists():
+                            html_path = str(candidate)
+                    if html_path:
+                        injected = inject_signature_into_report(html_path, bot_signature)
+                        if injected:
+                            console.print(f"  📊 Signature section added to HTML report")
+
+                    # Also inject into replay report if it exists
+                    replay_html = Path(output_dir) / "replay_report.html"
+                    if replay_html.exists():
+                        inject_signature_into_report(str(replay_html), bot_signature)
+                except Exception:
+                    pass
+
+        except ImportError:
+            pass  # Signature module not installed
+        except Exception as e:
+            console.print(f"  [dim]Signature analysis skipped: {e}[/]")
+
 
 async def _run_simulation(
     bot_endpoint: str,
@@ -1516,11 +2028,19 @@ async def _run_simulation(
     stress_enabled: bool = False,
     run_tags: tuple[str, ...] = (),
     policy: str | None = None,
+    policy_mode: str | None = None,
+    policy_strict: bool = False,
     workflow: str | None = None,
     no_workflow: bool = False,
     expand_failures: bool = False,
     expand_variants: int = 5,
     expand_top: int = 5,
+    signature: bool = True,
+    rag_eval: bool = False,
+    rag_eval_speed: str = "standard",
+    rag_threshold: float = 0.7,
+    rag_gate: float | None = None,
+    tool_defs: str | None = None,
 ):
     """Async simulation runner."""
     from src.core.orchestrator import SimulationOrchestrator
@@ -1728,6 +2248,8 @@ async def _run_simulation(
         tags_dict=tags_dict,
         mode_label="manual",
         policy=policy,
+        policy_mode=policy_mode,
+        policy_strict=policy_strict,
         workflow=workflow,
         no_workflow=no_workflow,
         expand_failures=expand_failures,
@@ -1736,6 +2258,13 @@ async def _run_simulation(
         bot_endpoint=bot_endpoint,
         bot_api_key=bot_api_key,
         bot_format=bot_format,
+        signature=signature,
+        rag_eval=rag_eval,
+        rag_eval_speed=rag_eval_speed,
+        rag_threshold=rag_threshold,
+        rag_gate=rag_gate,
+        tool_defs=tool_defs,
+        documentation=documentation,
     )
 
     # Auto-save regression suite from failures
@@ -2381,44 +2910,104 @@ def _print_coverage(coverage_report):
 
 
 def _print_compliance_scorecard(scorecard):
-    """Print compliance scorecard to console."""
+    """Print compliance scorecard v2 to console — with control families, evidence, remediation."""
     from rich.table import Table
 
     status = "✅ COMPLIANT" if scorecard.overall_compliant else "❌ NON-COMPLIANT"
     status_color = "bold green" if scorecard.overall_compliant else "bold red"
+    gate_mode = scorecard.gate_mode.replace("_", " ").title()
 
-    console.print(f"\n[bold]📋 Policy Compliance: {scorecard.policy_set_name}[/]")
+    console.print(f"\n[bold]📋 Policy Compliance: {scorecard.policy_set_name}[/] (v{scorecard.policy_set_version})")
     console.print(f"  [{status_color}]{status}[/] — {scorecard.compliance_score:.0f}% ({scorecard.passed_rules}/{scorecard.total_rules} rules passed)")
+    console.print(f"  Gate mode: [bold]{gate_mode}[/]", end="")
+    if scorecard.skipped_rules > 0:
+        console.print(f" | {scorecard.skipped_rules} skipped", end="")
+    if scorecard.total_evidence_items > 0:
+        console.print(f" | {scorecard.total_evidence_items} evidence items", end="")
+    console.print()
 
+    # Severity breakdown
+    sev_counts = scorecard.violation_count_by_severity
+    if sev_counts:
+        parts = [f"[{'bold red' if s == 'critical' else 'red' if s == 'high' else 'yellow' if s == 'medium' else 'green'}]{c} {s}[/]" for s, c in sev_counts.items()]
+        console.print(f"  Violations: {' · '.join(parts)}")
+
+    # Critical violations
     if scorecard.critical_violations:
-        console.print(f"  [bold red]Critical violations: {len(scorecard.critical_violations)}[/]")
+        console.print(f"  [bold red]Critical violations ({len(scorecard.critical_violations)}):[/]")
         for v in scorecard.critical_violations:
             console.print(f"    ❌ {v.rule_name}: {v.message}")
+            if v.remediation:
+                console.print(f"       [dim]💡 {v.remediation}[/]")
+
+    # High violations
+    if scorecard.high_violations:
+        console.print(f"  [red]High violations ({len(scorecard.high_violations)}):[/]")
+        for v in scorecard.high_violations[:3]:
+            console.print(f"    ⚠ {v.rule_name}: {v.message}")
+            if v.remediation:
+                console.print(f"       [dim]💡 {v.remediation}[/]")
+
+    # Control family breakdown
+    if scorecard.control_family_results:
+        cf = scorecard.control_family_results
+        cf_parts = []
+        for family, counts in cf.items():
+            if counts["failed"] > 0:
+                cf_parts.append(f"[red]{family}: {counts['passed']}/{counts['total']}[/]")
+            else:
+                cf_parts.append(f"[green]{family}: {counts['passed']}/{counts['total']}[/]")
+        if cf_parts:
+            console.print(f"  Control families: {' · '.join(cf_parts)}")
 
     # Per-rule table
     table = Table(show_header=True, header_style="bold")
     table.add_column("Rule", max_width=30)
     table.add_column("Judge", style="cyan")
+    table.add_column("Condition", max_width=20)
     table.add_column("Status", justify="center")
     table.add_column("Actual", justify="right")
     table.add_column("Threshold", justify="right")
     table.add_column("Severity")
+    table.add_column("Evidence", justify="right")
 
     sev_colors = {"critical": "bold red", "high": "red", "medium": "yellow", "low": "green"}
 
     for r in scorecard.results:
-        status_icon = "[green]✓[/]" if r.passed else "[red]✗[/]"
+        if r.not_evaluated:
+            status_icon = "[dim]⊘[/]"
+        else:
+            status_icon = "[green]✓[/]" if r.passed else "[red]✗[/]"
         sev_color = sev_colors.get(r.severity.value, "white")
+
+        ev_count = str(len(r.evidence)) if r.evidence else ""
+
+        rule_name = r.rule_name
+        if r.scope_applied:
+            rule_name += " 🎯"
+
         table.add_row(
-            r.rule_name,
+            rule_name,
             r.judge,
+            r.condition.value,
             status_icon,
-            f"{r.actual_value:.2f}",
-            f"{r.threshold:.2f}",
+            f"{r.actual_value:.3f}",
+            f"{r.threshold:.3f}",
             f"[{sev_color}]{r.severity.value}[/]",
+            ev_count,
         )
 
     console.print(table)
+
+    # Show sample evidence for worst failures
+    failed_with_evidence = [r for r in scorecard.results if not r.passed and r.evidence and not r.not_evaluated]
+    if failed_with_evidence:
+        console.print(f"\n  [bold]🔍 Sample Evidence (top failures):[/]")
+        for r in failed_with_evidence[:3]:
+            console.print(f"    [red]{r.rule_name}[/] ({r.failed_count} failed / {r.evaluated_count} evaluated):")
+            for e in r.evidence[:2]:
+                turn_info = f" turn {e.turn_index}" if e.turn_index is not None else ""
+                console.print(f"      → {e.conversation_id}{turn_info} [{e.persona_name}] score={e.score:.2f}: {e.issue[:80]}")
 
 
 def _print_workflow_results(workflow_def, workflow_results):
@@ -2565,6 +3154,90 @@ def _print_expansion_report(exp_report):
         if exp_report.fluke_count:
             console.print(f"[dim]{exp_report.fluke_count} fluke[/] ", end="")
         console.print()
+
+
+def _print_rag_eval_report(rag_report):
+    """Print RAG/Tool evaluation results to console."""
+    from rich.table import Table
+
+    console.print(f"\n[bold]🔬 RAG/Tool Evaluation Results[/]")
+    console.print(
+        f"  Conversations: {rag_report.total_conversations} | "
+        f"Turns evaluated: {rag_report.total_turns_evaluated} | "
+        f"Evidence: {rag_report.evidence_mode} | "
+        f"Speed: {rag_report.eval_speed} | "
+        f"Time: {rag_report.execution_time_seconds:.1f}s"
+    )
+
+    # Score summary
+    def _color(score):
+        if score >= 0.8:
+            return "green"
+        elif score >= 0.6:
+            return "yellow"
+        return "red"
+
+    overall = rag_report.overall_score
+    rag_s = rag_report.overall_rag_score
+    tool_s = rag_report.overall_tool_score
+
+    console.print(
+        f"\n  Overall: [{_color(overall)}]{overall:.1%}[/] | "
+        f"RAG: [{_color(rag_s)}]{rag_s:.1%}[/] | "
+        f"Tool: [{_color(tool_s)}]{tool_s:.1%}[/] | "
+        f"Issues: {rag_report.total_rag_issues + rag_report.total_tool_issues}"
+    )
+
+    # No-evidence hint
+    if (rag_report.evidence_mode == "inferred"
+            and not rag_report.rag_metric_averages
+            and not rag_report.tool_metric_averages):
+        console.print(
+            "\n  [dim]ℹ No RAG evidence or tool calls detected in bot responses.[/]"
+            "\n  [dim]  This bot may not use retrieval-augmented generation or function calling.[/]"
+            "\n  [dim]  Tip: Provide --documentation for grounding context, or use --tool-defs for tool validation.[/]"
+        )
+
+    # RAG metrics table
+    if rag_report.rag_metric_averages:
+        table = Table(title="RAG Metrics", show_lines=False, padding=(0, 1))
+        table.add_column("Metric", style="bold")
+        table.add_column("Avg Score", justify="center")
+        table.add_column("Pass Rate", justify="center")
+        for name in sorted(rag_report.rag_metric_averages):
+            avg = rag_report.rag_metric_averages[name]
+            pr = rag_report.rag_metric_pass_rates.get(name, 0)
+            table.add_row(
+                name.replace("_", " ").title(),
+                f"[{_color(avg)}]{avg:.1%}[/]",
+                f"{pr:.0%}",
+            )
+        console.print(table)
+
+    # Tool metrics table
+    if rag_report.tool_metric_averages:
+        table = Table(title="Tool Metrics", show_lines=False, padding=(0, 1))
+        table.add_column("Metric", style="bold")
+        table.add_column("Avg Score", justify="center")
+        table.add_column("Pass Rate", justify="center")
+        for name in sorted(rag_report.tool_metric_averages):
+            avg = rag_report.tool_metric_averages[name]
+            pr = rag_report.tool_metric_pass_rates.get(name, 0)
+            table.add_row(
+                name.replace("_", " ").title(),
+                f"[{_color(avg)}]{avg:.1%}[/]",
+                f"{pr:.0%}",
+            )
+        console.print(table)
+
+    # Top issues
+    if rag_report.top_issues:
+        console.print(f"\n  [yellow]Top Issues:[/]")
+        for issue in rag_report.top_issues[:5]:
+            console.print(f"    ⚠ {issue[:100]}")
+
+    if rag_report.errors:
+        console.print(f"\n  [dim]Errors: {len(rag_report.errors)}[/]")
 
 
 @main.command()
@@ -3765,7 +4438,8 @@ def _print_calibration_report(report, verbose: bool):
 @click.option("--validate", "validate_path", default=None, help="Validate a custom YAML policy file")
 @click.option("--verbose", "-v", is_flag=True, default=False, help="Show full rule details")
 @click.option("--export", "export_path", default=None, help="Export a built-in template to YAML file for customization")
-def policies(industry: str | None, validate_path: str | None, verbose: bool, export_path: str | None):
+@click.option("--strict", is_flag=True, default=False, help="Strict validation (fail on unknown judge names)")
+def policies(industry: str | None, validate_path: str | None, verbose: bool, export_path: str | None, strict: bool):
     """List available policy templates and validate custom policies.
 
     \b
@@ -3774,19 +4448,21 @@ def policies(industry: str | None, validate_path: str | None, verbose: bool, exp
         simtest policies --industry healthcare         # Show healthcare policy
         simtest policies -v                            # Verbose with all rules
         simtest policies --validate my_policy.yaml     # Validate custom policy
+        simtest policies --validate my.yaml --strict   # Strict validation
         simtest policies --export general > my.yaml    # Export template for editing
 
     \b
     Use with 'simtest run':
         simtest run --bot-endpoint http://... --policy general
         simtest run --bot-endpoint http://... --policy healthcare
+        simtest run --bot-endpoint http://... --policy healthcare --policy-mode strict
         simtest run --bot-endpoint http://... --policy ./my_custom_policy.yaml
     """
-    from src.policy import PolicyLoader, PolicySeverity
+    from src.policy import PolicyLoader, PolicySeverity, ComplianceGateMode
 
     console.print(Panel.fit(
-        "[bold blue]AI SimTest[/] - Policy-as-Code",
-        subtitle="Compliance guardrails",
+        "[bold blue]AI SimTest[/] - Policy-as-Code v2",
+        subtitle="Enterprise compliance governance",
     ))
 
     # Validate a custom file
@@ -3797,10 +4473,23 @@ def policies(industry: str | None, validate_path: str | None, verbose: bool, exp
             sys.exit(1)
         try:
             ps = PolicyLoader.load_from_file(vp)
-            warnings = PolicyLoader.validate_policy_set(ps)
+            warnings = PolicyLoader.validate_policy_set(ps, strict=strict)
             console.print(f"\n  [green]✅ Valid policy:[/] {ps.name} (v{ps.version})")
             console.print(f"  Rules: {ps.rule_count} | Industry: {ps.industry}")
+            console.print(f"  Gate mode: {ps.mode.value} | Error mode: {ps.evaluation_error_mode.value}")
             console.print(f"  Critical rules: {len(ps.critical_rules)}")
+
+            families = ps.get_control_families()
+            if families:
+                console.print(f"  Control families: {', '.join(families)}")
+
+            conditions = {}
+            for r in ps.rules:
+                conditions[r.condition.value] = conditions.get(r.condition.value, 0) + 1
+            if conditions:
+                cond_parts = [f"{v}×{k}" for k, v in sorted(conditions.items(), key=lambda x: -x[1])]
+                console.print(f"  Conditions: {', '.join(cond_parts)}")
+
             if warnings:
                 console.print(f"\n  [yellow]Warnings:[/]")
                 for w in warnings:
@@ -3846,6 +4535,11 @@ def policies(industry: str | None, validate_path: str | None, verbose: bool, exp
         console.print(f"\n[bold cyan]{ps.name}[/] (v{ps.version})")
         console.print(f"  {ps.description}")
         console.print(f"  Industry: {ps.industry} | Rules: {ps.rule_count} | Critical: {len(ps.critical_rules)}")
+        console.print(f"  Gate mode: [bold]{ps.mode.value}[/] | Error mode: {ps.evaluation_error_mode.value}")
+
+        families = ps.get_control_families()
+        if families:
+            console.print(f"  Control families: {', '.join(families)}")
 
         if verbose:
             table = Table(show_header=True, header_style="bold")
@@ -3855,6 +4549,7 @@ def policies(industry: str | None, validate_path: str | None, verbose: bool, exp
             table.add_column("Condition")
             table.add_column("Threshold", justify="right")
             table.add_column("Severity")
+            table.add_column("Family", style="dim")
 
             sev_colors = {"critical": "bold red", "high": "red", "medium": "yellow", "low": "green"}
 
@@ -3867,11 +4562,13 @@ def policies(industry: str | None, validate_path: str | None, verbose: bool, exp
                     r.condition.value,
                     f"{r.threshold}",
                     f"[{sev_color}]{r.severity.value}[/]",
+                    r.control_family or "",
                 )
 
             console.print(table)
 
     console.print(f"\n[dim]Use with: simtest run --bot-endpoint URL --policy <name-or-yaml-file>[/]")
+    console.print(f"[dim]Override gate: simtest run --policy healthcare --policy-mode strict[/]")
     console.print(f"[dim]Export template: simtest policies --export general > my_policy.yaml[/]")
     console.print()
 

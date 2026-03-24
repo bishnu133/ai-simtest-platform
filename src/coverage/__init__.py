@@ -30,6 +30,13 @@ from src.coverage.models import (
 from src.coverage.analyzer import CoverageAnalyzer
 from src.coverage.constants import SCENARIO_METADATA
 from src.coverage.coverage_html import generate_coverage_html, inject_coverage_into_report
+from src.coverage.workflow_coverage import (
+        WorkflowCoverage,
+        WorkflowStepCoverage,
+        analyze_workflow_coverage,
+        load_workflow_coverage_from_exports,
+        inject_workflow_coverage_into_report,
+    )
 
 __all__ = [
     "CoverageAnalyzer",
@@ -43,4 +50,9 @@ __all__ = [
     "SCENARIO_METADATA",
     "generate_coverage_html",
     "inject_coverage_into_report",
+    "WorkflowCoverage",
+    "WorkflowStepCoverage",
+    "analyze_workflow_coverage",
+    "load_workflow_coverage_from_exports",
+    "inject_workflow_coverage_into_report",
 ]

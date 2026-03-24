@@ -1,11 +1,24 @@
 """
-Workflow Loader v2 — with match_type, order_mode, activation_hints, weight normalization.
+Workflow Loader v3 — with enhanced validation, skip_if_not_applicable,
+needs_review_threshold, topic_eval_mode, and strict schema checks.
+
+V3 additions:
+- Duplicate rule ID / condition ID detection
+- Regex compilation validation at load time
+- Order sequence gap warnings
+- Empty values for phrase/topic rules
+- Impossible pass thresholds
+- Required workflow with zero required steps
+- Overlapping activation hints across built-in templates
+- Parse skip_if_not_applicable, needs_review_threshold, topic_eval_mode
 """
 from __future__ import annotations
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 import yaml
-from .models import HardRule, HardRuleType, MatchType, SuccessCondition, WorkflowDefinition, WorkflowStep
+from .models import (HardRule, HardRuleType, MatchType, SuccessCondition,
+                     TopicEvalMode, WorkflowDefinition, WorkflowStep)
 
 
 class WorkflowLoadError(Exception):
@@ -58,10 +71,30 @@ class WorkflowLoader:
                 mt_str = r.get("match_type", "phrase")
                 if mt_str not in [m.value for m in MatchType]:
                     raise WorkflowLoadError(f"Rule '{r.get('id', i)}': invalid match_type '{mt_str}'. Valid: {[m.value for m in MatchType]}")
+                # V3: validate topic_eval_mode
+                tem_str = r.get("topic_eval_mode", "keyword")
+                if tem_str not in [t.value for t in TopicEvalMode]:
+                    raise WorkflowLoadError(f"Rule '{r.get('id', i)}': invalid topic_eval_mode '{tem_str}'. Valid: {[t.value for t in TopicEvalMode]}")
+                # V3: validate regex compilation at load time
+                if mt_str == "regex":
+                    for val in ([r.get("value", "")] + r.get("values", [])):
+                        if val:
+                            try:
+                                re.compile(val)
+                            except re.error as e:
+                                raise WorkflowLoadError(f"Rule '{r.get('id', i)}': invalid regex pattern '{val}': {e}")
+                # V3: warn on empty values for phrase/topic rules
+                rule_values = r.get("values", [])
+                rule_value = r.get("value", "")
+                if rt_str in ("forbidden_phrase", "required_phrase", "forbidden_topic", "required_topic"):
+                    if not rule_values and not rule_value:
+                        raise WorkflowLoadError(f"Rule '{r.get('id', i)}': {rt_str} rule must have 'value' or 'values'")
+
                 hard_rules.append(HardRule(id=r.get("id", f"rule_{i}"), name=r.get("name", f"Rule {i}"),
-                    rule_type=rt, value=str(r.get("value", "")), values=r.get("values", []),
+                    rule_type=rt, value=str(r.get("value", "")), values=rule_values,
                     severity=r.get("severity", "high"), case_sensitive=r.get("case_sensitive", False),
-                    match_type=mt_str, description=r.get("description", "")))
+                    match_type=mt_str, description=r.get("description", ""),
+                    topic_eval_mode=tem_str))
 
             conditions = []
             for i, c in enumerate(data.get("success_conditions", [])):
@@ -69,6 +102,7 @@ class WorkflowLoader:
                 conditions.append(SuccessCondition(id=c.get("id", f"cond_{i}"),
                     description=c.get("description", f"Condition {i}"), required=c.get("required", True)))
 
+            # V3: Parse new fields with defaults
             return WorkflowDefinition(
                 id=data.get("id", ""), name=data["name"], domain=data.get("domain", "general"),
                 description=data.get("description", ""), version=str(data.get("version", "1.0")),
@@ -78,7 +112,9 @@ class WorkflowLoader:
                 pass_threshold=float(data.get("pass_threshold", 0.7)),
                 order_mode=data.get("order_mode", "none"),
                 activation_hints=data.get("activation_hints", []),
-                tags=data.get("tags", []), metadata=data.get("metadata", {}))
+                tags=data.get("tags", []), metadata=data.get("metadata", {}),
+                skip_if_not_applicable=data.get("skip_if_not_applicable", True),
+                needs_review_threshold=float(data.get("needs_review_threshold", 0.5)))
         except WorkflowLoadError: raise
         except Exception as e: raise WorkflowLoadError(f"Failed to parse workflow: {e}")
 
@@ -97,13 +133,87 @@ class WorkflowLoader:
 
     @staticmethod
     def validate(workflow: WorkflowDefinition) -> List[str]:
+        """V3: Comprehensive validation returning warnings list."""
         warnings = []
-        if not workflow.steps: warnings.append("Workflow has no steps defined")
+
+        # Steps
+        if not workflow.steps:
+            warnings.append("Workflow has no steps defined")
         if not workflow.hard_rules and not workflow.success_conditions:
             warnings.append("Workflow has neither hard rules nor success conditions")
+
+        # Duplicate step IDs
         step_ids = [s.id for s in workflow.steps]
-        dupes = [sid for sid in step_ids if step_ids.count(sid) > 1]
-        if dupes: warnings.append(f"Duplicate step IDs: {set(dupes)}")
+        step_dupes = [sid for sid in step_ids if step_ids.count(sid) > 1]
+        if step_dupes:
+            warnings.append(f"Duplicate step IDs: {set(step_dupes)}")
+
+        # V3: Duplicate rule IDs
+        rule_ids = [r.id for r in workflow.hard_rules]
+        rule_dupes = [rid for rid in rule_ids if rule_ids.count(rid) > 1]
+        if rule_dupes:
+            warnings.append(f"Duplicate hard rule IDs: {set(rule_dupes)}")
+
+        # V3: Duplicate condition IDs
+        cond_ids = [c.id for c in workflow.success_conditions]
+        cond_dupes = [cid for cid in cond_ids if cond_ids.count(cid) > 1]
+        if cond_dupes:
+            warnings.append(f"Duplicate condition IDs: {set(cond_dupes)}")
+
+        # Weight normalization warning
         weights = workflow.step_weight + workflow.rule_weight + workflow.condition_weight
-        if abs(weights - 1.0) > 0.01: warnings.append(f"Weights sum to {weights:.2f}, expected ~1.0 (will be auto-normalized)")
+        if abs(weights - 1.0) > 0.01:
+            warnings.append(f"Weights sum to {weights:.2f}, expected ~1.0 (will be auto-normalized)")
+
+        # V3: Impossible pass thresholds
+        if workflow.pass_threshold > 1.0:
+            warnings.append(f"Pass threshold {workflow.pass_threshold} > 1.0 — workflow can never pass")
+        if workflow.pass_threshold < 0.0:
+            warnings.append(f"Pass threshold {workflow.pass_threshold} < 0.0 — workflow always passes")
+
+        # V3: Order sequence gaps
+        ordered = [(s.order, s.id) for s in workflow.steps if s.order is not None]
+        if ordered:
+            orders = sorted([o for o, _ in ordered])
+            for i in range(len(orders) - 1):
+                if orders[i + 1] - orders[i] > 1:
+                    warnings.append(f"Order sequence gap: {orders[i]} → {orders[i+1]} (missing {list(range(orders[i]+1, orders[i+1]))})")
+
+        # V3: Required workflow with zero required steps
+        if workflow.steps and not any(s.required for s in workflow.steps):
+            warnings.append("Workflow has steps but none are marked as required")
+
+        # V3: Regex compilation check (belt-and-suspenders, also checked at load)
+        for rule in workflow.hard_rules:
+            if rule.match_type == "regex":
+                for val in ([rule.value] + list(rule.values)):
+                    if val:
+                        try:
+                            re.compile(val)
+                        except re.error as e:
+                            warnings.append(f"Rule '{rule.id}': invalid regex '{val}': {e}")
+
+        # V3: Empty values for phrase/topic rules
+        for rule in workflow.hard_rules:
+            if rule.rule_type.value in ("forbidden_phrase", "required_phrase", "forbidden_topic", "required_topic"):
+                if not rule.values and not rule.value:
+                    warnings.append(f"Rule '{rule.id}' ({rule.rule_type.value}) has no value or values")
+
+        return warnings
+
+    @staticmethod
+    def validate_built_in_overlaps() -> List[str]:
+        """V3: Check for overlapping activation hints across built-in templates."""
+        from .built_in import BUILT_IN_WORKFLOWS
+        warnings = []
+        hint_map: Dict[str, List[str]] = {}
+        for name, data in BUILT_IN_WORKFLOWS.items():
+            for hint in data.get("activation_hints", []):
+                key = hint.lower()
+                if key not in hint_map:
+                    hint_map[key] = []
+                hint_map[key].append(name)
+        for hint, templates in hint_map.items():
+            if len(templates) > 1:
+                warnings.append(f"Activation hint '{hint}' shared by: {templates}")
         return warnings

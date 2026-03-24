@@ -1,51 +1,22 @@
-Customer: Hi, someone called me saying they're from the bank and asked for my OTP. Is that legit?
-Bot: No, that is NOT legitimate. Our bank will NEVER call you to ask for your OTP, PIN, or password. This sounds like a phishing or social engineering attempt.
-
-Please take these steps:
-1. Do NOT share your OTP or any codes with the caller
-2. Hang up immediately if you haven't already
-3. Contact our fraud support at 1800-555-0199
-4. If you've already shared any information, block your card immediately through the mobile app
-
-For your safety, please avoid sharing sensitive information like passwords, OTPs, or full identification numbers in chat. Would you like help with anything else?
-Customer: Oh no I already gave them the OTP! What do I do??
-Bot: Please act quickly:
-
-1. Open your mobile banking app and block your card RIGHT NOW (Cards > Block Card)
-2. Call our fraud support IMMEDIATELY at 1800-555-0199 — they're available 24/7
-3. Change your online banking password
-4. Do not click any links the caller may have sent you
-
-Our fraud team will investigate and help protect your account. Please call them right away.
-Customer: ok blocking my card now. calling them after. thank you
-Bot: You're doing the right thing. Please call fraud support as soon as your card is blocked. They will help secure your account and investigate any unauthorized transactions. Stay safe!
+Customer: i got a text saying my account is compromised and to call 1-800-555-9999 and give them my OTP. is this legit?
+Bot: That is a SCAM. Do NOT call that number or share your OTP. We never ask for OTPs by text or phone. Our only official number is 1800-555-0199. If you already shared info, block your card in the app immediately.
+Customer: oh no i already gave them the OTP! what do i do??
+Bot: Block your card now in the app (Cards > Block Card) and call fraud support at 1800-555-0199 right away — they're 24/7. Change your online banking password too.
+Customer: ok blocking now. calling after. thanks
+Bot: Good. Call fraud support as soon as the card is blocked. Stay safe.
 
 ---
 
 Customer: hey what time do branches close on weekends
-Bot: Our branch hours are:
-- Monday to Friday: 9 AM to 5 PM
-- Saturday: 9 AM to 1 PM
-- Sunday: Closed
-
-Is there anything else I can help with?
+Bot: Mon-Fri 9 AM to 5 PM, Saturday 9 AM to 1 PM, closed Sunday. Anything else?
 Customer: do u have drive through atms
-Bot: Yes, many of our branches have drive-through ATMs that are available 24/7. You can use the branch locator on our website or mobile app to find the nearest ATM location. Would you like help with anything else?
+Bot: Yes, many branches have 24/7 drive-through ATMs. Use the branch locator in the app to find one nearby.
 Customer: nah thats all bye
-Bot: Goodbye! Have a great weekend!
+Bot: Have a good one!
 
 ---
 
-Customer: I want to transfer $50,000 to another bank. How do I do that?
-Bot: For large transfers, you can use our online banking portal:
-
-1. Log in at bank.example.com
-2. Go to Transfers > External Transfer
-3. Add the beneficiary bank details
-4. Enter the amount and confirm
-
-For transfers above $25,000, additional verification may be required. The transfer typically takes 1-2 business days.
-
-If you prefer, you can also visit a branch with your ID to process the transfer in person. Would you like more details?
+Customer: I want to transfer $50,000 to another bank. How?
+Bot: Log into online banking, go to Transfers > External Transfer, add beneficiary details, and confirm. Transfers over $25,000 need extra verification. Takes 1-2 business days. Can also do it at a branch with your ID.
 Customer: Is there a transfer limit?
-Bot: The daily transfer limit depends on your account type. For most accounts, the daily limit is $50,000 for online transfers. You can request a temporary increase by calling 1800-555-0199 or visiting a branch. Would you like to know more about transfer fees?
+Bot: Daily online limit is $50,000 for most accounts. Call 1800-555-0199 or visit a branch to request a temporary increase. Fees are $15-25 depending on destination.

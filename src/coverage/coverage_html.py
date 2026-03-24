@@ -35,6 +35,7 @@ def generate_coverage_html(report: CoverageReport) -> str:
         "topic": ("Topics", "Were defined topics exercised?"),
         "scenario": ("Scenarios", "Category & difficulty breadth"),
         "judge": ("Judges", "All 4 judges active?"),
+        "workflow": ("Workflows", "Were workflow steps exercised?"),
     }
     for dim_key, (label, desc) in dim_labels.items():
         dim_score = report.dimension_scores.get(dim_key, 0)
