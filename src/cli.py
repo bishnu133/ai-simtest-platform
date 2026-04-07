@@ -87,12 +87,19 @@ def main():
 @click.option("--contains", "filter_contains", default=None, help="Only evaluate imported conversations containing this text")
 @click.option("--min-conversations-for-gate", default=1, type=int, help="Minimum conversations before CI/CD gates are enforced (default: 1)")
 @click.option("--signature/--no-signature", default=True, help="Enable/disable behavioral signature analysis (default: enabled)")
+@click.option("--show-cost", is_flag=True, default=False, help="Display estimated LLM cost breakdown after simulation.")
+@click.option("--budget-limit", default=None, type=float, help="Maximum estimated USD cost for this run. Halts if exceeded.")
+@click.option("--budget-mode", default="soft", type=click.Choice(["soft", "hard"]), help="Budget enforcement: soft=finish current batch then stop, hard=stop immediately.")
 @click.option("--rag-eval/--no-rag-eval", default=False, help="Enable RAG/Tool evaluation on bot responses (evaluates retrieval accuracy, tool usage, citation quality)")
 @click.option("--eval-speed", "rag_eval_speed", type=click.Choice(["deterministic", "fast", "standard", "full"]), default="standard", help="RAG eval speed: deterministic (free) | fast | standard | full (all metrics)")
 @click.option("--rag-threshold", type=float, default=0.7, help="RAG/Tool evaluation pass threshold (0.0-1.0, default 0.7)")
 @click.option("--rag-gate", type=float, default=None, help="CI/CD gate: exit code 1 if RAG overall score below this value")
 @click.option("--tool-defs", type=click.Path(exists=True), default=None, help="Path to tool definitions JSON/YAML for tool metric validation (schema: [{name, required_params, ...}])")
 @click.option("--rag-demo", default=None, help="Run RAG eval on a built-in demo pack instead of simulation (faq_rag, finance_tools, healthcare_citations, failure_injection)")
+@click.option("--notify", "notify_config_path", default=None, help="Path to notify.yaml for webhook/email notifications on run events")
+@click.option("--notify-on", "notify_on", default=None, help="Comma-separated event type filter override (e.g., gate_failed,critical_failure)")
+@click.option("--notify-dry-run", "notify_dry_run", is_flag=True, default=False, help="Render notification payloads and log them without sending")
+@click.option("--notify-required", "notify_required", is_flag=True, default=False, help="Fail run startup if notification config is broken or undeliverable")
 def run(
     bot_endpoint: str,
     bot_api_key: str | None,
@@ -146,16 +153,80 @@ def run(
     filter_contains: str | None,
     min_conversations_for_gate: int,
     signature: bool,
+    show_cost: bool,
+    budget_limit: float | None,
+    budget_mode: str,
     rag_eval: bool,
     rag_eval_speed: str,
     rag_threshold: float,
     rag_gate: float | None,
     tool_defs: str | None,
     rag_demo: str | None,
+    notify_config_path: str | None,
+    notify_on: str | None,
+    notify_dry_run: bool,
+    notify_required: bool,
 ):
     """Run a simulation test against your AI chatbot."""
     from src.core.logging import setup_logging
     setup_logging()
+
+    # ── Initialize cost tracking (P4 #27) ─────────────────────
+    try:
+        from src.cost import init_cost_tracker, BudgetMode as _BudgetMode
+        _cost_tracker = init_cost_tracker(
+            run_id="",
+            budget_limit=budget_limit,
+            budget_mode=_BudgetMode(budget_mode) if budget_limit else _BudgetMode.SOFT,
+        )
+        if budget_limit:
+            console.print(f"  💰 Budget limit: [bold]${budget_limit:.2f}[/] ({budget_mode} mode)")
+    except ImportError:
+        pass  # Cost module not installed
+
+    # ── Initialize notification engine (P4 #22) ──────────────
+    _notification_engine = None
+    if notify_config_path:
+        try:
+            from src.notifications import (
+                load_notification_config, NotificationEngine, EventType as _NEventType,
+            )
+            _notify_config = load_notification_config(notify_config_path)
+            validation_errors = _notify_config.validate()
+            if validation_errors:
+                for err in validation_errors:
+                    console.print(f"  [red]⚠ Notification config error: {err}[/]")
+                if notify_required:
+                    console.print("[bold red]--notify-required: Notification config has errors. Aborting.[/]")
+                    sys.exit(1)
+            else:
+                # Apply --notify-on override
+                if notify_on:
+                    override_types = []
+                    for et_str in notify_on.split(","):
+                        et_str = et_str.strip()
+                        try:
+                            override_types.append(_NEventType(et_str))
+                        except ValueError:
+                            console.print(f"  [yellow]⚠ Unknown notification event type: {et_str}[/]")
+                    if override_types:
+                        for ch in _notify_config.channels:
+                            ch.events = override_types
+
+                _notification_engine = NotificationEngine(
+                    _notify_config, dry_run=notify_dry_run,
+                )
+                console.print(f"  📡 Notifications: [bold]{len(_notify_config.channels)}[/] channel(s) configured")
+                if notify_dry_run:
+                    console.print(f"  📡 [yellow]Dry-run mode — payloads logged but not sent[/]")
+        except FileNotFoundError:
+            console.print(f"  [red]⚠ Notification config not found: {notify_config_path}[/]")
+            if notify_required:
+                sys.exit(1)
+        except Exception as e:
+            console.print(f"  [red]⚠ Notification init failed: {e}[/]")
+            if notify_required:
+                sys.exit(1)
 
     console.print(Panel.fit(
         "[bold blue]AI SimTest[/] - Simulation Testing Platform",
@@ -437,6 +508,10 @@ def run(
             rag_threshold=rag_threshold,
             rag_gate=rag_gate,
             tool_defs=tool_defs,
+            show_cost=show_cost,
+            budget_limit=budget_limit,
+            budget_mode=budget_mode,
+            notification_engine=_notification_engine,
         ))
         return
 
@@ -488,6 +563,10 @@ def run(
             rag_gate=rag_gate,
             tool_defs=tool_defs,
             documentation=documentation,
+            show_cost=show_cost,
+            budget_limit=budget_limit,
+            budget_mode=budget_mode,
+            notification_engine=_notification_engine,
         ))
         return
 
@@ -656,6 +735,10 @@ def run(
         rag_threshold=rag_threshold,
         rag_gate=rag_gate,
         tool_defs=tool_defs,
+        show_cost=show_cost,
+        budget_limit=budget_limit,
+        budget_mode=budget_mode,
+        notification_engine=_notification_engine,
     ))
 
 
@@ -690,6 +773,10 @@ async def _run_partial_autonomous(
     rag_gate: float | None = None,
     tool_defs: str | None = None,
     documentation: str = "",
+    show_cost: bool = False,
+    budget_limit: float | None = None,
+    budget_mode: str = "soft",
+    notification_engine=None,
 ):
     """Run the partial autonomous pipeline."""
     from src.core.autonomous_orchestrator import AutonomousOrchestrator
@@ -784,6 +871,10 @@ async def _run_partial_autonomous(
                 rag_gate=rag_gate,
                 tool_defs=tool_defs,
                 documentation=documentation,
+                show_cost=show_cost,
+                budget_limit=budget_limit,
+                budget_mode=budget_mode,
+                notification_engine=notification_engine,
             )
             console.print(f"\n  📁 Results exported to: [bold]{output_dir}[/]")
 
@@ -817,6 +908,10 @@ async def _run_full_autonomous(
     rag_threshold: float = 0.7,
     rag_gate: float | None = None,
     tool_defs: str | None = None,
+    show_cost: bool = False,
+    budget_limit: float | None = None,
+    budget_mode: str = "soft",
+    notification_engine=None,
 ):
     """Run the fully autonomous pipeline: discovery → approval → partial pipeline."""
     from src.core.llm_client import LLMClientFactory
@@ -972,6 +1067,10 @@ async def _run_full_autonomous(
                     rag_threshold=rag_threshold,
                     rag_gate=rag_gate,
                     tool_defs=tool_defs,
+                    show_cost=show_cost,
+                    budget_limit=budget_limit,
+                    budget_mode=budget_mode,
+                    notification_engine=notification_engine,
                 )
                 console.print(f"\n  📁 Results exported to: [bold]{output_dir}[/]")
             else:
@@ -1003,12 +1102,14 @@ async def _run_full_autonomous(
             pass
         _print_auto_result(result, output_dir, run_fingerprint=_auto_fp, workflow=workflow, no_workflow=no_workflow,
                            signature=signature, rag_eval=rag_eval, rag_eval_speed=rag_eval_speed,
-                           rag_threshold=rag_threshold, rag_gate=rag_gate, tool_defs=tool_defs)
+                           rag_threshold=rag_threshold, rag_gate=rag_gate, tool_defs=tool_defs,
+                           show_cost=show_cost, budget_limit=budget_limit, budget_mode=budget_mode)
 
 
 def _print_auto_result(result, output_dir: str, run_fingerprint=None, workflow: str | None = None, no_workflow: bool = False,
                         signature: bool = True, rag_eval: bool = False, rag_eval_speed: str = "standard",
-                        rag_threshold: float = 0.7, rag_gate: float | None = None, tool_defs: str | None = None):
+                        rag_threshold: float = 0.7, rag_gate: float | None = None, tool_defs: str | None = None,
+                        show_cost: bool = False, budget_limit: float | None = None, budget_mode: str = "soft"):
     """Display the fully autonomous mode results."""
     console.print("\n" + "=" * 60)
     console.print("[bold magenta]🤖 Fully Autonomous Mode Results[/]")
@@ -1082,6 +1183,9 @@ def _print_auto_result(result, output_dir: str, run_fingerprint=None, workflow: 
                 rag_threshold=rag_threshold,
                 rag_gate=rag_gate,
                 tool_defs=tool_defs,
+                show_cost=show_cost,
+                budget_limit=budget_limit,
+                budget_mode=budget_mode,
             )
         elif sim_result and hasattr(sim_result, "aborted") and sim_result.aborted:
             console.print(f"[yellow]  Pipeline was aborted: {sim_result.abort_reason}[/]")
@@ -1249,9 +1353,13 @@ def _post_simulation_analysis(
     rag_gate: float | None = None,
     tool_defs: str | None = None,
     documentation: str = "",
+    show_cost: bool = False,
+    budget_limit: float | None = None,
+    budget_mode: str = "soft",
+    notification_engine=None,
 ):
     """
-    Run post-simulation analysis — coverage, versioning, compliance, workflow, expansion, RAG/tool eval, and signature.
+    Run post-simulation analysis — coverage, versioning, compliance, workflow, expansion, RAG/tool eval, signature, and cost summary.
 
     Called from all 3 modes (manual, partial, auto) to ensure
     consistent outputs regardless of execution path.
@@ -1369,6 +1477,16 @@ def _post_simulation_analysis(
                     f"\n  [bold red]✗ COVERAGE GATE FAILED:[/] "
                     f"{coverage_report.overall_coverage:.0%} < {min_coverage:.0%} threshold"
                 )
+                if notification_engine:
+                    try:
+                        from src.notifications.models import NotificationEvent, EventType as _NE
+                        notification_engine.notify_sync(NotificationEvent(
+                            event_type=_NE.GATE_FAILED,
+                            summary=f"Coverage gate failed: {coverage_report.overall_coverage:.0%} < {min_coverage:.0%}",
+                            details={"gate_name": "coverage", "actual": coverage_report.overall_coverage, "threshold": min_coverage},
+                        ))
+                    except Exception:
+                        pass
                 sys.exit(1)
             else:
                 console.print(
@@ -1548,6 +1666,17 @@ def _post_simulation_analysis(
                     f"{len(scorecard.critical_violations)} critical, "
                     f"{len(scorecard.high_violations)} high violation(s)"
                 )
+                if notification_engine:
+                    try:
+                        from src.notifications.models import NotificationEvent, EventType as _NE
+                        notification_engine.notify_sync(NotificationEvent(
+                            event_type=_NE.GATE_FAILED,
+                            summary=f"Compliance gate failed: {scorecard.failed_rules} rule(s) failed",
+                            details={"gate_name": "policy", "failed_rules": scorecard.failed_rules,
+                                     "critical_violations": len(scorecard.critical_violations)},
+                        ))
+                    except Exception:
+                        pass
                 sys.exit(1)
             else:
                 console.print(
@@ -1690,6 +1819,16 @@ def _post_simulation_analysis(
                 # Gate check
                 if total_critical_all > 0:
                     console.print(f"\n  [bold red]✗ WORKFLOW GATE FAILED:[/] {total_critical_all} critical violation(s) across {len(workflow_defs)} workflow(s)")
+                    if notification_engine:
+                        try:
+                            from src.notifications.models import NotificationEvent, EventType as _NE
+                            notification_engine.notify_sync(NotificationEvent(
+                                event_type=_NE.GATE_FAILED,
+                                summary=f"Workflow gate failed: {total_critical_all} critical violations",
+                                details={"gate_name": "workflow", "critical_violations": total_critical_all},
+                            ))
+                        except Exception:
+                            pass
                     import sys
                     sys.exit(1)
                 elif workflow_defs:
@@ -1907,6 +2046,16 @@ def _post_simulation_analysis(
                             f"\n  [bold red]✗ RAG GATE FAILED:[/] "
                             f"Overall score {rag_report.overall_score:.3f} < {rag_gate}"
                         )
+                        if notification_engine:
+                            try:
+                                from src.notifications.models import NotificationEvent, EventType as _NE
+                                notification_engine.notify_sync(NotificationEvent(
+                                    event_type=_NE.GATE_FAILED,
+                                    summary=f"RAG gate failed: score {rag_report.overall_score:.3f} < {rag_gate}",
+                                    details={"gate_name": "rag_eval", "actual": rag_report.overall_score, "threshold": rag_gate},
+                                ))
+                            except Exception:
+                                pass
                         import sys
                         sys.exit(1)
 
@@ -2003,6 +2152,192 @@ def _post_simulation_analysis(
         except Exception as e:
             console.print(f"  [dim]Signature analysis skipped: {e}[/]")
 
+    # ── Step 8: Cost Summary (P4 #27) ────────────────────────
+    if show_cost or budget_limit:
+        try:
+            from src.cost import get_cost_tracker, reset_cost_tracker
+            from src.cost.cost_html import inject_cost_into_report
+
+            tracker = get_cost_tracker()
+            if tracker and not tracker.is_finalized:
+                cost_report = tracker.finalize(
+                    total_conversations=report.summary.total_conversations if hasattr(report, 'summary') else 0,
+                    total_turns=report.summary.total_turns if hasattr(report, 'summary') else 0,
+                )
+
+                # Console output
+                if show_cost:
+                    _print_cost_summary(cost_report)
+
+                # Save cost.json
+                try:
+                    import json as _json
+                    cost_path = Path(output_dir) / "cost.json"
+                    with open(cost_path, "w") as f:
+                        _json.dump(cost_report.to_dict(), f, indent=2)
+                    console.print(f"  💰 Cost report: {cost_path}")
+                except Exception:
+                    pass
+
+                # Append to summary.json
+                try:
+                    import json as _json
+                    summary_path = Path(output_dir) / "summary.json"
+                    if summary_path.exists():
+                        with open(summary_path, "r") as f:
+                            summary_data = _json.load(f)
+                        summary_data["cost_summary"] = cost_report.to_dict()
+                        with open(summary_path, "w") as f:
+                            _json.dump(summary_data, f, indent=2)
+                except Exception:
+                    pass
+
+                # Inject into HTML report
+                try:
+                    html_path = exported.get("html") if exported else None
+                    if not html_path:
+                        candidate = Path(output_dir) / "report.html"
+                        if candidate.exists():
+                            html_path = str(candidate)
+                    if html_path:
+                        if inject_cost_into_report(html_path, cost_report):
+                            console.print(f"  💰 Cost section added to HTML report")
+                except Exception:
+                    pass
+
+                # Budget gate
+                if cost_report.budget_exceeded:
+                    console.print(
+                        f"\n  [bold red]✗ BUDGET EXCEEDED:[/] "
+                        f"Estimated ${cost_report.total_estimated_cost_usd:.4f} > "
+                        f"limit ${cost_report.budget_limit:.2f} "
+                        f"({cost_report.budget_mode} mode)"
+                    )
+                elif budget_limit:
+                    console.print(
+                        f"\n  [bold green]✓ WITHIN BUDGET:[/] "
+                        f"Estimated ${cost_report.total_estimated_cost_usd:.4f} / "
+                        f"${budget_limit:.2f} limit"
+                    )
+
+                reset_cost_tracker()
+        except ImportError:
+            pass
+        except Exception as e:
+            console.print(f"  [dim]Cost tracking skipped: {e}[/]")
+
+    # ── Step 9: Notification Finalize (P4 #22) ───────────────
+    if notification_engine:
+        try:
+            from src.notifications.models import NotificationEvent, EventType as _NEvt
+            from src.notifications.notification_html import inject_notification_into_report
+            import json as _json
+
+            # Build report links (Review #5)
+            _report_links = {}
+            _html_path = exported.get("html") if exported else None
+            if not _html_path:
+                _candidate = Path(output_dir) / "report.html"
+                if _candidate.exists():
+                    _html_path = str(_candidate)
+            if _html_path:
+                _report_links["report_html"] = _html_path
+            _summary_file = Path(output_dir) / "summary.json"
+            if _summary_file.exists():
+                _report_links["report_json"] = str(_summary_file)
+            _cost_file = Path(output_dir) / "cost.json"
+            if _cost_file.exists():
+                _report_links["cost_report"] = str(_cost_file)
+
+            # Cost snapshot
+            _cost_snap = {}
+            try:
+                from src.cost import get_cost_tracker as _gct
+                _ct = _gct()
+                if _ct:
+                    _cost_snap = {
+                        "estimated_total": _ct.total_estimated_cost,
+                        "tokens_used": _ct._total_tokens,
+                    }
+            except Exception:
+                pass
+
+            # Build summary details
+            _summary_data = {}
+            if hasattr(report, 'summary'):
+                _s = report.summary
+                _summary_data = {
+                    "pass_rate": getattr(_s, "pass_rate", 0),
+                    "average_score": getattr(_s, "average_score", 0),
+                    "critical_failures": getattr(_s, "critical_failures", 0),
+                    "total_conversations": getattr(_s, "total_conversations", 0),
+                }
+
+            _completed_event = NotificationEvent(
+                event_type=_NEvt.RUN_COMPLETED,
+                summary=f"Simulation completed: {_summary_data.get('pass_rate', 0):.0%} pass rate, "
+                        f"{_summary_data.get('critical_failures', 0)} critical failures",
+                run_id=getattr(report, 'summary', None) and getattr(report.summary, 'simulation_id', '') or '',
+                details=_summary_data,
+                links=_report_links,
+                cost_snapshot=_cost_snap,
+            )
+
+            # Finalize: emit run_completed + flush buffers + await background tasks
+            import asyncio as _notify_aio
+            import concurrent.futures as _notify_cf
+
+            async def _finalize_notifications():
+                await notification_engine.notify(_completed_event)
+                return await notification_engine.finalize()
+
+            with _notify_cf.ThreadPoolExecutor(max_workers=1) as _npool:
+                _nfuture = _npool.submit(lambda: _notify_aio.run(_finalize_notifications()))
+                _notif_summary = _nfuture.result(timeout=60)
+
+            # Console output
+            _n_sent = _notif_summary.notifications_sent
+            _n_failed = _notif_summary.notifications_failed
+            _n_suppressed = _notif_summary.notifications_suppressed_rate_limit + _notif_summary.notifications_suppressed_dedupe
+            if _n_sent > 0 or _n_failed > 0:
+                console.print(f"\n  📡 [bold cyan]Notifications:[/] {_n_sent} sent, {_n_failed} failed, {_n_suppressed} suppressed")
+                if _notif_summary.circuit_breaker_trips > 0:
+                    console.print(f"  📡 [yellow]⚠ {_notif_summary.circuit_breaker_trips} channel(s) tripped circuit breaker[/]")
+
+            # Save notification_log.json (full detail — Review #5)
+            try:
+                _nlog_path = Path(output_dir) / "notification_log.json"
+                with open(_nlog_path, "w") as _nf:
+                    _json.dump(_notif_summary.to_full_dict(), _nf, indent=2)
+                console.print(f"  📡 Notification log: {_nlog_path}")
+            except Exception:
+                pass
+
+            # Append compact summary to summary.json
+            try:
+                _sum_path = Path(output_dir) / "summary.json"
+                if _sum_path.exists():
+                    with open(_sum_path, "r") as _sf:
+                        _sd = _json.load(_sf)
+                    _sd["notification_summary"] = _notif_summary.to_summary_dict()
+                    with open(_sum_path, "w") as _sf:
+                        _json.dump(_sd, _sf, indent=2)
+            except Exception:
+                pass
+
+            # Inject into HTML report
+            try:
+                if _html_path:
+                    if inject_notification_into_report(_html_path, _notif_summary):
+                        console.print(f"  📡 Notification summary added to HTML report")
+            except Exception:
+                pass
+
+        except ImportError:
+            pass
+        except Exception as _ne:
+            console.print(f"  [dim]Notification finalize skipped: {_ne}[/]")
+
 
 async def _run_simulation(
     bot_endpoint: str,
@@ -2041,6 +2376,10 @@ async def _run_simulation(
     rag_threshold: float = 0.7,
     rag_gate: float | None = None,
     tool_defs: str | None = None,
+    show_cost: bool = False,
+    budget_limit: float | None = None,
+    budget_mode: str = "soft",
+    notification_engine=None,
 ):
     """Async simulation runner."""
     from src.core.orchestrator import SimulationOrchestrator
@@ -2265,6 +2604,10 @@ async def _run_simulation(
         rag_gate=rag_gate,
         tool_defs=tool_defs,
         documentation=documentation,
+        show_cost=show_cost,
+        budget_limit=budget_limit,
+        budget_mode=budget_mode,
+        notification_engine=notification_engine,
     )
 
     # Auto-save regression suite from failures
@@ -3154,6 +3497,74 @@ def _print_expansion_report(exp_report):
         if exp_report.fluke_count:
             console.print(f"[dim]{exp_report.fluke_count} fluke[/] ", end="")
         console.print()
+
+
+def _print_cost_summary(cost_report):
+    """Print estimated LLM cost summary to console with actionable highlights."""
+    from rich.table import Table
+
+    console.print(f"\n[bold]💰 Estimated Cost Summary[/]")
+    console.print(f"  [dim]Note: Costs are estimated using LiteLLM pricing. Actual provider billing may differ.[/]")
+
+    # Confidence indicator
+    conf_colors = {"high": "green", "partial": "yellow", "low": "red", "none": "dim"}
+    conf_color = conf_colors.get(cost_report.cost_confidence, "dim")
+    console.print(f"  Confidence: [{conf_color}]{cost_report.cost_confidence}[/] "
+                  f"({cost_report.calls_with_usage}/{cost_report.total_calls} calls with usage)")
+
+    # Summary stats
+    console.print(f"  Total estimated cost: [bold cyan]${cost_report.total_estimated_cost_usd:.4f}[/]")
+    console.print(f"  Total tokens: {cost_report.total_tokens:,} "
+                  f"(prompt: {cost_report.total_prompt_tokens:,}, "
+                  f"completion: {cost_report.total_completion_tokens:,})")
+    console.print(f"  LLM calls: {cost_report.total_calls} "
+                  f"(successful: {cost_report.successful_calls}, "
+                  f"retried: {cost_report.retried_calls}, "
+                  f"failed w/usage: {cost_report.failed_calls_with_usage})")
+    if cost_report.cost_per_completed_conversation > 0:
+        console.print(f"  Est. cost/conversation: ${cost_report.cost_per_completed_conversation:.4f}")
+    if cost_report.cost_per_turn > 0:
+        console.print(f"  Est. cost/turn: ${cost_report.cost_per_turn:.4f}")
+
+    # Per-component table
+    if cost_report.per_component:
+        table = Table(show_header=True, header_style="bold", title="Estimated cost by component")
+        table.add_column("Component", max_width=25)
+        table.add_column("Calls", justify="right")
+        table.add_column("Tokens", justify="right")
+        table.add_column("Est. Cost", justify="right", style="cyan")
+
+        sorted_comps = sorted(cost_report.per_component.items(),
+                              key=lambda x: x[1].estimated_cost_usd, reverse=True)
+        for comp_name, cc in sorted_comps:
+            table.add_row(comp_name, str(cc.total_calls),
+                          f"{cc.total_tokens:,}", f"${cc.estimated_cost_usd:.4f}")
+        console.print(table)
+
+    # Per-model table
+    if cost_report.per_model:
+        table = Table(show_header=True, header_style="bold", title="Estimated cost by model")
+        table.add_column("Model", max_width=30)
+        table.add_column("Provider")
+        table.add_column("Calls", justify="right")
+        table.add_column("Tokens", justify="right")
+        table.add_column("Est. Cost", justify="right", style="cyan")
+
+        sorted_models = sorted(cost_report.per_model.items(),
+                               key=lambda x: x[1].estimated_cost_usd, reverse=True)
+        for model_name, mc in sorted_models:
+            table.add_row(model_name[:30], mc.provider,
+                          str(mc.total_calls), f"{mc.total_tokens:,}",
+                          f"${mc.estimated_cost_usd:.4f}")
+        console.print(table)
+
+    # Actionable highlights
+    if cost_report.highest_cost_component:
+        console.print(f"  💡 Highest cost component: [bold]{cost_report.highest_cost_component}[/]")
+    if cost_report.highest_cost_model:
+        console.print(f"  💡 Highest cost model: [bold]{cost_report.highest_cost_model}[/]")
+    if cost_report.calls_without_usage > 0:
+        console.print(f"  ⚠️  {cost_report.calls_without_usage} call(s) missing usage data — cost may be underestimated")
 
 
 def _print_rag_eval_report(rag_report):
@@ -4986,6 +5397,657 @@ def history(history_dir: str, last_n: int, filter_tag: str | None):
         console.print(f"\n  {direction} Pass rate trend: {first.pass_rate:.0%} → {last.pass_rate:.0%} ({pr_delta:+.0%})")
 
     console.print()
+
+
+# ============================================================
+# simtest notify-test — Test notification config
+# ============================================================
+
+@main.command("notify-test")
+@click.option("--config", "config_path", required=True, help="Path to notify.yaml")
+@click.option("--channel", default=None, help="Test a specific channel by name (default: all)")
+@click.option("--event", "event_type", default="gate_failed", help="Event type to simulate (default: gate_failed)")
+def notify_test(config_path: str, channel: str | None, event_type: str):
+    """Send a test notification to validate your notify.yaml config."""
+    import asyncio as _aio
+    from src.notifications import (
+        load_notification_config, NotificationEngine,
+        NotificationEvent, EventType, lint_notification_config,
+    )
+
+    console.print(Panel.fit(
+        "[bold cyan]AI SimTest[/] — Notification Test",
+        subtitle="Validating notification config",
+    ))
+
+    # Lint first
+    is_valid, errors, warnings = lint_notification_config(config_path)
+    if not is_valid:
+        for err in errors:
+            console.print(f"  [red]✗ {err}[/]")
+        sys.exit(1)
+    for w in warnings:
+        console.print(f"  [yellow]⚠ {w}[/]")
+
+    config = load_notification_config(config_path)
+
+    # Filter to specific channel if requested
+    if channel:
+        ch = config.get_channel(channel)
+        if not ch:
+            console.print(f"  [red]✗ Channel '{channel}' not found in config[/]")
+            console.print(f"  Available: {', '.join(c.name for c in config.channels)}")
+            sys.exit(1)
+        config.channels = [ch]
+
+    # Parse event type
+    try:
+        et = EventType(event_type)
+    except ValueError:
+        console.print(f"  [red]✗ Unknown event type: {event_type}[/]")
+        console.print(f"  Available: {', '.join(e.value for e in EventType)}")
+        sys.exit(1)
+
+    # Build test event
+    test_event = NotificationEvent(
+        event_type=et,
+        summary=f"Test notification from AI SimTest (event: {et.value})",
+        run_id="test_run_000",
+        details={"gate_name": "test", "test_mode": True, "source": "notify-test CLI"},
+        links={"report_html": "./reports/test_report.html"},
+        environment=config.environment or "test",
+    )
+
+    console.print(f"\n  📡 Sending test notification ({et.value}) to {len(config.channels)} channel(s)...")
+
+    engine = NotificationEngine(config, dry_run=False)
+
+    async def _send_test():
+        await engine.notify(test_event)
+        return await engine.finalize()
+
+    summary = _aio.run(_send_test())
+
+    console.print(f"\n  ✅ Sent: {summary.notifications_sent}")
+    if summary.notifications_failed > 0:
+        console.print(f"  [red]✗ Failed: {summary.notifications_failed}[/]")
+        for entry in summary.delivery_log:
+            if entry.get("status") == "failed":
+                console.print(f"    Channel: {entry.get('channel_name')} — {entry.get('failure_class', 'unknown')}")
+        sys.exit(1)
+    else:
+        console.print("  ✅ All channels delivered successfully!")
+
+
+# ============================================================
+# simtest notify-lint — Validate notification config
+# ============================================================
+
+@main.command("notify-lint")
+@click.option("--config", "config_path", required=True, help="Path to notify.yaml")
+def notify_lint(config_path: str):
+    """Validate a notify.yaml config file without sending any notifications."""
+    from src.notifications import lint_notification_config
+
+    console.print(Panel.fit(
+        "[bold cyan]AI SimTest[/] — Notification Config Lint",
+        subtitle="Static validation only — no network calls",
+    ))
+
+    is_valid, errors, warnings = lint_notification_config(config_path)
+
+    if errors:
+        for err in errors:
+            console.print(f"  [red]✗ {err}[/]")
+    if warnings:
+        for w in warnings:
+            console.print(f"  [yellow]⚠ {w}[/]")
+
+    if is_valid:
+        console.print(f"\n  [bold green]✓ Config is valid[/]")
+    else:
+        console.print(f"\n  [bold red]✗ Config has {len(errors)} error(s)[/]")
+        sys.exit(1)
+
+
+
+# ============================================================
+# simtest multi-compare (P4 #20 — Multi-Model Comparison)
+# ============================================================
+
+@main.command("multi-compare")
+@click.option("--config", "config_path", required=True,
+              type=click.Path(exists=True),
+              help="Path to models.yaml defining bot endpoints and comparison settings.")
+@click.option("--output", "output_dir", default="./reports/multi_compare",
+              help="Output directory for comparison results [default: ./reports/multi_compare]")
+@click.option("--profile", "profile_override", default=None,
+              help="Override decision profile: balanced, safety_first, quality_first, cost_optimized, compliance_first, low_latency")
+@click.option("--champion", "champion_override", default=None,
+              help="Override champion model ID (must match a model ID in config)")
+@click.option("--fail-if-worse", is_flag=True, default=False,
+              help="CI/CD gate: exit code 1 if gate verdict is FAIL")
+@click.option("--strict", is_flag=True, default=False,
+              help="Enable strict analysis mode (blocks results on low confidence / invalid parity)")
+@click.option("--dry-run", is_flag=True, default=False,
+              help="Validate config and show run plan without executing simulations")
+@click.option("--resume", is_flag=True, default=False,
+              help="Resume from checkpoint if a previous run was interrupted")
+@click.option("--show-cost", is_flag=True, default=False,
+              help="Display per-model cost breakdown in console output")
+@click.option("--personas", "personas_override", default=None, type=int,
+              help="Override persona count from config (2-100)")
+@click.option("--parallel", "parallel_override", default=None, type=int,
+              help="Override per-model conversation parallelism (1-20)")
+@click.option("--budget-limit", "budget_override", default=None, type=float,
+              help="Override per-model budget limit in USD")
+def multi_compare(
+    config_path: str,
+    output_dir: str,
+    profile_override: str | None,
+    champion_override: str | None,
+    fail_if_worse: bool,
+    strict: bool,
+    dry_run: bool,
+    resume: bool,
+    show_cost: bool,
+    personas_override: int | None,
+    parallel_override: int | None,
+    budget_override: float | None,
+):
+    """Compare multiple bot models side-by-side with the same persona set.
+
+    Runs the same simulation against each bot endpoint defined in the YAML
+    config, then performs N-way comparison analysis and generates an
+    enterprise-grade HTML dashboard.
+
+    Examples:
+
+        simtest multi-compare --config models.yaml
+
+        simtest multi-compare --config models.yaml --profile safety_first
+
+        simtest multi-compare --config models.yaml --fail-if-worse --strict
+
+        simtest multi-compare --config models.yaml --dry-run
+
+        simtest multi-compare --config models.yaml --personas 5 --parallel 2
+    """
+    import time as _time
+
+    console.print(Panel.fit(
+        "[bold blue]AI SimTest[/] — Multi-Model Comparison",
+        subtitle="P4 #20 · Enterprise-Grade Model Evaluation",
+    ))
+
+    # ── Step 1: Load and validate config ─────────────────────
+    try:
+        config = _load_multi_compare_config(config_path)
+    except Exception as e:
+        console.print(f"\n[red]❌ Config error: {e}[/]")
+        console.print(f"[dim]Check your YAML syntax and model definitions.[/]")
+        sys.exit(1)
+
+    # Apply CLI overrides
+    if profile_override:
+        config.decision_profile = profile_override
+    if champion_override:
+        config.champion = champion_override
+    if personas_override is not None:
+        config.settings.personas = personas_override
+    if parallel_override is not None:
+        config.settings.parallel = parallel_override
+    if budget_override is not None:
+        config.settings.budget_limit = budget_override
+
+    # Re-validate after overrides
+    try:
+        config.get_decision_profile()
+    except ValueError as e:
+        console.print(f"\n[red]❌ Profile error: {e}[/]")
+        sys.exit(1)
+
+    # Resolve API keys from environment
+    _resolve_api_keys(config)
+
+    # ── Step 2: Display run plan ─────────────────────────────
+    _print_multi_compare_plan(config, strict, resume)
+
+    if dry_run:
+        console.print(f"\n  [yellow]🏁 Dry-run complete — no simulations executed.[/]")
+        return
+
+    # ── Step 3: Run simulations ──────────────────────────────
+    run_start = _time.time()
+    out_path = Path(output_dir)
+    out_path.mkdir(parents=True, exist_ok=True)
+
+    model_results = {}
+    shared_personas = None
+    total_models = len(config.models)
+
+    for idx, model_spec in enumerate(config.models, 1):
+        model_label = f"{idx}/{total_models}"
+        console.print(f"\n  ▶ Running model {model_label}: [bold]{model_spec.name}[/] ({model_spec.id})")
+
+        try:
+            result, personas_used = _run_single_model(
+                model_spec=model_spec,
+                settings=config.settings,
+                shared_personas=shared_personas,
+                output_base=out_path,
+            )
+            model_results[model_spec.id] = result
+
+            # Capture shared personas from first run
+            if shared_personas is None and personas_used:
+                shared_personas = personas_used
+
+            status_icon = "✅" if result.status.value == "success" else "⚠️"
+            pass_rate = result.summary_dict.get("pass_rate", 0)
+            exec_time = result.execution_time_seconds
+            console.print(
+                f"    {status_icon} Completed in {exec_time:.1f}s · "
+                f"Pass rate: {pass_rate:.0%}"
+            )
+
+            if show_cost and result.cost_report_dict:
+                cost = result.cost_report_dict.get("total_estimated_cost", 0)
+                console.print(f"    💰 Estimated cost: ${cost:.4f}")
+
+        except Exception as e:
+            console.print(f"    [red]❌ Model failed: {e}[/]")
+            from src.multi_compare.models import ModelRunResult, ModelRunStatus
+            model_results[model_spec.id] = ModelRunResult(
+                model_id=model_spec.id,
+                model_name=model_spec.name,
+                status=ModelRunStatus.FAILED,
+                error=str(e),
+            )
+
+    run_elapsed = _time.time() - run_start
+
+    # ── Step 4: N-Way Analysis ───────────────────────────────
+    console.print(f"\n  📊 Running N-way comparison analysis...")
+
+    try:
+        from src.multi_compare.analysis import NWayComparisonEngine, AnalysisConfig, AnalysisMode
+
+        analysis_config = AnalysisConfig(
+            mode=AnalysisMode.STRICT if strict else AnalysisMode.EXPLORATORY,
+            champion_id=config.champion,
+            decision_profile_name=config.decision_profile,
+        )
+
+        engine = NWayComparisonEngine(analysis_config)
+        report = engine.analyze(
+            results=model_results,
+            total_personas=config.settings.personas,
+            champion_id=config.champion,
+            decision_profile=config.get_decision_profile(),
+        )
+
+        # Stamp metadata
+        report.config_name = config.name
+        report.decision_profiles_applied = [config.decision_profile]
+
+    except Exception as e:
+        console.print(f"\n[red]❌ Analysis failed: {e}[/]")
+        import traceback
+        console.print(f"[dim]{traceback.format_exc()}[/]")
+        sys.exit(1)
+
+    # ── Step 5: Generate dashboard ───────────────────────────
+    try:
+        from src.multi_compare.dashboard import MultiCompareDashboard
+
+        dashboard_path = out_path / "multi_compare_report.html"
+        MultiCompareDashboard().export(report, dashboard_path)
+        console.print(f"  ✅ Dashboard generated")
+    except Exception as e:
+        console.print(f"  [yellow]⚠ Dashboard generation failed: {e}[/]")
+        dashboard_path = None
+
+    # ── Step 6: Export comparison JSON ────────────────────────
+    try:
+        comparison_json_path = out_path / "comparison.json"
+        report_data = report.model_dump(mode="json")
+        with open(comparison_json_path, "w") as f:
+            json.dump(report_data, f, indent=2, default=str)
+        console.print(f"  ✅ Comparison JSON exported")
+    except Exception as e:
+        console.print(f"  [yellow]⚠ JSON export failed: {e}[/]")
+        comparison_json_path = None
+
+    # ── Step 7: Print console summary ────────────────────────
+    _print_multi_compare_summary(report, run_elapsed, show_cost)
+
+    # ── Step 8: Print file locations ─────────────────────────
+    console.print(f"\n  📁 Output directory: [bold]{out_path}[/]")
+    if dashboard_path:
+        console.print(f"  📁 Dashboard: [bold]{dashboard_path}[/]")
+    if comparison_json_path:
+        console.print(f"  📁 Comparison JSON: [bold]{comparison_json_path}[/]")
+
+    # ── Step 9: CI/CD gate ───────────────────────────────────
+    if fail_if_worse and not report.gate_result.passed:
+        console.print(f"\n  [bold red]✗ CI/CD gate FAILED — exiting with code 1[/]")
+        for gc in report.gate_result.checks:
+            if not gc.passed:
+                console.print(f"    [red]✗ {gc.name}: {gc.reason}[/]")
+        sys.exit(1)
+    elif report.gate_result.passed:
+        console.print(f"\n  [green]✓ All CI/CD gate checks passed[/]")
+
+
+# ─────────────────────────────────────────────────────────────
+# Multi-Compare Helper Functions
+# ─────────────────────────────────────────────────────────────
+
+def _load_multi_compare_config(config_path: str):
+    """Load and validate models.yaml → MultiCompareConfig."""
+    import yaml
+
+    path = Path(config_path)
+    raw = path.read_text(encoding="utf-8")
+
+    # Support both YAML and JSON
+    if path.suffix in (".yaml", ".yml"):
+        data = yaml.safe_load(raw)
+    else:
+        data = json.loads(raw)
+
+    from src.multi_compare.models import MultiCompareConfig
+    return MultiCompareConfig(**data)
+
+
+def _resolve_api_keys(config):
+    """Resolve API keys from environment variables."""
+    import os
+
+    for model_spec in config.models:
+        if model_spec.api_key_env and not model_spec.api_key:
+            key = os.environ.get(model_spec.api_key_env)
+            if key:
+                model_spec.api_key = key
+            else:
+                console.print(
+                    f"  [yellow]⚠ API key env '{model_spec.api_key_env}' "
+                    f"not set for model '{model_spec.id}'[/]"
+                )
+
+
+def _print_multi_compare_plan(config, strict: bool, resume: bool):
+    """Display the run plan as a Rich table."""
+    mode_label = config.mode.value.replace("_", " ").title()
+    profile_label = config.decision_profile.replace("_", " ").title()
+    analysis_mode = "STRICT" if strict else "EXPLORATORY"
+
+    console.print(f"\n  📋 Config: [bold]{config.name}[/]")
+    console.print(f"     Mode: {mode_label}")
+    console.print(f"     Profile: {profile_label}")
+    console.print(f"     Analysis: {analysis_mode}")
+    if config.champion:
+        console.print(f"     Champion: [bold]{config.champion}[/]")
+    console.print(f"     Personas: {config.settings.personas} · "
+                  f"Max turns: {config.settings.max_turns} · "
+                  f"Parallel: {config.settings.parallel}")
+
+    if config.settings.budget_limit:
+        console.print(f"     Budget: ${config.settings.budget_limit:.2f}/model "
+                      f"({config.settings.budget_mode})")
+
+    if resume:
+        console.print(f"     [cyan]Resume: ON — will skip completed models[/]")
+
+    # Model table
+    table = Table(title="Models", show_header=True, header_style="bold dim",
+                  border_style="dim", pad_edge=False)
+    table.add_column("#", style="dim", width=3)
+    table.add_column("ID", style="bold")
+    table.add_column("Name")
+    table.add_column("Endpoint", style="dim")
+    table.add_column("Adapter", style="dim")
+    table.add_column("Tags", style="dim")
+
+    for i, m in enumerate(config.models, 1):
+        champion_mark = " 🏆" if m.id == config.champion else ""
+        endpoint_short = m.endpoint[:50] + "..." if len(m.endpoint) > 50 else m.endpoint
+        tags_str = ", ".join(m.tags) if m.tags else ""
+        table.add_row(
+            str(i),
+            f"{m.id}{champion_mark}",
+            m.name,
+            endpoint_short,
+            m.adapter.value,
+            tags_str,
+        )
+
+    console.print(table)
+
+
+def _run_single_model(model_spec, settings, shared_personas, output_base):
+    """
+    Run a single model's simulation.
+
+    Uses the existing ManualOrchestrator pipeline, reusing shared personas
+    for cross-model consistency.
+
+    Returns (ModelRunResult, personas_used).
+    """
+    import time as _time
+    from src.multi_compare.models import ModelRunResult, ModelRunStatus
+
+    model_start = _time.time()
+    model_output = output_base / model_spec.id
+    model_output.mkdir(parents=True, exist_ok=True)
+
+    try:
+        from src.models import BotConfig, SimulationConfig
+        from src.providers import LLMClientFactory
+        from src.core.orchestrator import SimulationOrchestrator
+        from src.generators.persona_generator import PersonaGenerator
+        from src.judges import JudgeEngine, GroundingJudge, SafetyJudge, QualityJudge
+        from src.judges import RelevanceJudge
+        from src.exporters.html_report import HTMLReportExporter
+        from src.exporters.dataset_exporter import DatasetExporter
+
+        # Build bot config from ModelSpec
+        bot_config = BotConfig(
+            api_endpoint=model_spec.endpoint,
+            api_key=model_spec.api_key or "",
+            request_format=model_spec.request_format or "openai",
+            response_path=model_spec.response_path,
+            headers=model_spec.headers,
+            timeout_seconds=model_spec.timeout_seconds,
+            verify_ssl=model_spec.verify_ssl,
+        )
+
+        # Build simulation config
+        sim_config = SimulationConfig(
+            name=f"Multi-Compare: {model_spec.name}",
+            bot=bot_config,
+            documentation=settings.documentation or "",
+            num_personas=settings.personas,
+            max_turns=settings.max_turns,
+            min_turns=settings.min_turns,
+            max_parallel_conversations=settings.parallel,
+            pass_threshold=settings.pass_threshold,
+            warn_threshold=settings.warn_threshold,
+        )
+
+        # Initialize cost tracking for this model
+        try:
+            from src.cost import init_cost_tracker, BudgetMode as _BM
+            _tracker = init_cost_tracker(
+                run_id=model_spec.id,
+                budget_limit=settings.budget_limit,
+                budget_mode=_BM(settings.budget_mode) if settings.budget_limit else _BM.SOFT,
+            )
+        except ImportError:
+            pass
+
+        # Create LLM client
+        llm_client = LLMClientFactory.create(provider="openai")
+
+        # Generate or reuse personas
+        if shared_personas is not None:
+            personas = shared_personas
+        else:
+            generator = PersonaGenerator(llm_client)
+            personas = asyncio.run(
+                generator.generate(sim_config)
+            )
+
+        # Initialize judges
+        grounding_judge = GroundingJudge(
+            model_name="sentence-transformers/all-MiniLM-L6-v2",
+            threshold=0.35,
+        )
+        safety_judge = SafetyJudge(pii_enabled=True, toxicity_enabled=True)
+        quality_judge = QualityJudge(llm_client)
+        relevance_judge = RelevanceJudge(use_llm=False)
+
+        judges = [grounding_judge, safety_judge, quality_judge, relevance_judge]
+        judge_engine = JudgeEngine(judges)
+        asyncio.run(judge_engine.initialize_all())
+
+        # Run simulation
+        orchestrator = SimulationOrchestrator(
+            config=sim_config,
+            llm_client=llm_client,
+            judge_engine=judge_engine,
+        )
+
+        report = asyncio.run(
+            orchestrator.run(personas=personas)
+        )
+
+        # Export per-model outputs
+        exporter = DatasetExporter()
+        summary_path = model_output / "summary.json"
+        summary_data = report.summary.model_dump(mode="json")
+
+        # Add score_by_judge to summary for analysis
+        summary_data["score_by_judge"] = report.score_by_judge
+        summary_data["score_by_persona_type"] = report.score_by_persona_type
+
+        with open(summary_path, "w") as f:
+            json.dump(summary_data, f, indent=2, default=str)
+
+        # Export JSONL
+        jsonl_path = model_output / "results.jsonl"
+        exporter.export_jsonl(report.judged_conversations, str(jsonl_path))
+
+        # Export per-model HTML
+        try:
+            html_path = model_output / "report.html"
+            HTMLReportExporter().export(report, personas, html_path)
+        except Exception:
+            pass  # Non-critical
+
+        # Collect cost data
+        cost_dict = None
+        try:
+            from src.cost import get_cost_tracker
+            tracker = get_cost_tracker()
+            if tracker:
+                cost_report = tracker.finalize()
+                cost_dict = cost_report.model_dump(mode="json")
+        except (ImportError, Exception):
+            pass
+
+        elapsed = _time.time() - model_start
+
+        return ModelRunResult(
+            model_id=model_spec.id,
+            model_name=model_spec.name,
+            status=ModelRunStatus.SUCCESS,
+            report=report,
+            summary_dict=summary_data,
+            cost_report_dict=cost_dict,
+            execution_time_seconds=round(elapsed, 1),
+        ), personas
+
+    except Exception as e:
+        elapsed = _time.time() - model_start
+        return ModelRunResult(
+            model_id=model_spec.id,
+            model_name=model_spec.name,
+            status=ModelRunStatus.FAILED,
+            error=str(e),
+            execution_time_seconds=round(elapsed, 1),
+        ), shared_personas
+
+
+def _print_multi_compare_summary(report, elapsed: float, show_cost: bool):
+    """Print Rich console summary of comparison results."""
+    matrix = report.comparison_matrix
+
+    # Winner
+    winner = matrix.overall_winner
+    winner_text = f"[bold green]{winner}[/]" if winner else "[yellow]No clear winner[/]"
+
+    # Find winner score
+    winner_score = ""
+    if winner:
+        for r in matrix.rankings:
+            if r.model_id == winner:
+                winner_score = f" (score {r.overall_score:.3f})"
+                break
+
+    # Gate
+    gate = report.gate_result
+    gate_text = "[bold green]PASS[/]" if gate.passed else "[bold red]FAIL[/]"
+
+    # Parity
+    parity_ok = all(not p.parity_warning for p in matrix.coverage_parity)
+    parity_text = "[green]OK[/]" if parity_ok else "[yellow]DEGRADED[/]"
+    for p in matrix.coverage_parity:
+        if p.parity_warning and "invalid" in p.parity_warning.lower():
+            parity_text = "[red]INVALID[/]"
+            break
+
+    # Build summary panel
+    summary_lines = [
+        f"🏆 Winner: {winner_text}{winner_score}",
+        f"🚦 Gate: {gate_text}",
+        f"📏 Parity: {parity_text}",
+        f"⏱  Total time: {elapsed:.1f}s",
+    ]
+
+    # Rankings
+    if matrix.rankings:
+        summary_lines.append("")
+        for r in sorted(matrix.rankings, key=lambda x: x.overall_rank):
+            rank_icon = "🥇" if r.overall_rank == 1 else "🥈" if r.overall_rank == 2 else "🥉" if r.overall_rank == 3 else f"#{r.overall_rank}"
+            deploy = "✅" if r.deployment_ready else "❌"
+            score_color = "green" if r.overall_score >= 0.8 else "yellow" if r.overall_score >= 0.5 else "red"
+            summary_lines.append(
+                f"  {rank_icon} {r.model_name}: "
+                f"[{score_color}]{r.overall_score:.3f}[/] {deploy}"
+            )
+
+    # Cost summary
+    if show_cost and report.cost_analysis:
+        summary_lines.append("")
+        for ce in sorted(report.cost_analysis, key=lambda x: x.cost_rank):
+            summary_lines.append(
+                f"  💰 {ce.model_id}: ${ce.total_cost:.4f} "
+                f"(${ce.cost_per_conversation or 0:.4f}/conv)"
+            )
+
+    # Recommendations (top 2)
+    if report.recommendations:
+        summary_lines.append("")
+        for rec in report.recommendations[:2]:
+            summary_lines.append(f"  {rec}")
+
+    console.print(Panel(
+        "\n".join(summary_lines),
+        title="[bold]📊 Comparison Results[/]",
+        border_style="blue",
+    ))
 
 
 if __name__ == "__main__":

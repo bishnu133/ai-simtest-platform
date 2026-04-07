@@ -189,6 +189,31 @@ class LLMClient:
 
             logger.debug("llm_request", model=self.model, provider=self.provider.value, n=len(messages))
             response = await litellm.acompletion(**kwargs)
+
+            # ── Cost tracking (P4 #27) ────────────────────────────
+            try:
+                from src.cost.tracker import get_cost_tracker
+                from src.cost.pricing import estimate_cost_from_usage
+                cost_tracker = get_cost_tracker()
+                if cost_tracker is not None and not cost_tracker.is_finalized:
+                    usage = getattr(response, 'usage', None)
+                    has_usage = usage is not None and getattr(usage, 'total_tokens', 0) > 0
+                    pt, ct, tt, est_cost = estimate_cost_from_usage(self.model, usage)
+                    component = getattr(self, '_cost_component', 'other')
+                    subcomponent = getattr(self, '_cost_subcomponent', '')
+                    cost_tracker.record(
+                        model=self.model,
+                        prompt_tokens=pt,
+                        completion_tokens=ct,
+                        total_tokens=tt,
+                        component=component,
+                        subcomponent=subcomponent,
+                        provider=self.provider.value,
+                        has_usage=has_usage,
+                    )
+            except Exception:
+                pass  # Cost tracking must never break LLM calls
+
             content = response.choices[0].message.content
             logger.debug("llm_response", model=self.model, provider=self.provider.value,
                          tokens=response.usage.total_tokens if response.usage else None)
@@ -228,15 +253,21 @@ class LLMClientFactory:
 
     @classmethod
     def persona_generator(cls) -> LLMClient:
-        return cls.get_client(settings.persona_generator_model, temperature=0.9, max_tokens=4000)
+        client = cls.get_client(settings.persona_generator_model, temperature=0.9, max_tokens=4000)
+        client._cost_component = "persona_generator"
+        return client
 
     @classmethod
     def user_simulator(cls) -> LLMClient:
-        return cls.get_client(settings.user_simulator_model, temperature=0.8, max_tokens=500)
+        client = cls.get_client(settings.user_simulator_model, temperature=0.8, max_tokens=500)
+        client._cost_component = "user_simulator"
+        return client
 
     @classmethod
     def quality_judge(cls) -> LLMClient:
-        return cls.get_client(settings.quality_judge_model, temperature=0.1, max_tokens=2000)
+        client = cls.get_client(settings.quality_judge_model, temperature=0.1, max_tokens=2000)
+        client._cost_component = "quality_judge"
+        return client
 
     @classmethod
     def clear_cache(cls) -> None:
