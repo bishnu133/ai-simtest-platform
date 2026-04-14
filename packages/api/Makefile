@@ -1,16 +1,32 @@
 # AI SimTest API — Week 5 developer commands
 # Usage: make <target>
 
-.PHONY: install test test-verbose test-coverage clean lint run
+# .PHONY: install test test-verbose test-coverage clean lint run
+.PHONY: install test test-verbose test-coverage test-db clean lint run \
+        db-migrate db-seed-dev
 
 install:
 	pip install -r requirements.txt
 
 test:
-	PYTHONPATH=. python -m pytest tests/ -q
+	PYTHONPATH=. python -m pytest tests/ --ignore=tests/test_storage_r2.py -q
 
 test-verbose:
-	PYTHONPATH=. python -m pytest tests/ -v
+	PYTHONPATH=. python -m pytest tests/ --ignore=tests/test_storage_r2.py -v
+
+test-db:
+	@echo "=== DB tests (requires Postgres 16 binaries) ==="
+	PYTHONPATH=. python -m pytest tests/db/ -v
+
+db-migrate:
+	@echo "=== Running Alembic upgrade head ==="
+	@echo "    Requires DATABASE_URL to be set (postgresql+asyncpg://...)"
+	python -m alembic upgrade head
+
+db-seed-dev:
+	@echo "=== Seeding dev tenant + workspace + dual membership ==="
+	@echo "    Requires DATABASE_URL to be set. Idempotent — safe to re-run."
+	python scripts/seed_dev_tenant.py
 
 test-suite:
 	@echo "=== Storage adapter base ==="

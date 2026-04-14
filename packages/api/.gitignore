@@ -1,0 +1,94 @@
+# ============================================================
+# AI SimTest API — .gitignore
+# ============================================================
+
+# ---- Python bytecode & caches ----
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# ---- Virtualenvs (if one gets created inside packages/api) ----
+.venv/
+venv/
+env/
+ENV/
+
+# ---- Pytest & coverage ----
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.cover
+.hypothesis/
+
+# ---- Mypy / type checker caches ----
+.mypy_cache/
+.dmypy.json
+.pytype/
+.ruff_cache/
+
+# ---- Build artifacts ----
+build/
+dist/
+*.egg-info/
+*.egg
+pip-wheel-metadata/
+src/ai_simtest_api.egg-info/
+
+# ---- Local environment & secrets ----
+# .env.example is committed; .env with real values must never be
+.env
+.env.local
+.env.*.local
+*.env
+
+# Clerk, Neon, R2 credentials should never be committed — if any of
+# these file patterns ever appear, .gitignore catches them:
+credentials.json
+secrets.json
+*.pem
+*.key
+
+# ---- Alembic local test artifacts ----
+# The migration versions/ directory IS committed. But sqlite DBs or
+# local dump files from manual alembic runs should not be.
+*.sqlite
+*.sqlite3
+*.db
+alembic/versions/*.pyc
+
+# ---- Deliverable tarballs (they go in /mnt/user-data/outputs or your Downloads,
+# not in the repo) ----
+ai-simtest-platform-postgres-auth-*.tar.gz
+ai-simtest-platform-week5.zip
+ai-simtest-platform-s1-complete.tar.gz
+POSTGRES_AUTH_TURN*_README.md
+!README.md
+
+# ---- IDE / editor state ----
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ---- Local test output / scratch ----
+/tmp/
+*.log
+pytest-*.log
+test-output/
+scratch/
+diag.py
+test_diag*.py
+test_rls_diag.py
+
+# ---- Jupyter (if you ever open a notebook for exploration) ----
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# ---- Type stubs generated locally ----
+*.pyi.gen

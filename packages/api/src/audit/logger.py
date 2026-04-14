@@ -48,6 +48,12 @@ class AuditActions:
     CONVERSATION_STORED = "conversation.stored"
     CONVERSATION_FETCHED = "conversation.fetched"
     CONVERSATION_DELETED = "conversation.deleted"
+    # Week 6a Turn 2 additions — read-sensitive audit events (v1.2.2 §11.8)
+    CONVERSATION_TRANSCRIPT_VIEWED = "conversation.transcript_viewed"
+    CONVERSATION_DOWNLOAD_URL_ISSUED = "conversation.download_url_issued"
+    # Week 6a Turn 3 additions — comparison audit events (v1.2.2 §11.8)
+    COMPARISON_CREATED = "comparison.created"
+    COMPARISON_VIEWED = "comparison.viewed"
 
     # Tenant/workspace
     TENANT_CREATED = "tenant.created"

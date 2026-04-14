@@ -1,0 +1,1607 @@
+{
+  "components": {
+    "schemas": {
+      "ComparisonListResponse": {
+        "properties": {
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ComparisonRecord"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "ComparisonListResponse",
+        "type": "object"
+      },
+      "ComparisonRecord": {
+        "description": "First-class comparison resource (v1.2.2 \u00a7M2 hybrid storage rule).\n\nInline fields are the SINGLE SOURCE OF TRUTH for both\nGET /v1/comparisons/{id} and GET /v1/comparisons/{id}/regression-signals.\n`result_ref` is reserved for Week 6b/7 heavy diff artifacts and is\nNone for all comparisons created in 6a.",
+        "properties": {
+          "comparison_profile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comparison Profile"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "engine_version": {
+            "default": "engine_v1",
+            "title": "Engine Version",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "evidence_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Count"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "left_provenance": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RunProvenance"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "left_run_id": {
+            "title": "Left Run Id",
+            "type": "string"
+          },
+          "metric_deltas": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/MetricDelta"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metric Deltas"
+          },
+          "regression_signals": {
+            "items": {
+              "$ref": "#/components/schemas/RegressionSignal"
+            },
+            "title": "Regression Signals",
+            "type": "array"
+          },
+          "result_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result Ref"
+          },
+          "right_provenance": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RunProvenance"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "right_run_id": {
+            "title": "Right Run Id",
+            "type": "string"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ComparisonStatus",
+            "default": "pending"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "verdict": {
+            "anyOf": [
+              {
+                "enum": [
+                  "regression",
+                  "improvement",
+                  "neutral",
+                  "inconclusive"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verdict"
+          },
+          "workspace_id": {
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "workspace_id",
+          "tenant_id",
+          "left_run_id",
+          "right_run_id"
+        ],
+        "title": "ComparisonRecord",
+        "type": "object"
+      },
+      "ComparisonStatus": {
+        "enum": [
+          "pending",
+          "running",
+          "completed",
+          "failed"
+        ],
+        "title": "ComparisonStatus",
+        "type": "string"
+      },
+      "ConversationListResponse": {
+        "properties": {
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ConversationSummary"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "ConversationListResponse",
+        "type": "object"
+      },
+      "ConversationSummary": {
+        "description": "Searchable conversation metadata. Lives in PG.\n\nCarries a payload_ref pointing at the full transcript in R2. The\ntranscript is fetched on demand (list views only need the summary).",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "failure_category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Category"
+          },
+          "failure_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Reason"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "judge_scores": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Judge Scores",
+            "type": "object"
+          },
+          "pass_rate": {
+            "default": 0.0,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Pass Rate",
+            "type": "number"
+          },
+          "persona_id": {
+            "title": "Persona Id",
+            "type": "string"
+          },
+          "persona_name": {
+            "title": "Persona Name",
+            "type": "string"
+          },
+          "persona_type": {
+            "default": "standard",
+            "title": "Persona Type",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "tags": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "object"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "transcript_ref": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObjectRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "turn_count": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Turn Count",
+            "type": "integer"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "verdict": {
+            "default": "pending",
+            "enum": [
+              "pass",
+              "fail",
+              "error",
+              "pending"
+            ],
+            "title": "Verdict",
+            "type": "string"
+          },
+          "workspace_id": {
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "workspace_id",
+          "run_id",
+          "persona_id",
+          "persona_name"
+        ],
+        "title": "ConversationSummary",
+        "type": "object"
+      },
+      "CoverageMetric": {
+        "properties": {
+          "covered": {
+            "title": "Covered",
+            "type": "integer"
+          },
+          "dimension": {
+            "title": "Dimension",
+            "type": "string"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "dimension",
+          "covered",
+          "total"
+        ],
+        "title": "CoverageMetric",
+        "type": "object"
+      },
+      "CreateComparisonRequest": {
+        "properties": {
+          "left_run_id": {
+            "title": "Left Run Id",
+            "type": "string"
+          },
+          "right_run_id": {
+            "title": "Right Run Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "left_run_id",
+          "right_run_id"
+        ],
+        "title": "CreateComparisonRequest",
+        "type": "object"
+      },
+      "DashboardSummary": {
+        "description": "Composite above-the-fold dashboard payload (v1.2.2 \u00a7S2 \u00a711.6).",
+        "properties": {
+          "artifact_generated_at": {
+            "format": "date-time",
+            "title": "Artifact Generated At",
+            "type": "string"
+          },
+          "asset_versions_used": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Asset Versions Used",
+            "type": "array"
+          },
+          "coverage": {
+            "items": {
+              "$ref": "#/components/schemas/CoverageMetric"
+            },
+            "title": "Coverage",
+            "type": "array"
+          },
+          "data_source_version": {
+            "default": "in_memory_v1",
+            "title": "Data Source Version",
+            "type": "string"
+          },
+          "engine_version": {
+            "title": "Engine Version",
+            "type": "string"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "judges": {
+            "items": {
+              "$ref": "#/components/schemas/JudgeBreakdown"
+            },
+            "title": "Judges",
+            "type": "array"
+          },
+          "overview": {
+            "$ref": "#/components/schemas/RunOverview"
+          },
+          "run_status": {
+            "$ref": "#/components/schemas/RunStatus"
+          },
+          "top_failures": {
+            "items": {
+              "$ref": "#/components/schemas/FailurePattern"
+            },
+            "title": "Top Failures",
+            "type": "array"
+          }
+        },
+        "required": [
+          "overview",
+          "judges",
+          "top_failures",
+          "coverage",
+          "engine_version",
+          "run_status",
+          "artifact_generated_at"
+        ],
+        "title": "DashboardSummary",
+        "type": "object"
+      },
+      "FailurePattern": {
+        "properties": {
+          "cluster_id": {
+            "title": "Cluster Id",
+            "type": "string"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "sample_conversation_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Sample Conversation Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "cluster_id",
+          "label",
+          "count"
+        ],
+        "title": "FailurePattern",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "JudgeBreakdown": {
+        "properties": {
+          "avg_score": {
+            "default": 0.0,
+            "title": "Avg Score",
+            "type": "number"
+          },
+          "fail_count": {
+            "default": 0,
+            "title": "Fail Count",
+            "type": "integer"
+          },
+          "judge_name": {
+            "title": "Judge Name",
+            "type": "string"
+          },
+          "pass_count": {
+            "default": 0,
+            "title": "Pass Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "judge_name"
+        ],
+        "title": "JudgeBreakdown",
+        "type": "object"
+      },
+      "MetricDelta": {
+        "properties": {
+          "delta": {
+            "title": "Delta",
+            "type": "number"
+          },
+          "left": {
+            "title": "Left",
+            "type": "number"
+          },
+          "metric": {
+            "title": "Metric",
+            "type": "string"
+          },
+          "right": {
+            "title": "Right",
+            "type": "number"
+          }
+        },
+        "required": [
+          "metric",
+          "left",
+          "right",
+          "delta"
+        ],
+        "title": "MetricDelta",
+        "type": "object"
+      },
+      "ObjectRef": {
+        "description": "Reference to an object stored in a storage backend.\n\nThis is what gets persisted in the database alongside metadata \u2014\nthe ObjectRef tells us which backend, which key, and the hash for\nintegrity verification.",
+        "properties": {
+          "backend": {
+            "enum": [
+              "local",
+              "r2"
+            ],
+            "title": "Backend",
+            "type": "string"
+          },
+          "bucket": {
+            "title": "Bucket",
+            "type": "string"
+          },
+          "content_hash": {
+            "title": "Content Hash",
+            "type": "string"
+          },
+          "content_type": {
+            "default": "application/octet-stream",
+            "title": "Content Type",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "size_bytes": {
+            "minimum": 0.0,
+            "title": "Size Bytes",
+            "type": "integer"
+          },
+          "stored_at": {
+            "format": "date-time",
+            "title": "Stored At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "backend",
+          "bucket",
+          "key",
+          "size_bytes",
+          "content_hash"
+        ],
+        "title": "ObjectRef",
+        "type": "object"
+      },
+      "RegressionSignal": {
+        "description": "Typed regression signal (v1.2.2 \u00a711 strongly recommended #4).",
+        "properties": {
+          "metric": {
+            "title": "Metric",
+            "type": "string"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "title": "Payload",
+            "type": "object"
+          },
+          "severity": {
+            "enum": [
+              "info",
+              "warning",
+              "critical"
+            ],
+            "title": "Severity",
+            "type": "string"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "severity",
+          "metric"
+        ],
+        "title": "RegressionSignal",
+        "type": "object"
+      },
+      "RunOverview": {
+        "properties": {
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "pass_rate": {
+            "default": 0.0,
+            "title": "Pass Rate",
+            "type": "number"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RunStatus"
+          },
+          "total_conversations": {
+            "default": 0,
+            "title": "Total Conversations",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "run_id",
+          "status"
+        ],
+        "title": "RunOverview",
+        "type": "object"
+      },
+      "RunProvenance": {
+        "properties": {
+          "asset_versions_used": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Asset Versions Used",
+            "type": "array"
+          },
+          "engine_version": {
+            "title": "Engine Version",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "run_status": {
+            "$ref": "#/components/schemas/RunStatus"
+          }
+        },
+        "required": [
+          "run_id",
+          "engine_version",
+          "run_status"
+        ],
+        "title": "RunProvenance",
+        "type": "object"
+      },
+      "RunStatus": {
+        "description": "Run lifecycle states. Maps 1:1 to AuditActions.RUN_* codes.",
+        "enum": [
+          "queued",
+          "running",
+          "completed",
+          "failed",
+          "cancelled"
+        ],
+        "title": "RunStatus",
+        "type": "string"
+      },
+      "RunTimelineEvent": {
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "actor_id": {
+            "title": "Actor Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "title": "Metadata",
+            "type": "object"
+          }
+        },
+        "required": [
+          "action",
+          "actor_id",
+          "created_at"
+        ],
+        "title": "RunTimelineEvent",
+        "type": "object"
+      },
+      "RunTimelineResponse": {
+        "description": "Run lifecycle timeline (v1.2.2 \u00a711.7 \u2014 transitional, audit-backed in 6a).",
+        "properties": {
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/RunTimelineEvent"
+            },
+            "title": "Events",
+            "type": "array"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "events"
+        ],
+        "title": "RunTimelineResponse",
+        "type": "object"
+      },
+      "SignedDownloadUrlResponse": {
+        "description": "Locked per v1.2.2 \u00a7M3 \u2014 DO NOT modify field names.",
+        "properties": {
+          "correlation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correlation Id"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "expires_in_seconds": {
+            "title": "Expires In Seconds",
+            "type": "integer"
+          },
+          "method": {
+            "default": "GET",
+            "title": "Method",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "expires_in_seconds",
+          "expires_at"
+        ],
+        "title": "SignedDownloadUrlResponse",
+        "type": "object"
+      },
+      "TranscriptRedaction": {
+        "description": "Reserved redaction shell (v1.2.2 \u00a711.5). Always present, no enforcement in 6a.",
+        "properties": {
+          "applied": {
+            "default": false,
+            "title": "Applied",
+            "type": "boolean"
+          },
+          "masked_field_count": {
+            "default": 0,
+            "title": "Masked Field Count",
+            "type": "integer"
+          },
+          "policy_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy Version"
+          }
+        },
+        "title": "TranscriptRedaction",
+        "type": "object"
+      },
+      "TranscriptResponse": {
+        "properties": {
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "redaction": {
+            "$ref": "#/components/schemas/TranscriptRedaction"
+          },
+          "transcript": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Transcript",
+            "type": "array"
+          }
+        },
+        "required": [
+          "conversation_id",
+          "transcript"
+        ],
+        "title": "TranscriptResponse",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "Week 6a foundation \u2014 runs, results, comparisons.",
+    "title": "AI SimTest Control Plane API",
+    "version": "0.6.0a1"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/v1/comparisons": {
+      "get": {
+        "operationId": "list_comparisons_v1_comparisons_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComparisonListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Comparisons",
+        "tags": [
+          "comparisons"
+        ]
+      },
+      "post": {
+        "operationId": "create_comparison_v1_comparisons_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateComparisonRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComparisonRecord"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Comparison",
+        "tags": [
+          "comparisons"
+        ]
+      }
+    },
+    "/v1/comparisons/{comparison_id}": {
+      "get": {
+        "operationId": "get_comparison_v1_comparisons__comparison_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "comparison_id",
+            "required": true,
+            "schema": {
+              "title": "Comparison Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComparisonRecord"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Comparison",
+        "tags": [
+          "comparisons"
+        ]
+      }
+    },
+    "/v1/comparisons/{comparison_id}/regression-signals": {
+      "get": {
+        "operationId": "get_regression_signals_v1_comparisons__comparison_id__regression_signals_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "comparison_id",
+            "required": true,
+            "schema": {
+              "title": "Comparison Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RegressionSignal"
+                  },
+                  "title": "Response Get Regression Signals V1 Comparisons  Comparison Id  Regression Signals Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Regression Signals",
+        "tags": [
+          "comparisons"
+        ]
+      }
+    },
+    "/v1/conversations": {
+      "get": {
+        "operationId": "list_conversations_v1_conversations_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "run_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Run Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "verdict",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "pass",
+                    "fail",
+                    "error",
+                    "pending"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Verdict"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Conversations",
+        "tags": [
+          "conversations"
+        ]
+      }
+    },
+    "/v1/conversations/{conversation_id}": {
+      "get": {
+        "operationId": "get_conversation_v1_conversations__conversation_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Conversation",
+        "tags": [
+          "conversations"
+        ]
+      }
+    },
+    "/v1/conversations/{conversation_id}/download-url": {
+      "get": {
+        "operationId": "get_download_url_v1_conversations__conversation_id__download_url_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignedDownloadUrlResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Download Url",
+        "tags": [
+          "conversations"
+        ]
+      }
+    },
+    "/v1/conversations/{conversation_id}/transcript": {
+      "get": {
+        "operationId": "get_transcript_v1_conversations__conversation_id__transcript_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TranscriptResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Transcript",
+        "tags": [
+          "conversations"
+        ]
+      }
+    },
+    "/v1/runs/{run_id}/coverage": {
+      "get": {
+        "operationId": "get_coverage_v1_runs__run_id__coverage_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CoverageMetric"
+                  },
+                  "title": "Response Get Coverage V1 Runs  Run Id  Coverage Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Coverage",
+        "tags": [
+          "results"
+        ]
+      }
+    },
+    "/v1/runs/{run_id}/dashboard": {
+      "get": {
+        "operationId": "get_dashboard_v1_runs__run_id__dashboard_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Dashboard",
+        "tags": [
+          "results"
+        ]
+      }
+    },
+    "/v1/runs/{run_id}/failures": {
+      "get": {
+        "operationId": "get_failures_v1_runs__run_id__failures_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/FailurePattern"
+                  },
+                  "title": "Response Get Failures V1 Runs  Run Id  Failures Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Failures",
+        "tags": [
+          "results"
+        ]
+      }
+    },
+    "/v1/runs/{run_id}/judges": {
+      "get": {
+        "operationId": "get_judges_v1_runs__run_id__judges_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/JudgeBreakdown"
+                  },
+                  "title": "Response Get Judges V1 Runs  Run Id  Judges Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Judges",
+        "tags": [
+          "results"
+        ]
+      }
+    },
+    "/v1/runs/{run_id}/timeline": {
+      "get": {
+        "description": "Run lifecycle timeline.\n\n**Note:** In Week 6a, this endpoint reads from the audit log filtered\nby `resource_type=\"run\"` and the run-lifecycle action whitelist. When\nthe `run_events` table lands per the Control Plane / Execution Plane\narchitecture, the data source will switch but the response contract\nwill not change. UI built against this endpoint will not require\nmigration.",
+        "operationId": "get_timeline_v1_runs__run_id__timeline_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunTimelineResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Timeline",
+        "tags": [
+          "results"
+        ]
+      }
+    }
+  }
+}
