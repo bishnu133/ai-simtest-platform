@@ -7,12 +7,32 @@ properties.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Annotated, Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field
 
 from src.common.models import ActorRef, AssetStatus, AssetType, utcnow
+from src.secrets.denylist import check_no_secrets
+from src.secrets.safe_jsonb import SafeJSONB
 from src.storage.models import ObjectRef, StorageTier
+
+
+def _validate_safe_jsonb_str_values(v: Any) -> Any:
+    """SafeJSONB variant for dict[str, str] fields (e.g. tags).
+
+    Same recursive key scan as ``SafeJSONB`` but preserves the narrower
+    str-valued type annotation. Per Turn 2 plan v0.6 §5, the scanner only
+    inspects keys, so the value type is irrelevant to enforcement.
+    """
+    if v is None:
+        return v
+    check_no_secrets(v)
+    return v
+
+
+# A parallel Annotated type for dict[str, str] fields. Keeps the static type
+# narrower than SafeJSONB while running the same key-scan validator.
+_SafeJSONBStr = Annotated[dict[str, str], AfterValidator(_validate_safe_jsonb_str_values)]
 
 
 class AssetRecord(BaseModel):
@@ -72,8 +92,8 @@ class AssetCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     slug: str = Field(min_length=1, max_length=100, pattern=r"^[a-z0-9][a-z0-9_-]*$")
     description: str = ""
-    content: dict[str, Any] = Field(default_factory=dict)
-    tags: dict[str, str] = Field(default_factory=dict)
+    content: SafeJSONB = Field(default_factory=dict)
+    tags: _SafeJSONBStr = Field(default_factory=dict)
     changelog: str = "Initial version"
 
 
@@ -82,15 +102,15 @@ class AssetUpdateRequest(BaseModel):
 
     name: str | None = Field(None, min_length=1, max_length=200)
     description: str | None = None
-    content: dict[str, Any] | None = None
-    tags: dict[str, str] | None = None
+    content: SafeJSONB | None = None
+    tags: _SafeJSONBStr | None = None
     changelog: str | None = None
 
 
 class AssetVersionRequest(BaseModel):
     """Request body for creating a new version of an existing asset."""
 
-    content: dict[str, Any]
+    content: SafeJSONB
     changelog: str = Field(min_length=1, max_length=2000)
 
 

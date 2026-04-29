@@ -1,7 +1,7 @@
 """Conversation storage service.
 
 Implements the hybrid storage pattern for conversation data:
-  - Summary → in-memory store (PG in production)
+  - Summary → repository (InMemory by default, Postgres via Turn 2.6 Step 5)
   - Full transcript → object storage (R2 in production, Local in dev/test)
 
 The service owns the tenant-scoped storage key convention:
@@ -10,10 +10,19 @@ The service owns the tenant-scoped storage key convention:
 All public methods require a TenantContext. Cross-tenant access is
 structurally impossible because every storage operation validates the
 key prefix against the tenant_id.
+
+Turn 2.6 Step 4 changes:
+  * The `_summaries` dict and `_lock` move out of ConversationService
+    into ``InMemoryConversationSummaryRepository`` (default impl).
+  * ``ConversationService.__init__`` accepts an optional ``summary_repo``
+    parameter typed against the ``ConversationSummaryRepository``
+    Protocol. Defaults to a fresh InMemory impl when not supplied so all
+    existing call sites keep working unchanged.
+  * ``_reset()`` becomes a getattr capability check per R-7. The
+    Protocol does NOT include _reset (test-only helper).
 """
 from __future__ import annotations
 
-import asyncio
 import json
 import uuid
 from typing import Any
@@ -24,6 +33,10 @@ from src.conversations.models import (
     ConversationSummary,
     ConversationTranscript,
     ConversationVerdict,
+)
+from src.conversations.repository import (
+    ConversationSummaryRepository,
+    InMemoryConversationSummaryRepository,
 )
 from src.storage.base import StorageAdapter
 from src.storage.models import ObjectNotFound, ObjectRef, SignedUrl, StorageError
@@ -44,19 +57,22 @@ class TranscriptIntegrityError(ConversationServiceError):
 class ConversationService:
     """Tenant-aware conversation storage.
 
-    Stores summaries in memory (swap for PG in production) and transcripts
-    in the injected StorageAdapter. Every mutation writes an audit event.
+    Stores summaries via the injected ``ConversationSummaryRepository``
+    (InMemory by default) and transcripts in the injected
+    ``StorageAdapter``. Every mutation writes an audit event.
     """
 
     _KEY_TEMPLATE = (
         "{tenant_id}/{workspace_id}/runs/{run_id}/conversations/{conversation_id}.json"
     )
 
-    def __init__(self, storage: StorageAdapter):
+    def __init__(
+        self,
+        storage: StorageAdapter,
+        summary_repo: ConversationSummaryRepository | None = None,
+    ):
         self._storage = storage
-        # (tenant_id, workspace_id, conversation_id) -> ConversationSummary
-        self._summaries: dict[tuple[str, str, str], ConversationSummary] = {}
-        self._lock = asyncio.Lock()
+        self._summary_repo = summary_repo or InMemoryConversationSummaryRepository()
 
     # ---------------- key helpers ----------------
 
@@ -69,11 +85,6 @@ class ConversationService:
             run_id=run_id,
             conversation_id=conversation_id,
         )
-
-    def _summary_key(
-        self, ctx: TenantContext, conversation_id: str
-    ) -> tuple[str, str, str]:
-        return (ctx.tenant_id, ctx.workspace_id, conversation_id)
 
     # ---------------- store ----------------
 
@@ -91,7 +102,7 @@ class ConversationService:
         persona_type: str = "standard",
         tags: dict[str, str] | None = None,
     ) -> ConversationSummary:
-        """Persist a conversation: summary to memory, transcript to R2."""
+        """Persist a conversation: summary via repo, transcript via storage."""
         conversation_id = transcript.conversation_id or str(uuid.uuid4())
         key = self._key(ctx, run_id, conversation_id)
 
@@ -133,8 +144,7 @@ class ConversationService:
             tags=dict(tags or {}),
         )
 
-        async with self._lock:
-            self._summaries[self._summary_key(ctx, conversation_id)] = summary
+        await self._summary_repo.upsert(summary)
 
         audit_logger.write(
             ctx,
@@ -157,12 +167,7 @@ class ConversationService:
     async def get_summary(
         self, ctx: TenantContext, conversation_id: str
     ) -> ConversationSummary:
-        summary = self._summaries.get(self._summary_key(ctx, conversation_id))
-        if summary is None:
-            raise ConversationNotFound(
-                f"Conversation {conversation_id} not found in workspace"
-            )
-        return summary
+        return await self._summary_repo.get(ctx, conversation_id)
 
     async def list_summaries(
         self,
@@ -172,18 +177,9 @@ class ConversationService:
         limit: int = 50,
     ) -> list[ConversationSummary]:
         """List conversation summaries with optional filters."""
-        results: list[ConversationSummary] = []
-        for (t, w, _cid), summary in self._summaries.items():
-            if t != ctx.tenant_id or w != ctx.workspace_id:
-                continue
-            if run_id and summary.run_id != run_id:
-                continue
-            if verdict and summary.verdict != verdict:
-                continue
-            results.append(summary)
-
-        results.sort(key=lambda s: s.created_at, reverse=True)
-        return results[:limit]
+        return await self._summary_repo.list(
+            ctx, run_id=run_id, verdict=verdict, limit=limit
+        )
 
     async def get_transcript(
         self, ctx: TenantContext, conversation_id: str
@@ -263,31 +259,21 @@ class ConversationService:
         Returns the number of conversations deleted. Used for GDPR
         right-to-erasure requests and tenant data deletion.
         """
-        to_delete: list[tuple[tuple[str, str, str], ConversationSummary]] = []
-        for k, summary in self._summaries.items():
-            t, w, _ = k
-            if (
-                t == ctx.tenant_id
-                and w == ctx.workspace_id
-                and summary.run_id == run_id
-            ):
-                to_delete.append((k, summary))
+        deleted_summaries = await self._summary_repo.delete_for_run(ctx, run_id)
 
-        deleted = 0
-        async with self._lock:
-            for k, summary in to_delete:
-                if summary.transcript_ref is not None:
-                    try:
-                        await self._storage.delete(
-                            tenant_id=ctx.tenant_id,
-                            key=summary.transcript_ref.key,
-                        )
-                    except StorageError:
-                        # Best-effort: log and continue; summary is still removed
-                        pass
-                self._summaries.pop(k, None)
-                deleted += 1
+        # Fan out object-storage deletes for transcripts (best-effort)
+        for summary in deleted_summaries:
+            if summary.transcript_ref is not None:
+                try:
+                    await self._storage.delete(
+                        tenant_id=ctx.tenant_id,
+                        key=summary.transcript_ref.key,
+                    )
+                except StorageError:
+                    # Best-effort: log and continue; summary is already gone
+                    pass
 
+        deleted = len(deleted_summaries)
         if deleted:
             audit_logger.write(
                 ctx,
@@ -301,5 +287,23 @@ class ConversationService:
     # ---------------- test helpers ----------------
 
     def _reset(self) -> None:
-        """Wipe the summary store. Test-only."""
-        self._summaries.clear()
+        """Wipe the summary store. Test-only.
+
+        Production repos do NOT support reset. We use a getattr capability
+        check (Turn 2.6 plan v0.2.1 §6.3 / R-7) so:
+          - InMemory impl (which has _reset()) → works
+          - Postgres impl (which does NOT have _reset()) → RuntimeError, fail-loud
+
+        Per R-7 review: the Protocol stays clean; this helper is invoked
+        only in tests, and the RuntimeError is the correct production
+        signal that a misconfigured test path called _reset on a
+        Postgres-backed repo.
+        """
+        reset = getattr(self._summary_repo, "_reset", None)
+        if reset is None:
+            raise RuntimeError(
+                f"{type(self._summary_repo).__name__} does not support "
+                f"_reset(); this helper is InMemory-only and must not be "
+                f"called in production paths."
+            )
+        reset()

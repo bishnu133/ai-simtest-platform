@@ -78,7 +78,9 @@ class TestAssetLargePayload:
             asset_type=AssetType.DATASET,
             name="Tenant A Data",
             slug="tenant-a-data",
-            content={"secret": "a"},
+            content={"data": "a"},  # was {"secret": "a"} pre-Turn 2; "secret"
+                                    # is now denylisted by SafeJSONB. Test intent
+                                    # (cross-tenant fetch is blocked) is unchanged.
         )
         created = await svc.create_asset(ctx_tenant_a, req)
 

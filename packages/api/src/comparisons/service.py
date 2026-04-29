@@ -7,14 +7,18 @@ from datetime import timedelta
 from src.api.errors import APIError
 from src.audit.logger import AuditActions, audit_logger
 from src.common.models import TenantContext, utcnow
-from src.comparisons.idempotency import InMemoryIdempotencyStore, canonical_hash
+from src.comparisons.idempotency import (
+    IdempotencyStore,
+    InMemoryIdempotencyStore,
+    canonical_hash,
+)
 from src.comparisons.models import (
     ComparisonRecord,
     ComparisonStatus,
     RunProvenance,
 )
 from src.comparisons.provider import ComparisonProvider, ProviderUnavailable
-from src.comparisons.repository import InMemoryComparisonRepository
+from src.comparisons.repository import ComparisonRepository, InMemoryComparisonRepository
 from src.runs.models import RunStatus
 from src.runs.service import RunService
 
@@ -41,10 +45,10 @@ class IdempotentReplay(Exception):
 class ComparisonService:
     def __init__(
         self,
-        repo: InMemoryComparisonRepository,
+        repo: ComparisonRepository,
         run_service: RunService,
         provider: ComparisonProvider,
-        idempotency: InMemoryIdempotencyStore | None = None,
+        idempotency: IdempotencyStore | None = None,
     ):
         self._repo = repo
         self._runs = run_service
@@ -62,7 +66,7 @@ class ComparisonService:
 
         # Idempotency check
         if idempotency_key:
-            entry = self._idempotency.lookup(ctx.workspace_id, idempotency_key)
+            entry = await self._idempotency.lookup(ctx, idempotency_key)
             if entry is not None:
                 if entry.body_hash != body_hash:
                     raise IdempotencyConflict(
@@ -145,8 +149,8 @@ class ComparisonService:
 
         # Remember idempotency
         if idempotency_key:
-            self._idempotency.remember(
-                ctx.workspace_id, idempotency_key, body_hash, record.id
+            await self._idempotency.remember(
+                ctx, idempotency_key, body_hash, record.id
             )
 
         return record

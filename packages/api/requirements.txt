@@ -15,6 +15,11 @@ asyncpg>=0.29
 alembic>=1.13
 greenlet>=3.0
 
+# Postgres + Auth Wiring Sprint (Turn 3) — JWT verification for Clerk
+# and future OIDC providers. [crypto] extra pulls in the `cryptography`
+# backend needed for RS256/ES256 signature verification.
+PyJWT[crypto]>=2.8
+
 # Development & test
 pytest>=8.0
 pytest-asyncio>=0.23

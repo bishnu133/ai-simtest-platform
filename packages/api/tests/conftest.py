@@ -1,12 +1,10 @@
 """Shared pytest fixtures for Week 5 test suites."""
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
 
 import pytest
-import pytest_asyncio
 
 
 # Ensure `src.*` is importable
@@ -18,6 +16,18 @@ if str(ROOT) not in sys.path:
 from src.audit.logger import audit_logger  # noqa: E402
 from src.common.models import ActorRef, TenantContext  # noqa: E402
 from src.storage.local import LocalFilesystemAdapter  # noqa: E402
+
+# Re-export DB fixtures so they are visible to sibling suites like tests/auth/.
+# These fixtures physically live in tests/db/conftest.py, but auth tests cannot
+# see sibling conftests automatically.
+from tests.db.conftest import (  # noqa: E402,F401
+    _configure_engine,
+    admin_session,
+    clean_db,
+    migrated_db,
+    pg_instance,
+    pg_url,
+)
 
 
 @pytest.fixture
@@ -76,3 +86,39 @@ def reset_audit_log():
     audit_logger.clear()
     yield
     audit_logger.clear()
+
+
+# ---------------------------------------------------------------------------
+# Turn 4 §6.3 — factory-built app fixtures
+#
+# These are additive (no edit to existing fixtures). Tests that want
+# the Turn 4 composition-root path use `factory_app`; tests that want
+# the legacy `src.main.create_app()` path keep using whatever they
+# already use.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def test_settings():
+    """Default AppSettings for factory-built apps in tests.
+
+    app_env="test" disables several guardrails and lets database_url
+    be None. auth_provider="dev" picks the DevAuthProvider. auth_enabled
+    =False keeps the middleware out of the way for tests that don't
+    exercise the auth path.
+    """
+    from src.config import AppSettings
+
+    return AppSettings(
+        app_env="test",
+        auth_provider="dev",
+        auth_enabled=False,
+    )
+
+
+@pytest.fixture
+def factory_app(test_settings):
+    """An app built via the Turn 4 composition root, no auth middleware."""
+    from src.app_factory import create_app
+
+    return create_app(settings=test_settings)

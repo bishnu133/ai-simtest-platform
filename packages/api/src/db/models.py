@@ -148,6 +148,17 @@ class Workspace(Base):
 
     __table_args__ = (
         Index("ix_workspaces_tenant_id", "tenant_id"),
+        # At most one default workspace per tenant. Race-safe enforcement
+        # via partial unique index — Alembic revision 0002. Mirrored here
+        # in __table_args__ so SQLAlchemy metadata stays in sync (prevents
+        # autogenerate from re-emitting the index as a "drop"). See
+        # Turn 2.5 plan v0.2.1 §3.1 D-Mig + MF-5.
+        Index(
+            "uq_workspaces_one_default_per_tenant",
+            "tenant_id",
+            unique=True,
+            postgresql_where=text("is_default = true"),
+        ),
     )
 
 
@@ -717,6 +728,15 @@ class IdempotencyKey(Base):
         ForeignKey("tenants.id", ondelete="CASCADE"),
         nullable=False,
     )
+    workspace_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey(
+            "workspaces.id",
+            ondelete="CASCADE",
+            name="fk_idempotency_keys_workspace_id_workspaces",
+        ),
+        nullable=False,
+    )
     idempotency_key: Mapped[str] = mapped_column(String(255), nullable=False)
     request_hash: Mapped[str] = mapped_column(String(128), nullable=False)
     response_payload: Mapped[dict] = mapped_column(
@@ -732,10 +752,15 @@ class IdempotencyKey(Base):
 
     __table_args__ = (
         Index(
-            "uq_idempotency_keys_tenant_key",
+            "uq_idempotency_keys_tenant_workspace_key",
             "tenant_id",
+            "workspace_id",
             "idempotency_key",
             unique=True,
+        ),
+        Index(
+            "ix_idempotency_keys_expires_at",
+            "expires_at",
         ),
     )
 

@@ -60,6 +60,37 @@ class AuditActions:
     WORKSPACE_CREATED = "workspace.created"
     USER_INVITED = "user.invited"
 
+    # Turn 3 additions — auth lifecycle events (plan §8.5 mandatory
+    # audit events). Emission wired by TenantContextMiddleware and the
+    # bootstrap lifecycle in src/auth/.
+    #   AUTH_ACCEPTED: credentials verified and membership resolved
+    #   AUTH_REJECTED: 401 — missing/invalid credentials
+    #   AUTH_MEMBERSHIP_DENIED: 403 — credentials ok but no role mapping
+    #                           (missing provider_org_role or unknown value)
+    #   AUTH_BOOTSTRAP_CREATED_TENANT: first-use tenant provisioning
+    AUTH_ACCEPTED = "auth.accepted"
+    AUTH_REJECTED = "auth.rejected"
+    AUTH_MEMBERSHIP_DENIED = "auth.membership_denied"
+    AUTH_BOOTSTRAP_CREATED_TENANT = "auth.bootstrap_created_tenant"
+    # Turn 4 — bootstrap detected a structural state inconsistency
+    # (e.g. tenant row present but missing default workspace, or retry
+    # budget exhausted). Distinct from AUTH_REJECTED (which is for
+    # credential-shaped failures) and AUTH_MEMBERSHIP_DENIED (which is
+    # for membership-row absence).
+    AUTH_TENANT_STATE_INVALID = "auth.tenant_state_invalid"
+
+    # Turn 2 additions — secret-rejection event codes (constants only).
+    # Per Turn 2 plan v0.6 §5.2, Turn 2 ships these as constants only;
+    # no emission logic, no handler wiring. The Turn 3 FastAPI exception
+    # handler for SecretLeakDetected / ValidationError consumes these
+    # constants when it wires runtime audit emission. See
+    # src/secrets/denylist.py::SecretLeakDetected for the validator that
+    # surfaces these conditions at the API boundary as HTTP 422.
+    ASSET_CREATE_REJECTED_SECRET_LEAK = "asset.create_rejected_secret_leak"
+    RUN_CREATE_REJECTED_SECRET_LEAK = "run.create_rejected_secret_leak"
+    COMPARISON_CREATE_REJECTED_SECRET_LEAK = "comparison.create_rejected_secret_leak"
+    CONVERSATION_STORE_REJECTED_SECRET_LEAK = "conversation.store_rejected_secret_leak"
+
 
 @dataclass
 class AuditEvent:

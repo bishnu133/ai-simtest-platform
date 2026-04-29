@@ -196,10 +196,14 @@ async def test_fresh_upgrade_creates_no_data_rows(clean_db: str) -> None:
 
 
 async def test_alembic_current_returns_initial_schema(clean_db: str) -> None:
-    """`alembic current` must return exactly `0001_initial_schema`.
+    """`alembic current` must return exactly one head revision.
 
     This is a guard against accidental dual-revision states (e.g. someone
-    creating a 0002 without realizing 0001 is the only deployed migration).
+    creating a migration without realizing another head exists). It does
+    not pin a specific revision id, because the latest planned migration
+    advances over time (0001 -> 0002 -> 0003 -> ...) as Turn-by-Turn
+    migrations land legitimately. The test name is preserved for the
+    sacred-287 identity guarantee (Turn 2.6 plan v0.2.1 §A.3).
     """
     async with raw_admin_session() as s:
         revisions = (
@@ -211,9 +215,6 @@ async def test_alembic_current_returns_initial_schema(clean_db: str) -> None:
     assert len(revisions) == 1, (
         f"Expected exactly 1 alembic revision, got {len(revisions)}: "
         f"{[r[0] for r in revisions]}"
-    )
-    assert revisions[0][0] == "0001_initial_schema", (
-        f"Expected revision '0001_initial_schema', got {revisions[0][0]!r}"
     )
 
 
@@ -330,4 +331,110 @@ async def test_required_indexes_present(clean_db: str) -> None:
         f"Required indexes missing from schema: {sorted(missing)}\n"
         f"This is a regression on the v0.5.1 MF-1 fix or §7.0 lookup indexes. "
         f"Indexes currently present: {sorted(present & _REQUIRED_INDEXES)}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# 6. Migration 0003 round-trip — Turn 2.6 Step 3 (sacred-tests exception §A.3)
+# ---------------------------------------------------------------------------
+
+
+async def test_migration_0003_round_trips(clean_db: str) -> None:
+    """Migration 0003 (idempotency_keys.workspace_id) round-trips cleanly.
+
+    Forward: workspace_id column exists, ix_idempotency_keys_expires_at
+    index exists, uq_idempotency_keys_tenant_workspace_key index exists,
+    old uq_idempotency_keys_tenant_key is gone.
+
+    Downgrade then re-upgrade: state matches the forward state again
+    (tests that downgrade is the exact inverse).
+    """
+    project_root = Path(__file__).resolve().parent.parent.parent
+
+    async def _index_set() -> set[str]:
+        async with raw_admin_session() as s:
+            rows = (
+                await s.execute(
+                    sa.text(
+                        "SELECT indexname FROM pg_indexes "
+                        "WHERE schemaname = 'public' "
+                        "AND tablename = 'idempotency_keys'"
+                    )
+                )
+            ).all()
+        return {row[0] for row in rows}
+
+    async def _has_workspace_id_column() -> bool:
+        async with raw_admin_session() as s:
+            row = await s.execute(
+                sa.text(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_name = 'idempotency_keys' "
+                    "AND column_name = 'workspace_id'"
+                )
+            )
+            return row.scalar_one_or_none() is not None
+
+    # --- After head: 0003 applied ---
+    indexes_at_head = await _index_set()
+    assert "uq_idempotency_keys_tenant_workspace_key" in indexes_at_head
+    assert "ix_idempotency_keys_expires_at" in indexes_at_head
+    assert "uq_idempotency_keys_tenant_key" not in indexes_at_head, (
+        "Old tenant-only unique index should be gone after 0003."
+    )
+    assert await _has_workspace_id_column(), (
+        "workspace_id column should exist after 0003 upgrade."
+    )
+
+    # --- Downgrade to 0002 ---
+    result = subprocess.run(
+        [sys.executable, "-m", "alembic", "downgrade", "0002_ws_default_unique_idx"],
+        cwd=str(project_root),
+        env={
+            **os.environ,
+            "PYTHONPATH": str(project_root),
+        },
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert result.returncode == 0, (
+        f"alembic downgrade failed:\n"
+        f"stdout:\n{result.stdout}\n"
+        f"stderr:\n{result.stderr}"
+    )
+
+    indexes_at_0002 = await _index_set()
+    assert "uq_idempotency_keys_tenant_workspace_key" not in indexes_at_0002
+    assert "ix_idempotency_keys_expires_at" not in indexes_at_0002
+    assert "uq_idempotency_keys_tenant_key" in indexes_at_0002, (
+        "Old tenant-only unique index must be restored on downgrade."
+    )
+    assert not await _has_workspace_id_column(), (
+        "workspace_id column should be dropped on downgrade."
+    )
+
+    # --- Re-upgrade to head: state matches forward state ---
+    result = subprocess.run(
+        [sys.executable, "-m", "alembic", "upgrade", "head"],
+        cwd=str(project_root),
+        env={
+            **os.environ,
+            "PYTHONPATH": str(project_root),
+        },
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert result.returncode == 0, (
+        f"alembic re-upgrade failed:\n"
+        f"stdout:\n{result.stdout}\n"
+        f"stderr:\n{result.stderr}"
+    )
+
+    indexes_after_reup = await _index_set()
+    assert indexes_after_reup == indexes_at_head, (
+        f"After downgrade -> re-upgrade round-trip, index set diverged:\n"
+        f"  before: {sorted(indexes_at_head)}\n"
+        f"  after:  {sorted(indexes_after_reup)}"
     )

@@ -1,5 +1,11 @@
 """Comparisons package — first-class comparison resources."""
-from src.comparisons.idempotency import InMemoryIdempotencyStore, canonical_hash
+from src.comparisons.idempotency import (
+    IdempotencyEntry,
+    IdempotencyStore,
+    InMemoryIdempotencyStore,
+    PostgresIdempotencyRepository,
+    canonical_hash,
+)
 from src.comparisons.models import (
     ComparisonListResponse,
     ComparisonRecord,
@@ -19,6 +25,7 @@ from src.comparisons.repository import (
     ComparisonNotFound,
     ComparisonRepository,
     InMemoryComparisonRepository,
+    PostgresComparisonRepository,
 )
 from src.comparisons.service import (
     ComparisonIneligible,
@@ -37,12 +44,16 @@ __all__ = [
     "RunProvenance",
     "ComparisonRepository",
     "InMemoryComparisonRepository",
+    "PostgresComparisonRepository",
     "ComparisonNotFound",
     "ComparisonProvider",
     "FailClosedComparisonProvider",
     "ProviderUnavailable",
     "get_comparison_provider",
+    "IdempotencyEntry",
+    "IdempotencyStore",
     "InMemoryIdempotencyStore",
+    "PostgresIdempotencyRepository",
     "canonical_hash",
     "ComparisonService",
     "ComparisonIneligible",

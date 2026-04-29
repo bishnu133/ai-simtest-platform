@@ -24,6 +24,7 @@ class IdempotencyKeyRecord(BaseModel):
 
     id: str
     tenant_id: str
+    workspace_id: str  # added in Turn 2.6 Step 3 / migration 0003
     idempotency_key: str
     request_hash: str
     response_payload: dict[str, Any] = Field(default_factory=dict)
@@ -36,6 +37,7 @@ def idempotency_key_to_domain(row: IdempotencyKey) -> IdempotencyKeyRecord:
     return IdempotencyKeyRecord(
         id=str(row.id),
         tenant_id=str(row.tenant_id),
+        workspace_id=str(row.workspace_id),
         idempotency_key=row.idempotency_key,
         request_hash=row.request_hash,
         response_payload=dict(row.response_payload or {}),
@@ -49,6 +51,7 @@ def idempotency_key_to_orm(record: IdempotencyKeyRecord) -> IdempotencyKey:
     return IdempotencyKey(
         id=record.id,
         tenant_id=record.tenant_id,
+        workspace_id=record.workspace_id,
         idempotency_key=record.idempotency_key,
         request_hash=record.request_hash,
         response_payload=dict(record.response_payload),

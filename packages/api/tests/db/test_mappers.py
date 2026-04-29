@@ -762,11 +762,21 @@ async def test_dashboard_artifact_roundtrip(clean_db: str) -> None:
 
 
 async def test_idempotency_key_roundtrip(clean_db: str) -> None:
-    tid, _wid = await _seed_tenant_and_workspace()
+    """Round-trip an IdempotencyKeyRecord through the ORM shape.
+
+    Turn 2.6 Step 3: workspace_id added to the domain shape and ORM
+    column (migration 0003). Test body updated to carry the new
+    workspace_id; test name preserved per the sacred-tests exception
+    discipline that already covers test_alembic_current_returns_initial_schema
+    in test_migration_safety.py (Turn 2.6 plan v0.2.1 §A.3 — extended
+    here as T2.6-AmendmentB; surfaced for sign-off).
+    """
+    tid, wid = await _seed_tenant_and_workspace()
     now = _now()
     original = IdempotencyKeyRecord(
         id=str(uuid.uuid4()),
         tenant_id=tid,
+        workspace_id=wid,
         idempotency_key="client-key-abc",
         request_hash="sha256:requesthash",
         response_payload={"comparison_id": "cmp_123", "status": "pending"},
@@ -789,6 +799,7 @@ async def test_idempotency_key_roundtrip(clean_db: str) -> None:
     assert roundtripped.request_hash == "sha256:requesthash"
     assert roundtripped.response_payload["comparison_id"] == "cmp_123"
     assert roundtripped.status_code == 201
+    assert roundtripped.workspace_id == wid
 
 
 # ---------------------------------------------------------------------------

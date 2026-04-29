@@ -25,7 +25,7 @@ from typing import Callable
 from src.audit.logger import AuditActions, audit_logger
 from src.common.models import TenantContext
 from src.runs.models import RunRecord, RunStatus
-from src.runs.repository import InMemoryRunRepository
+from src.runs.repository import RunRepository, RunStatusMutating
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +63,7 @@ def set_dashboard_invalidator(fn: InvalidatorFn) -> None:
 class RunStateTransition:
     """The only sanctioned path for mutating run status."""
 
-    def __init__(self, repo: InMemoryRunRepository):
+    def __init__(self, repo: RunStatusMutating):
         self._repo = repo
 
     async def transition(
@@ -115,7 +115,18 @@ class RunStateTransition:
 class RunService:
     """Read-side run service for routers."""
 
-    def __init__(self, repo: InMemoryRunRepository):
+    def __init__(self, repo: RunRepository):
+        # repo must satisfy both RunRepository (public) and
+        # RunStatusMutating (internal). Both shipped impls satisfy both
+        # protocols. We type the parameter as the public Protocol so
+        # callers don't have to know about the internal mutation surface;
+        # the runtime check below catches a mis-wired repo at startup
+        # rather than at the first state transition.
+        if not isinstance(repo, RunStatusMutating):
+            raise TypeError(
+                f"RunService requires a repo satisfying RunStatusMutating; "
+                f"got {type(repo).__name__}"
+            )
         self._repo = repo
         self.transitions = RunStateTransition(repo)
 

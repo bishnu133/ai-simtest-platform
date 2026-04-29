@@ -12,6 +12,7 @@ from src.results.models import (
 from src.results.repository import (
     DashboardArtifactRepository,
     InMemoryDashboardArtifactRepository,
+    PostgresDashboardArtifactRepository,
 )
 from src.results.service import DashboardService
 
@@ -27,5 +28,6 @@ __all__ = [
     "RunTimelineResponse",
     "DashboardArtifactRepository",
     "InMemoryDashboardArtifactRepository",
+    "PostgresDashboardArtifactRepository",
     "DashboardService",
 ]
