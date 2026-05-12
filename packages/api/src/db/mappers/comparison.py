@@ -12,15 +12,19 @@ Two non-trivial translations:
   3. `metric_deltas` is a list of `MetricDelta` models or None.
      Stored as JSONB array or SQL NULL.
 
-  4. `initiated_by_actor_id` exists on the ORM but not on the Week 6a
-     `ComparisonRecord` domain shape. The mapper defaults it to "system"
-     on the write path; Turn 2 repositories will override this with the
-     actual actor from TenantContext.
+  4. `initiated_by_actor_id` exists on the ORM but not on the
+     `ComparisonRecord` domain shape. Turn 2.7 Drift 4 (plan v0.2.1 §2.4):
+     comparison_to_orm accepts an optional `write_ctx: WriteContext`;
+     the actor_id is lifted from `write_ctx.actor.actor_id`. If
+     `write_ctx` is None, the mapper falls back to
+     `WriteContext.system().actor.actor_id` (= "system") for
+     backward compatibility with callers not yet threaded through.
 """
 from __future__ import annotations
 
 from typing import Any, cast
 
+from src.common.write_context import WriteContext
 from src.comparisons.models import (
     ComparisonRecord,
     ComparisonStatus,
@@ -140,7 +144,20 @@ def comparison_to_domain(row: Comparison) -> ComparisonRecord:
     )
 
 
-def comparison_to_orm(record: ComparisonRecord) -> Comparison:
+def comparison_to_orm(
+    record: ComparisonRecord,
+    *,
+    write_ctx: WriteContext | None = None,
+) -> Comparison:
+    """Map a ComparisonRecord → Comparison ORM row.
+
+    Turn 2.7 Drift 4 (plan v0.2.1 §2.4):
+        ``write_ctx`` is the new optional kwarg that carries the actor
+        performing the write. If None, falls back to
+        ``WriteContext.system()`` (= actor_id "system") to preserve
+        backward compatibility with callers not yet threaded through
+        (smoke scripts, fixtures, in-memory uses).
+    """
     signals_json = [_signal_to_dict(s) for s in record.regression_signals]
 
     left_prov_json = (
@@ -161,6 +178,10 @@ def comparison_to_orm(record: ComparisonRecord) -> Comparison:
     if record.result_ref and "/" in record.result_ref:
         result_bucket, _, result_key = record.result_ref.partition("/")
 
+    # Drift 4 actor lift — pull from write_ctx (or fall back to system).
+    effective_ctx = write_ctx if write_ctx is not None else WriteContext.system()
+    actor_id = effective_ctx.actor.actor_id
+
     return Comparison(
         id=record.id,
         tenant_id=record.tenant_id,
@@ -168,9 +189,10 @@ def comparison_to_orm(record: ComparisonRecord) -> Comparison:
         left_run_id=record.left_run_id,
         right_run_id=record.right_run_id,
         status=record.status.value,
-        # initiated_by_actor_id is ORM-only; default to 'system'. Turn 2
-        # repository writes will override with the real actor.
-        initiated_by_actor_id="system",
+        # initiated_by_actor_id sourced from write_ctx (Turn 2.7 Drift 4).
+        # Falls back to "system" via WriteContext.system() when write_ctx
+        # is None — preserves Turn 2.6 behavior for non-threaded callers.
+        initiated_by_actor_id=actor_id,
         engine_version=record.engine_version,
         config={},  # not in the Week 6a domain shape
         regression_signals=signals_json,

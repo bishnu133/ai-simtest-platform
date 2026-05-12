@@ -216,7 +216,7 @@ def _warn_on_risky_combinations(settings: AppSettings) -> None:
 
 
 def _build_engine(settings: AppSettings) -> "AsyncEngine | None":
-    """Construct (or override) the shared async engine.
+    """Construct (or reuse) the shared async engine.
 
     Returns None when ``settings.database_url`` is None and
     ``app_env="test"`` — this is the only combo that's legal because
@@ -227,13 +227,47 @@ def _build_engine(settings: AppSettings) -> "AsyncEngine | None":
     ``configure_engine_from_url(url)`` override. The factory uses the
     override hook so the existing tenant_scoped_session machinery
     keeps working.
-    """
-    from src.db.session import configure_engine_from_url, get_engine
 
+    Future-4 idempotency contract (2026-05-08, refined v0.4.1)
+    ---------------------------------------------------------
+    ``configure_engine_from_url`` nulls module-level
+    ``_engine`` / ``_sessionmaker`` WITHOUT awaiting an async
+    dispose. Calling it mid-test — after a prior session has just
+    committed rows — has been observed to break visibility for
+    sessions built from the rebuilt engine, under the suite-mode
+    interaction with NullPool + asyncpg connection lifecycle. That
+    broke ``test_factory_built_app_serves_one_authenticated_request_end_to_end_postgres``.
+
+    The contract this function now enforces: **if a global engine
+    is already configured, reuse it.** The caller responsible for
+    initial configuration is either:
+      - production: ``create_app`` is invoked exactly once at boot,
+        so the first call hits the configure path; subsequent calls
+        (if any) reuse.
+      - tests: the conftest ``_configure_engine`` autouse fixture +
+        per-function ``clean_db`` fixture (which calls
+        ``await reset_engine()`` then ``get_sessionmaker()``) ensure
+        ``_engine`` is a fresh, test-owned engine when the test body
+        runs.
+
+    URL-equality is intentionally NOT used for the gate: pydantic
+    AppSettings validation can canonicalize ``settings.database_url``
+    into a form that doesn't string-equal the raw env var the
+    conftest set. Engine-presence is unambiguous; URL strings
+    aren't. See ``tests/test_app_factory_engine_idempotency.py``.
+    """
     if not settings.database_url:
         # Test-only path. Production guardrails would have aborted by now.
         return None
-    configure_engine_from_url(settings.database_url)
+
+    # Future-4: if the global engine is already configured, reuse it.
+    # See the docstring above for why string-comparing URLs is wrong.
+    from src.db import session as _db_session
+    if _db_session._engine is not None:
+        return _db_session._engine
+
+    from src.db.session import configure_engine_from_url, get_engine
+    configure_engine_from_url(str(settings.database_url))
     return get_engine()
 
 

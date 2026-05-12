@@ -52,6 +52,43 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
+def _include_object(object, name, type_, reflected, compare_to):  # noqa: ARG001
+    """Autogenerate-comparison filter — exclude objects managed outside
+    the SQLAlchemy declarative layer.
+
+    Currently exclusion list:
+
+    * `audit_events_*` partition CHILD tables and any indexes on them.
+
+      The `audit_events` parent table is declared in `src/db/models.py`
+      (class `AuditEvent`). Its monthly partition children
+      (e.g. `audit_events_2026_05`) and the catch-all `audit_events_default`
+      are created by raw SQL in migration 0001 because SQLAlchemy's
+      declarative layer does not model `PARTITION BY` natively
+      (see src/db/models.py:22-26 "Note on `audit_events`").
+
+      Without this filter, `alembic check` and `alembic revision --autogenerate`
+      would propose to drop these reflected partitions on every run because
+      they aren't in `Base.metadata` — a false positive that buries real
+      drift signal.
+
+    Drift 1.5 (Turn 2.7, plan v0.2.1): added after Drift 1's
+    `test_alembic_check_is_clean_after_0004` test surfaced the partition-
+    table false positive. The filter is intentionally narrow — only
+    `audit_events` partitions are excluded; everything else is compared
+    normally so the canary still catches real model/migration drift.
+    """
+    if type_ == "table" and (
+        name.startswith("audit_events_2") or name == "audit_events_default"
+    ):
+        return False
+    if type_ == "index" and name is not None and (
+        name.startswith("audit_events_2") or name.startswith("audit_events_default")
+    ):
+        return False
+    return True
+
+
 def do_run_migrations(connection: Connection) -> None:
     context.configure(
         connection=connection,
@@ -59,6 +96,9 @@ def do_run_migrations(connection: Connection) -> None:
         # Preserve deterministic comparison order for autogen diffs.
         compare_type=True,
         compare_server_default=True,
+        # Drift 1.5: exclude audit_events partition children (raw-SQL
+        # managed in migration 0001) from autogen comparison.
+        include_object=_include_object,
     )
     with context.begin_transaction():
         context.run_migrations()

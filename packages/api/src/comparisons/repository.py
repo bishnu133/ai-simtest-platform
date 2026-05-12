@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.errors import APIError, CrossTenantForbidden
 from src.common.models import TenantContext
+from src.common.write_context import WriteContext
 from src.comparisons.models import ComparisonRecord
 from src.db.models import Comparison as ComparisonORM
 from src.db.session import raw_admin_session, tenant_scoped_session
@@ -34,7 +35,12 @@ class ComparisonNotFound(APIError):
 
 @runtime_checkable
 class ComparisonRepository(Protocol):
-    async def create(self, record: ComparisonRecord) -> ComparisonRecord: ...
+    async def create(
+        self,
+        record: ComparisonRecord,
+        *,
+        write_ctx: WriteContext | None = None,
+    ) -> ComparisonRecord: ...
     async def get(self, ctx: TenantContext, comparison_id: str) -> ComparisonRecord: ...
     async def list_for_tenant(self, ctx: TenantContext) -> list[ComparisonRecord]: ...
 
@@ -46,7 +52,16 @@ class InMemoryComparisonRepository:
     def _key(self, tenant_id: str, workspace_id: str, comparison_id: str):
         return (tenant_id, workspace_id, comparison_id)
 
-    async def create(self, record: ComparisonRecord) -> ComparisonRecord:
+    async def create(
+        self,
+        record: ComparisonRecord,
+        *,
+        write_ctx: WriteContext | None = None,  # noqa: ARG002 — InMemory does not persist actors
+    ) -> ComparisonRecord:
+        # InMemory accepts write_ctx for Protocol parity but does not
+        # persist the actor. Tests that need to verify actor persistence
+        # must use PostgresComparisonRepository (which threads write_ctx
+        # into the mapper via _upsert).
         k = self._key(record.tenant_id, record.workspace_id, record.id)
         self._records[k] = record
         return record
@@ -106,17 +121,16 @@ class PostgresComparisonRepository:
       ``ComparisonService`` calls create() twice for a single comparison —
       once for PENDING state and once for the COMPLETED transition. We
       preserve the existing service contract by implementing create() as
-      INSERT ... ON CONFLICT (id) DO UPDATE. Future-1 (post-audit
-      refactor in Turn 2.7+) may split this into create() + complete()
-      once the service can carry actor/audit context.
+      INSERT ... ON CONFLICT (id) DO UPDATE.
 
-    T2.6-D1 acknowledged drift (Turn 2.6 plan v0.2.1 §6.2):
-      The mapper hardcodes ``initiated_by_actor_id="system"`` because the
-      ``ComparisonRecord`` domain model does not carry an actor field.
-      ``PostgresComparisonRepository.create()`` does NOT override this in
-      Turn 2.6 — same gap as InMemoryComparisonRepository (which does not
-      track actors at all). Resolution scheduled for Turn 2.7 alongside
-      the audit/actor refactor.
+    T2.6-D1 RESOLVED in Turn 2.7 Drift 4 (plan v0.2.1 §2.4):
+      Previously the mapper hardcoded ``initiated_by_actor_id="system"``
+      because the Turn 2.6 ``ComparisonRepository.create()`` did not
+      accept actor context. Turn 2.7 Drift 4 added ``write_ctx:
+      WriteContext | None = None`` to the create() signature; the
+      service builds ``WriteContext.from_tenant_context(ctx)`` and
+      passes it through, so persisted rows now carry the real actor.
+      ``write_ctx=None`` retains the system-actor fallback for back-compat.
     """
 
     async def create(
@@ -124,6 +138,7 @@ class PostgresComparisonRepository:
         record: ComparisonRecord,
         *,
         session: AsyncSession | None = None,
+        write_ctx: WriteContext | None = None,
     ) -> ComparisonRecord:
         # RC-3 belt-and-braces consistency check
         if not record.tenant_id or not record.workspace_id:
@@ -137,22 +152,34 @@ class PostgresComparisonRepository:
 
         if session is None:
             async with tenant_scoped_session(record.tenant_id) as s:
-                await self._upsert(s, record)
+                await self._upsert(s, record, write_ctx=write_ctx)
                 return record
         else:
-            await self._upsert(session, record)
+            await self._upsert(session, record, write_ctx=write_ctx)
             return record
 
-    async def _upsert(self, s: AsyncSession, record: ComparisonRecord) -> None:
+    async def _upsert(
+        self,
+        s: AsyncSession,
+        record: ComparisonRecord,
+        *,
+        write_ctx: WriteContext | None = None,
+    ) -> None:
         """UPSERT body. Service calls create() twice (PENDING then COMPLETED).
 
         Implementation: SQLAlchemy ``session.merge()`` produces the
         equivalent of INSERT ... ON CONFLICT (id) DO UPDATE for the full
         column set, with the row's primary key (id) as the conflict
         target. After flush, the row reflects the latest record state.
+
+        Turn 2.7 Drift 4: ``write_ctx`` is forwarded to the mapper so
+        ``initiated_by_actor_id`` reflects the real actor instead of
+        the hardcoded ``"system"`` default. If ``write_ctx`` is None,
+        the mapper falls back to ``WriteContext.system()`` — preserves
+        back-compat for any caller not yet threaded.
         """
         _, comparison_to_orm = _mappers()
-        orm_obj = comparison_to_orm(record)
+        orm_obj = comparison_to_orm(record, write_ctx=write_ctx)
         await s.merge(orm_obj)
         await s.flush()
 

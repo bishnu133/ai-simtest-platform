@@ -98,8 +98,16 @@ class Tenant(Base):
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     slug: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    # NB Drift 1.5 (Turn 2.7): index/uniqueness for clerk_org_id is declared
+    # in __table_args__ below as the partial unique index
+    # `uq_tenants_clerk_org_id` so the model matches migration 0001 exactly.
+    # Previously this column had `unique=True, index=True` which produced an
+    # auto-named non-partial index `ix_tenants_clerk_org_id` — that was a
+    # silent drift from the migration's partial form
+    # (postgresql_where = "clerk_org_id IS NOT NULL") and was caught by
+    # `alembic check` in Drift 1.
     clerk_org_id: Mapped[str | None] = mapped_column(
-        String(255), nullable=True, unique=True, index=True
+        String(255), nullable=True
     )
     plan_id: Mapped[str] = mapped_column(
         String(32), nullable=False, server_default=text("'free'")
@@ -112,6 +120,20 @@ class Tenant(Base):
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+
+    __table_args__ = (
+        # Partial unique index — matches migration 0001's
+        # `uq_tenants_clerk_org_id`. Postgres treats NULL as distinct in
+        # unique constraints, so a non-partial unique on clerk_org_id
+        # would forbid more than one tenant with NULL clerk_org_id.
+        # The partial WHERE clause restricts uniqueness to non-NULL values.
+        Index(
+            "uq_tenants_clerk_org_id",
+            "clerk_org_id",
+            unique=True,
+            postgresql_where=text("clerk_org_id IS NOT NULL"),
+        ),
     )
 
 
@@ -246,6 +268,26 @@ class Membership(Base):
             "user_id",
             postgresql_where=text("workspace_id IS NULL"),
         ),
+        # Drift 1.5 (Turn 2.7): table comment matches migration 0001's
+        # `COMMENT ON TABLE memberships IS '...'` block (line 236-249).
+        # Without this dict in __table_args__, `alembic check` reports a
+        # `remove_table_comment` operation because the live DB has the
+        # comment but the model didn't declare it.
+        # The string MUST match migration 0001's COMMENT body byte-for-byte
+        # (modulo whitespace handling) or autogen will flag a comment diff.
+        {
+            "comment": (
+                "Memberships authorization model. "
+                "workspace_id IS NULL means tenant-level membership (org-wide actions). "
+                "workspace_id IS NOT NULL means workspace-level membership. "
+                "A user may have one tenant-level row AND N workspace-level rows. "
+                "Enforced by two partial unique indexes (uq_memberships_tenant_level, "
+                "uq_memberships_workspace_level) rather than a single full-tuple unique "
+                "constraint because Postgres treats NULL as distinct in unique constraints, "
+                "which would permit duplicate tenant-level rows and break authz. "
+                "See plan v0.5.1 §7.1."
+            ),
+        },
     )
 
 

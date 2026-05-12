@@ -1,6 +1,6 @@
-"""PostgresComparisonRepository tests — Turn 2.6 Step 2 (10 tests).
+"""PostgresComparisonRepository tests — Turn 2.6 Step 2 + Turn 2.7 Drift 2 (11 tests).
 
-Composition (Turn 2.6 plan v0.2.1 §4 Step 2):
+Composition (Turn 2.6 plan v0.2.1 §4 Step 2 + Turn 2.7 plan v0.2.1 §4.2):
   1.  create round-trips (PENDING)
   2.  create UPSERTs status transition (PENDING -> COMPLETED, no dup-key)
   3.  get raises ComparisonNotFound for absent id
@@ -11,11 +11,16 @@ Composition (Turn 2.6 plan v0.2.1 §4 Step 2):
   8.  external session does not commit until parent commits (RC-4 a)
   9.  external session rolls back on parent error (RC-4 b)
   10. SERVICE-LEVEL: ComparisonService(PostgresComparisonRepository)
-      persists PENDING then COMPLETED without duplicate-key failure
-      (v0.2.1 §A.4 strongly-recommended item)
+      persists PENDING then COMPLETED via service.create_comparison()
+      (Turn 2.7 Drift 2 — rewrote v0.2.1 §A.4's bypass workaround now
+      that the service mints UUID4 ids that asyncpg accepts)
+  11. SERVICE -> POSTGRES round-trip via repo.get verifies the
+      str(uuid.uuid4()) id round-trips cleanly through the UUID column
+      (Turn 2.7 Drift 2 source-fix end-to-end)
 """
 from __future__ import annotations
 
+import uuid
 from datetime import timedelta
 
 import pytest
@@ -462,79 +467,186 @@ async def test_postgres_comparison_repository_external_session_rolls_back_on_par
 
 
 # ---------------------------------------------------------------------------
-# Test 10 — SERVICE-LEVEL UPSERT (v0.2.1 §A.4 strongly-recommended)
+# Test 10 — SERVICE-LEVEL UPSERT (rewritten Turn 2.7 Drift 2)
 # ---------------------------------------------------------------------------
 
 
 async def test_comparison_service_with_postgres_repository_persists_pending_then_completed(
     admin_session: AsyncSession,
 ) -> None:
-    """v0.2.1 §A.4: prove the service-flow invariant — two
-    ``repo.create()`` calls (PENDING then COMPLETED) for the same
-    comparison id — yields exactly one row in the comparisons table
-    with the COMPLETED state visible.
+    """Turn 2.7 Drift 2 rewrite of v0.2.1 §A.4: prove the
+    service-flow invariant — two ``repo.create()`` calls
+    (PENDING then COMPLETED) for the same comparison id — yields
+    exactly one row in the comparisons table with the COMPLETED state
+    visible.
 
-    Discovered drift T2.6-D2 (id-shape mismatch):
-        ``ComparisonService.create_comparison`` mints ids of the form
-        ``f"cmp_{uuid.uuid4().hex[:12]}"`` (16 chars, non-UUID), but the
-        ``comparisons.id`` ORM column is ``UUID(as_uuid=False)`` and
-        asyncpg rejects non-UUID strings. This is parity with T2.6-D1
-        (initiated_by_actor_id="system") in scope: a forward-looking
-        discipline drift that needs the service to be made
-        Postgres-aware. Resolution scheduled for Turn 2.7 alongside
-        the audit/actor refactor (Future-1).
+    History (Turn 2.6 → Turn 2.7):
+        Originally this test could NOT call
+        ``ComparisonService.create_comparison`` because the service
+        minted ids of the form ``f"cmp_{uuid.uuid4().hex[:12]}"`` and
+        asyncpg rejected the non-UUID string. The Turn 2.6 version
+        called ``repo.create()`` directly with a hand-built
+        ``ComparisonRecord(id=<uuid>, ...)`` to exercise the UPSERT
+        invariant.
 
-    For this test we exercise the same two-call lifecycle the service
-    uses internally, but with a UUID-shaped id. The intent is unchanged:
-    catch a regression where the service-flow grows a third
-    ``repo.create`` call or violates the create-twice invariant. If the
-    UPSERT semantic is broken, this fails with IntegrityError on the
-    second create, exactly as a service-flow bug would.
+        Turn 2.7 Drift 2 fixed the service to mint UUID4 ids
+        (``str(uuid.uuid4())``). This rewrite collapses the workaround:
+        the test now invokes ``service.create_comparison(ctx, ...)``
+        directly — exactly the path Stage C operators will use — and
+        the UPSERT invariant is exercised implicitly by the service's
+        internal two-call lifecycle (PENDING -> COMPLETED).
+
+    Failure modes this catches:
+      * Service mints non-UUID ids again (regression of T2.6-D2).
+      * Service grows a third ``repo.create`` call.
+      * INSERT instead of UPSERT (would raise IntegrityError on the
+        second create).
+      * Service skips the COMPLETED write (final row would have
+        status='pending').
     """
-    tid, wid = await _seed_tenant_workspace(admin_session, "t26-svc-upsert")
+    tid, wid = await _seed_tenant_workspace(admin_session, "t27-svc-upsert")
     left = "abababab-1111-1111-1111-abababababab"
     right = "cdcdcdcd-2222-2222-2222-cdcdcdcdcdcd"
     await _seed_runs(admin_session, tid, wid, left, right)
 
-    repo = PostgresComparisonRepository()
-    cid = "11112222-3333-4444-5555-666677778888"
-
-    # Step 1 — the PENDING write the service makes after eligibility check
-    pending = _record(tid, wid, cid, left, right, status=ComparisonStatus.PENDING)
-    await repo.create(pending)
-
-    # Step 2 — the COMPLETED write the service makes after provider returns.
-    # This MUST not raise IntegrityError (UPSERT invariant).
-    completed = ComparisonRecord(
-        id=cid,
-        workspace_id=wid,
-        tenant_id=tid,
-        left_run_id=left,
-        right_run_id=right,
-        status=ComparisonStatus.COMPLETED,
-        created_at=pending.created_at,
-        completed_at=utcnow(),
-        engine_version="engine_v1",
-        regression_signals=[
-            RegressionSignal(
-                type="pass_rate_drop",
-                severity="warning",
-                metric="overall",
-                payload={},
-            )
-        ],
+    # Build the service with the real Postgres repository + InMemory
+    # runs/idempotency. Comparison service is what we're testing; the
+    # other deps are smoke fakes that don't influence the id-mint or
+    # the UPSERT path.
+    pg_cmp_repo = PostgresComparisonRepository()
+    in_mem_run_repo = InMemoryRunRepository()
+    # Seed the InMemory run repo with COMPLETED runs whose ids match
+    # the seeded Postgres rows so the eligibility check passes.
+    await in_mem_run_repo.create(
+        RunRecord(
+            run_id=left,
+            tenant_id=tid,
+            workspace_id=wid,
+            status=RunStatus.COMPLETED,
+            engine_version="engine_v1",
+            created_at=utcnow(),
+            completed_at=utcnow(),
+        )
     )
-    await repo.create(completed)
+    await in_mem_run_repo.create(
+        RunRecord(
+            run_id=right,
+            tenant_id=tid,
+            workspace_id=wid,
+            status=RunStatus.COMPLETED,
+            engine_version="engine_v1",
+            created_at=utcnow(),
+            completed_at=utcnow(),
+        )
+    )
 
-    # Direct DB check: exactly one row, status='completed', signals populated.
+    class _NullProvider:
+        async def compute(self, record):  # noqa: ARG002 — smoke
+            return ([], None)
+
+    service = ComparisonService(
+        repo=pg_cmp_repo,
+        run_service=RunService(in_mem_run_repo),
+        provider=_NullProvider(),
+    )
+
+    # The service's internal two-call lifecycle (PENDING -> COMPLETED)
+    # is what we're exercising. Returns the COMPLETED record.
+    record = await service.create_comparison(_ctx(tid, wid), left, right)
+
+    # Service must mint a UUID4 id (Drift 2 source-fix invariant).
+    parsed = uuid.UUID(record.id)
+    assert parsed.version == 4, (
+        f"ComparisonService minted id {record.id!r} which is not UUID4 "
+        f"(version={parsed.version}). Turn 2.7 Drift 2 source fix "
+        f"regressed."
+    )
+
+    # Direct DB check: exactly one row, status='completed'.
     rows_result = await admin_session.execute(
-        sa.select(ComparisonORM).where(ComparisonORM.id == cid)
+        sa.select(ComparisonORM).where(ComparisonORM.id == record.id)
     )
     rows = rows_result.scalars().all()
     assert len(rows) == 1, (
-        f"Expected exactly 1 row in comparisons for id={cid}, "
+        f"Expected exactly 1 row in comparisons for id={record.id}, "
         f"got {len(rows)}. UPSERT contract violated — service-flow "
         f"regression (e.g. third create call, or INSERT instead of UPSERT)."
     )
     assert rows[0].status == "completed"
-    assert rows[0].regression_signals  # non-empty JSONB list
+
+
+# ---------------------------------------------------------------------------
+# Test 11 — SERVICE -> POSTGRES round-trip via repo.get (Turn 2.7 Drift 2)
+# ---------------------------------------------------------------------------
+
+
+async def test_comparison_id_format_round_trips_through_postgres(
+    admin_session: AsyncSession,
+) -> None:
+    """Turn 2.7 Drift 2: write via ``service.create_comparison``, read
+    via ``repo.get``, assert the id matches in both directions.
+
+    This is the "source-fix verified end-to-end" test:
+
+      service mints UUID4 -> persists via repo
+                                -> Postgres stores in UUID column
+                                   -> repo.get() reads it back
+                                      -> string equality round-trip OK
+
+    If T2.6-D2 regresses (non-UUID id), the chain breaks at the
+    ``persists via repo`` step with an asyncpg "invalid input syntax for
+    type uuid" — failing this test before any assertion runs.
+
+    If the service mints a UUID but the repo somehow returns a different
+    id (e.g., a column-level transform crept in), the equality check
+    catches that.
+    """
+    tid, wid = await _seed_tenant_workspace(admin_session, "t27-roundtrip")
+    left = "11111111-aaaa-aaaa-aaaa-111111111111"
+    right = "22222222-bbbb-bbbb-bbbb-222222222222"
+    await _seed_runs(admin_session, tid, wid, left, right)
+
+    pg_cmp_repo = PostgresComparisonRepository()
+    in_mem_run_repo = InMemoryRunRepository()
+    for rid in (left, right):
+        await in_mem_run_repo.create(
+            RunRecord(
+                run_id=rid,
+                tenant_id=tid,
+                workspace_id=wid,
+                status=RunStatus.COMPLETED,
+                engine_version="engine_v1",
+                created_at=utcnow(),
+                completed_at=utcnow(),
+            )
+        )
+
+    class _NullProvider:
+        async def compute(self, record):  # noqa: ARG002 — smoke
+            return ([], None)
+
+    service = ComparisonService(
+        repo=pg_cmp_repo,
+        run_service=RunService(in_mem_run_repo),
+        provider=_NullProvider(),
+    )
+    ctx = _ctx(tid, wid)
+
+    # Write via service — the id is minted internally.
+    written = await service.create_comparison(ctx, left, right)
+
+    # Read via repo.get — the id round-trips.
+    fetched = await pg_cmp_repo.get(ctx, written.id)
+
+    assert fetched.id == written.id, (
+        f"Comparison id round-trip mismatch: wrote {written.id!r}, "
+        f"read back {fetched.id!r}. The source-fix's str(uuid.uuid4()) "
+        f"must round-trip cleanly through the Postgres UUID column."
+    )
+
+    # Sanity: id parses as a UUID4 (the source fix's specific shape).
+    parsed = uuid.UUID(written.id)
+    assert parsed.version == 4, (
+        f"id {written.id!r} round-tripped but is not UUID4 "
+        f"(version={parsed.version})"
+    )

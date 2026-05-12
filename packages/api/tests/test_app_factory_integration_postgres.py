@@ -76,9 +76,7 @@ from src.db.session import get_sessionmaker, raw_admin_session
 from src.results.models import RunOverview
 from src.runs.models import RunRecord, RunStatus
 
-
 pytestmark = pytest.mark.asyncio
-
 
 async def test_factory_built_app_serves_one_authenticated_request_end_to_end_postgres(
     clean_db: str,

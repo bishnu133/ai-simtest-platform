@@ -263,3 +263,56 @@ def test_create_app_shares_run_service_across_consumers(factory_app):
     # invariant is broken at the repo level even if the service
     # identity accidentally matched.
     assert cmp_svc._runs is factory_app.state.run_service
+
+
+# ---------------------------------------------------------------------------
+# Test 8 — safe-default repositories (v0.1-review MF-6 / SR-9 close)
+# ---------------------------------------------------------------------------
+
+
+def test_create_app_uses_in_memory_repositories_by_default(factory_app):
+    """Safe-default wiring: no use_postgres_* switch -> in-memory repos.
+
+    The factory's composition root must default to in-memory implementations
+    of the persistence layer when no Postgres feature switch is enabled.
+    This is the structural fail-safe invariant for the multi-tenant
+    control plane: turning a switch on is an explicit operator action;
+    turning all switches off is the safe-by-default behaviour.
+
+    Scope of assertions
+    -------------------
+    This test asserts the run-repository and dashboard-artifact-repository
+    defaults via the composition-root service handles confirmed reachable
+    by Test #7 (``shares_run_service_across_consumers``) and the Step 11
+    integration test:
+
+        * ``factory_app.state.run_service._repo``           -> RunRepository
+        * ``factory_app.state.dashboard_service._artifacts`` -> ArtifactRepo
+
+    The comparison and idempotency defaults are covered by the
+    ``tests/db/test_app_factory_persistence_switches_round2.py`` family
+    (W-cmp-2/3, W-idem-2/3) which exhaustively proves the switching
+    contract across all 5 use_postgres_* switches. This test pins the
+    *negative* invariant: without those switches, the safe in-memory
+    defaults remain.
+
+    If a future refactor moves the repo handles to a different attribute
+    path on the services, this test gets the fix - the invariant is the
+    safe-default wiring, not the attribute name.
+    """
+    from src.runs.repository import InMemoryRunRepository
+    from src.results.repository import InMemoryDashboardArtifactRepository
+
+    run_repo = factory_app.state.run_service._repo
+    art_repo = factory_app.state.dashboard_service._artifacts
+
+    assert isinstance(run_repo, InMemoryRunRepository), (
+        f"expected InMemoryRunRepository as default "
+        f"(no use_postgres_runs), got "
+        f"{type(run_repo).__module__}.{type(run_repo).__name__}"
+    )
+    assert isinstance(art_repo, InMemoryDashboardArtifactRepository), (
+        f"expected InMemoryDashboardArtifactRepository as default "
+        f"(no use_postgres_dashboard_artifacts), got "
+        f"{type(art_repo).__module__}.{type(art_repo).__name__}"
+    )

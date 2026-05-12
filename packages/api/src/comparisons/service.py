@@ -7,6 +7,7 @@ from datetime import timedelta
 from src.api.errors import APIError
 from src.audit.logger import AuditActions, audit_logger
 from src.common.models import TenantContext, utcnow
+from src.common.write_context import WriteContext
 from src.comparisons.idempotency import (
     IdempotencyStore,
     InMemoryIdempotencyStore,
@@ -98,7 +99,12 @@ class ComparisonService:
 
         # Create record in PENDING
         record = ComparisonRecord(
-            id=f"cmp_{uuid.uuid4().hex[:12]}",
+            # T2.6-D2 fix (Turn 2.7 Drift 2): mint a UUID4 string. The
+            # comparisons.id ORM column is UUID(as_uuid=False); the
+            # previous form `f"cmp_{uuid.uuid4().hex[:12]}"` was rejected
+            # by asyncpg and forced Stage B's smoke script to bypass
+            # this entire service path. See plan v0.2.1 §2.4 + §4.2.
+            id=str(uuid.uuid4()),
             workspace_id=ctx.workspace_id,
             tenant_id=ctx.tenant_id,
             left_run_id=left_run_id,
@@ -117,7 +123,12 @@ class ComparisonService:
                 run_status=right.status,
             ),
         )
-        await self._repo.create(record)
+        # T2.6-D1 fix (Turn 2.7 Drift 4): build a WriteContext from the
+        # caller's TenantContext so the repository can persist the real
+        # actor_id instead of the hardcoded "system" default. The same
+        # write_ctx is used for both create() calls (PENDING + COMPLETED).
+        write_ctx = WriteContext.from_tenant_context(ctx)
+        await self._repo.create(record, write_ctx=write_ctx)
 
         # Synchronous execution: PENDING -> RUNNING -> COMPLETED/FAILED
         record.status = ComparisonStatus.RUNNING
@@ -136,7 +147,9 @@ class ComparisonService:
         record.completed_at = utcnow()
 
         # Persist completed state
-        await self._repo.create(record)
+        # Same write_ctx as the PENDING write — the actor doesn't change
+        # between create() calls within a single service invocation.
+        await self._repo.create(record, write_ctx=write_ctx)
 
         # Audit
         audit_logger.write(

@@ -1,4 +1,17 @@
-"""Week 6a Turn 3: pagination contract tests (4 tests, v1.2.2 §S4)."""
+"""Week 6a Turn 3: pagination contract tests (4 tests, v1.2.2 §S4).
+
+Note on `cmp_<i>` IDs (Turn 2.7 Drift 2):
+    These tests construct ComparisonRecord(id=f"cmp_{i}", ...) values
+    and write them DIRECTLY to InMemoryComparisonRepository, bypassing
+    ComparisonService.create_comparison(). The ids are intentional
+    sort-order fixtures (cmp_0, cmp_1, cmp_2 — the assertions check
+    LIFO ordering: ["cmp_2", "cmp_1", "cmp_0"]), NOT examples of the
+    service-generated id format. ComparisonService now mints
+    str(uuid.uuid4()) ids per Turn 2.7 Drift 2; the cmp_<i> shape lives
+    here only because plain InMemory writes accept any string id and
+    short integer-suffixed ids make the sort assertion easier to read.
+    Do not "fix" these to UUIDs without also rewriting the assertions.
+"""
 from __future__ import annotations
 
 import asyncio

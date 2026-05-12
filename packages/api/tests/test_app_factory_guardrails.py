@@ -309,3 +309,80 @@ def test_risky_combination_emits_startup_warning(caplog, monkeypatch):
         "Expected a WARNING mentioning 'allow_self_serve_provisioning' "
         f"and 'production'; got warnings: {warning_messages}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Test 8 — R-8 carve-out (v0.1-review MF-2 final piece, positive case)
+# ---------------------------------------------------------------------------
+
+
+def test_test_env_mixed_comparison_idempotency_modes_allowed(monkeypatch):
+    """app_env='test' allows mixed use_postgres_comparisons /
+    use_postgres_idempotency (R-8 carve-out).
+
+    Coupling rule (R-8)
+    -------------------
+    Staging and production environments must have
+    ``use_postgres_comparisons == use_postgres_idempotency``. Mixed-mode
+    in those envs raises ``FatalConfigurationError`` - see
+    ``tests/db/test_app_factory_persistence_switches_round2.py`` W-coup-1.
+
+    The carve-out
+    -------------
+    For test and development environments, the coupling rule is relaxed.
+    This supports incremental migration paths where one persistence layer
+    is moved to Postgres ahead of the other during development, without
+    forcing a flag-day flip in CI / local dev.
+
+    Positive-case contract
+    ----------------------
+    ``AppSettings(app_env="test", use_postgres_comparisons=True,
+    use_postgres_idempotency=False, database_url=<PG URL>, ...)``
+    construction + ``create_app()`` must NOT raise
+    ``FatalConfigurationError``. Other downstream failures (lazy engine
+    connect, etc.) are out of scope: the guardrail check runs BEFORE
+    engine build, so absence of ``FatalConfigurationError`` proves the
+    carve-out works.
+
+    Environment-leak guard (monkeypatch usage)
+    ------------------------------------------
+    ``create_app`` reaches ``_build_engine`` which calls
+    ``configure_engine_from_url`` and mutates
+    ``os.environ["DATABASE_URL"]`` as a side effect. Without monkeypatch,
+    that mutation leaks into downstream ``clean_db``-using tests. Same
+    pattern as ``test_risky_combination_emits_startup_warning``. Root-
+    cause fix tracked as FH-Env-Mutation.
+    """
+    import os
+
+    current_db_url = os.environ.get("DATABASE_URL")
+    if current_db_url is not None:
+        monkeypatch.setenv("DATABASE_URL", current_db_url)
+    else:
+        monkeypatch.delenv("DATABASE_URL", raising=False)
+
+    # Mixed mode: comparisons=True, idempotency=False.
+    # In staging/production this raises FatalConfigurationError (W-coup-1).
+    # In test the carve-out allows this combination.
+    try:
+        settings = AppSettings(
+            app_env="test",
+            auth_provider="dev",
+            auth_enabled=False,
+            database_url="postgresql+asyncpg://carveout:test@localhost/carveout",
+            use_postgres_comparisons=True,
+            use_postgres_idempotency=False,
+        )
+        create_app(settings=settings)
+    except FatalConfigurationError as exc:
+        pytest.fail(
+            f"R-8 carve-out broken: app_env='test' with mixed "
+            f"use_postgres_comparisons=True / "
+            f"use_postgres_idempotency=False raised "
+            f"FatalConfigurationError unexpectedly: {exc}"
+        )
+    except Exception:
+        # Other downstream failures (engine-connect, lazy asyncpg init,
+        # etc.) happen AFTER guardrail validation. Absence of
+        # FatalConfigurationError above is the carve-out proof.
+        pass
