@@ -92,3 +92,7 @@ test_rls_diag.py
 
 # ---- Type stubs generated locally ----
 *.pyi.gen
+
+# ---- Sprint-local env scripts and scratch (T4.5 / FH-Tier-1) ----
+.t45_env*
+t45_*.py
