@@ -829,10 +829,10 @@ class AuditEvent(Base):
         server_default=text("gen_random_uuid()"),
         primary_key=True,
     )
-    tenant_id: Mapped[str] = mapped_column(
+    tenant_id: Mapped[str | None] = mapped_column(
         UUID(as_uuid=False),
         ForeignKey("tenants.id"),
-        nullable=False,
+        nullable=True,
     )
     action: Mapped[str] = mapped_column(String(100), nullable=False)
     resource_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
