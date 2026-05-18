@@ -100,10 +100,10 @@ async def _ensure_test_tenants_and_workspaces() -> None:
         )
         await s.execute(
             sa.text("""
-                INSERT INTO workspaces (id, tenant_id, name, slug, is_default)
+                INSERT INTO workspaces (id, tenant_id, name, is_default)
                 VALUES
-                    (:wid_a, :tid_a, 'Slice4 Workspace A', 'slice4-ws-a', true),
-                    (:wid_b, :tid_b, 'Slice4 Workspace B', 'slice4-ws-b', true)
+                    (:wid_a, :tid_a, 'Slice4 Workspace A', true),
+                    (:wid_b, :tid_b, 'Slice4 Workspace B', true)
                 ON CONFLICT (id) DO NOTHING
             """),
             {
