@@ -18,6 +18,13 @@ Slice 5 additions (additive only, Option A locked at v0.3.4):
     to the repository for Tier-1 RLS-aware persistence. The existing 26
     sync write() call sites are NOT migrated in this slice — that work
     is Slices 7-8.
+
+Slice 6 additions (additive only):
+  - bind_repository(repo) setter mutates self._audit_repository in-place.
+    Used by app_factory._bind_services to swap PostgresAuditEventRepository
+    into the module singleton when settings.use_postgres_audit_events=True.
+    Setter (not re-instantiation) preserves singleton identity for the
+    9 production + 16 test files that cache the audit_logger reference.
 """
 from __future__ import annotations
 
@@ -136,6 +143,10 @@ class AuditLogger:
     value `None` resolves to InMemoryAuditEventRepository(), preserving
     backward compatibility with the existing `audit_logger = AuditLogger()`
     module-level singleton. The synchronous write() method is unchanged.
+
+    Slice 6: bind_repository(repo) setter mutates the bound repository
+    in-place after construction. Used by app_factory to wire
+    PostgresAuditEventRepository into the module singleton at startup.
     """
 
     def __init__(
@@ -144,11 +155,31 @@ class AuditLogger:
     ) -> None:
         self._events: list[AuditEvent] = []
         # Slice 5 Q1=B1 + Q4=N2: constructor injection with InMemory default.
-        # Slice 6 (app_factory) will pass PostgresAuditEventRepository here
-        # for production wiring.
+        # Slice 6 (app_factory) uses bind_repository() to swap in
+        # PostgresAuditEventRepository for production wiring (see below).
         self._audit_repository: AuditEventRepository = (
             repository if repository is not None else InMemoryAuditEventRepository()
         )
+
+    def bind_repository(self, repository: AuditEventRepository) -> None:
+        """Replace the bound async repository in-place.
+
+        Slice 6 Q1=B2 (locked at Plan v0.2): the audit_logger module
+        singleton at the bottom of this file is instantiated once at
+        module load with the InMemory default. In production,
+        app_factory._bind_services calls this setter to swap in
+        PostgresAuditEventRepository per the use_postgres_audit_events
+        feature flag.
+
+        Why a setter, not constructor re-instantiation? The module
+        singleton is cached by reference at import time by 9 production
+        source files and 16 test files. Re-assigning
+        src.audit.logger.audit_logger from app_factory would leave their
+        cached references pointing to the original (stale) instance.
+        The setter mutates self in-place so all consumers see the new
+        repository transparently.
+        """
+        self._audit_repository = repository
 
     def write(
         self,

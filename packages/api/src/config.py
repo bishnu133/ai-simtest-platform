@@ -195,6 +195,22 @@ class AppSettings(BaseSettings):
         ),
     )
 
+    # Slice 6: audit_events durability switch. Mirrors the existing 5
+    # use_postgres_* flags. When True, app_factory._bind_services binds
+    # PostgresAuditEventRepository into the audit_logger module singleton
+    # via bind_repository (Q1=B2). Default False keeps tests on the
+    # InMemoryAuditEventRepository default from Slice 5.
+    # Requires database_url to be set — enforced by the cross-field
+    # guardrail in app_factory._enforce_production_guardrails.
+    use_postgres_audit_events: bool = Field(
+        default=False,
+        description=(
+            "Bind PostgresAuditEventRepository into the audit_logger "
+            "module singleton at app_factory startup. Requires "
+            "database_url. Default False per use_postgres_runs rationale."
+        ),
+    )
+
     # ------------------------------------------------------------------
     # Clerk provider configuration (only consumed when auth_provider='clerk')
     # ------------------------------------------------------------------

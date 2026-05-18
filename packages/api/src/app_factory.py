@@ -119,17 +119,19 @@ def _enforce_production_guardrails(settings: AppSettings) -> None:
     # when the operator asked for Postgres would be the same class of
     # bug as Drift #7.
     if (
-        settings.use_postgres_runs
-        or settings.use_postgres_dashboard_artifacts
-        or settings.use_postgres_comparisons
-        or settings.use_postgres_idempotency
-        or settings.use_postgres_conversation_summaries
+            settings.use_postgres_runs
+            or settings.use_postgres_dashboard_artifacts
+            or settings.use_postgres_comparisons
+            or settings.use_postgres_idempotency
+            or settings.use_postgres_conversation_summaries
+            or settings.use_postgres_audit_events
     ) and not settings.database_url:
         raise FatalConfigurationError(
             "use_postgres_runs / use_postgres_dashboard_artifacts / "
             "use_postgres_comparisons / use_postgres_idempotency / "
-            "use_postgres_conversation_summaries require database_url to be "
-            "set. Cannot construct a Postgres repository without a database URL."
+            "use_postgres_conversation_summaries / use_postgres_audit_events "
+            "require database_url to be set. Cannot construct a Postgres "
+            "repository without a database URL."
         )
 
     # Turn 2.6 plan v0.2.1 §6.4 R-8 coupling guardrail: in
@@ -448,6 +450,18 @@ def _bind_services(app: FastAPI, settings: AppSettings) -> None:
         storage=storage_adapter,
         summary_repo=conv_summary_repo,
     )
+
+    # Slice 6 (Plan v0.2 §B.5): bind the audit_logger module singleton to
+    # PostgresAuditEventRepository when use_postgres_audit_events=True.
+    # The cross-field guardrail in _enforce_production_guardrails already
+    # rejected this combination with database_url=None. Module singleton
+    # is mutated in-place via bind_repository (Slice 6 Q1=B2) —
+    # re-instantiation would leave cached references in 9 production +
+    # 16 test files stale.
+    if settings.use_postgres_audit_events:
+        from src.audit.logger import audit_logger
+        from src.audit.repository import PostgresAuditEventRepository
+        audit_logger.bind_repository(PostgresAuditEventRepository())
 
     # --- Stash on app.state for tests / introspection ---
     app.state.run_service = run_service
