@@ -10,6 +10,14 @@ Design principles:
   - Actor-stamped: every event carries ActorRef
   - Structured: action + resource_type + resource_id + metadata dict
   - Correlation-aware: events in the same request share correlation_id
+
+Slice 5 additions (additive only, Option A locked at v0.3.4):
+  - AuditLogger now accepts an AuditEventRepository at construction
+    (default: InMemoryAuditEventRepository). Sync write() is unchanged.
+  - Two async methods aemit_tenant_event / aemit_pretenant_event delegate
+    to the repository for Tier-1 RLS-aware persistence. The existing 26
+    sync write() call sites are NOT migrated in this slice — that work
+    is Slices 7-8.
 """
 from __future__ import annotations
 
@@ -17,7 +25,12 @@ import logging
 import uuid
 from dataclasses import dataclass, field
 from typing import Any
+from uuid import UUID
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.audit.context import PretenantAuditEvent, TenantAuditEvent
+from src.audit.repository import AuditEventRepository, InMemoryAuditEventRepository
 from src.common.models import ActorRef, TenantContext, utcnow
 
 logger = logging.getLogger(__name__)
@@ -117,10 +130,25 @@ class AuditLogger:
 
     In-memory implementation for testing; production uses the `audit_events`
     PG table. The interface is identical so swapping is transparent.
+
+    Slice 5 (Option A): constructor accepts an AuditEventRepository for the
+    async path (aemit_tenant_event / aemit_pretenant_event). The default
+    value `None` resolves to InMemoryAuditEventRepository(), preserving
+    backward compatibility with the existing `audit_logger = AuditLogger()`
+    module-level singleton. The synchronous write() method is unchanged.
     """
 
-    def __init__(self):
+    def __init__(
+        self,
+        repository: AuditEventRepository | None = None,
+    ) -> None:
         self._events: list[AuditEvent] = []
+        # Slice 5 Q1=B1 + Q4=N2: constructor injection with InMemory default.
+        # Slice 6 (app_factory) will pass PostgresAuditEventRepository here
+        # for production wiring.
+        self._audit_repository: AuditEventRepository = (
+            repository if repository is not None else InMemoryAuditEventRepository()
+        )
 
     def write(
         self,
@@ -157,6 +185,49 @@ class AuditLogger:
         except Exception as exc:  # pragma: no cover — defensive, never silently swallowed
             logger.error("audit write failed: %s", exc, exc_info=True)
             raise
+
+    async def aemit_tenant_event(
+        self,
+        event: TenantAuditEvent,
+        session: AsyncSession | None = None,
+    ) -> UUID:
+        """Async persist a tenant-scoped audit event via the bound repository.
+
+        Slice 5 (Option A): additive alongside sync write(). The 26 existing
+        audit_logger.write() call sites remain on the sync path. New Tier-1
+        code paths can call this method to get durable, RLS-aware audit
+        persistence via the AuditEventRepository contract from Slice 4.
+
+        Returns the UUID of the persisted row (Slice 5 Q3=R1).
+
+        Failure semantics (Slice 5 Q2=F1): exceptions from the underlying
+        repository propagate to the caller. Audit failures during Tier-1
+        paths must not be silently swallowed. Callers decide retry/fallback
+        policy per-site.
+        """
+        return await self._audit_repository.append_tenant_event(event, session=session)
+
+    async def aemit_pretenant_event(
+        self,
+        event: PretenantAuditEvent,
+        session: AsyncSession | None = None,
+    ) -> UUID:
+        """Async persist a pretenant (NULL tenant_id) audit event.
+
+        Used for events that occur before a tenant context is established
+        (e.g. auth.rejected with missing credentials). Delegates to
+        AuditEventRepository.append_pretenant_event which routes through
+        the SECURITY DEFINER function audit_pretenant_insert (Slice 0
+        migration 0006) to bypass RLS for this narrow case.
+
+        Returns the UUID of the persisted row (Slice 5 Q3=R1).
+
+        Failure semantics (Slice 5 Q2=F1): exceptions propagate. In
+        particular, AuditEventInsertRejected is raised when the
+        SECURITY DEFINER function rejects a pretenant event (e.g. action
+        outside the PRETENANT_ACTION_ALLOWLIST).
+        """
+        return await self._audit_repository.append_pretenant_event(event, session=session)
 
     def query(
         self,
