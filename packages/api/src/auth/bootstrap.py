@@ -54,6 +54,7 @@ from src.api.errors import (
     UnknownProviderOrgRole,
     WorkspaceNotFound,
 )
+from src.audit._compat import to_tenant_audit_event
 from src.audit.logger import AuditActions, AuditEvent, audit_logger
 from src.auth.provider import VerifiedClaims
 from src.auth.role_mapping import map_provider_org_role
@@ -263,8 +264,9 @@ async def ensure_membership(
         mapped_role = map_provider_org_role(claims)
     except (MissingProviderOrgRole, UnknownProviderOrgRole) as exc:
         # Emit audit BEFORE raising so the deny is traceable.
-        # Build a minimal context for audit_logger.write() which expects
-        # a TenantContext.
+        # Build a minimal context for audit emission (Slice 7 — async path
+        # via aemit_tenant_event_safe; ctx still required for the
+        # to_tenant_audit_event helper).
         from src.common.models import TenantContext
 
         deny_ctx = TenantContext(
@@ -272,16 +274,18 @@ async def ensure_membership(
             workspace_id=workspace_id,
             actor=ActorRef(actor_id=user_id, actor_type="human"),
         )
-        audit_logger.write(
-            ctx=deny_ctx,
-            action=AuditActions.AUTH_MEMBERSHIP_DENIED,
-            resource_type="membership",
-            resource_id=user_id,
-            metadata={
-                "reason": exc.code,
-                "provider_org_role": claims.provider_org_role,
-                "org_id": claims.org_id,
-            },
+        await audit_logger.aemit_tenant_event_safe(
+            to_tenant_audit_event(
+                ctx=deny_ctx,
+                action=AuditActions.AUTH_MEMBERSHIP_DENIED,
+                resource_type="membership",
+                resource_id=user_id,
+                metadata={
+                    "reason": exc.code,
+                    "provider_org_role": claims.provider_org_role,
+                    "org_id": claims.org_id,
+                },
+            )
         )
         raise
 
@@ -430,23 +434,27 @@ async def bootstrap(
     # rolled back.
     if tenant_just_created:
         commit_ctx = _build_actor_ctx(claims, result)
-        audit_logger.write(
-            ctx=commit_ctx,
-            action=AuditActions.AUTH_BOOTSTRAP_CREATED_TENANT,
-            resource_type="tenant",
-            resource_id=result.tenant_id,
-            metadata={
-                "org_id": claims.org_id,
-                "user_id": claims.user_id,
-                "is_first_user": result.is_first_user,
-            },
+        await audit_logger.aemit_tenant_event_safe(
+            to_tenant_audit_event(
+                ctx=commit_ctx,
+                action=AuditActions.AUTH_BOOTSTRAP_CREATED_TENANT,
+                resource_type="tenant",
+                resource_id=result.tenant_id,
+                metadata={
+                    "org_id": claims.org_id,
+                    "user_id": claims.user_id,
+                    "is_first_user": result.is_first_user,
+                },
+            )
         )
-        audit_logger.write(
-            ctx=commit_ctx,
-            action=AuditActions.TENANT_CREATED,
-            resource_type="tenant",
-            resource_id=result.tenant_id,
-            metadata={"org_id": claims.org_id},
+        await audit_logger.aemit_tenant_event_safe(
+            to_tenant_audit_event(
+                ctx=commit_ctx,
+                action=AuditActions.TENANT_CREATED,
+                resource_type="tenant",
+                resource_id=result.tenant_id,
+                metadata={"org_id": claims.org_id},
+            )
         )
 
     return result

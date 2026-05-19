@@ -247,7 +247,7 @@ async def test_refused_provisioning_does_not_emit_tenant_created_audit(
     this reason (plan §5.6.1 "audit reflects committed state" rule);
     this test locks that invariant in.
     """
-    audit_logger.clear()
+    audit_logger.clear_all()
     sm = get_sessionmaker()
     async with sm() as session:
         with pytest.raises(TenantStateInvalid):
@@ -261,8 +261,8 @@ async def test_refused_provisioning_does_not_emit_tenant_created_audit(
             )
 
     # Neither creation-family audit event may be present.
-    tenant_created = audit_logger.query(action=AuditActions.TENANT_CREATED)
-    boot_created = audit_logger.query(
+    tenant_created = audit_logger.query_all_events(action=AuditActions.TENANT_CREATED)
+    boot_created = audit_logger.query_all_events(
         action=AuditActions.AUTH_BOOTSTRAP_CREATED_TENANT
     )
     assert tenant_created == []
@@ -610,7 +610,7 @@ async def test_returning_member_fast_path_sets_is_first_user_false(
 
     # Phase 2: the returning user logs in. Claim carries a differing
     # provider_org_role; precedence must ignore it.
-    audit_logger.clear()
+    audit_logger.clear_all()
     sm = get_sessionmaker()
     async with sm() as session:
         result = await bootstrap(
@@ -632,9 +632,9 @@ async def test_returning_member_fast_path_sets_is_first_user_false(
     # Fast-path is intentionally silent on AUTH_MEMBERSHIP_DENIED
     # (no onboarding attempt). Also no new audit events about tenant
     # creation because the tenant already existed.
-    denied = audit_logger.query(action=AuditActions.AUTH_MEMBERSHIP_DENIED)
-    created = audit_logger.query(action=AuditActions.TENANT_CREATED)
-    boot_created = audit_logger.query(
+    denied = audit_logger.query_all_events(action=AuditActions.AUTH_MEMBERSHIP_DENIED)
+    created = audit_logger.query_all_events(action=AuditActions.TENANT_CREATED)
+    boot_created = audit_logger.query_all_events(
         action=AuditActions.AUTH_BOOTSTRAP_CREATED_TENANT
     )
     assert denied == []
@@ -690,7 +690,7 @@ async def test_existing_tenant_login_does_not_emit_tenant_created_audit(
     # Phase 2: new-to-tenant user logs in with valid provider_org_role.
     # Onboarding path creates membership rows but the TENANT itself
     # was not just created.
-    audit_logger.clear()
+    audit_logger.clear_all()
     sm = get_sessionmaker()
     async with sm() as session:
         result = await bootstrap(
@@ -713,8 +713,8 @@ async def test_existing_tenant_login_does_not_emit_tenant_created_audit(
 
     # Phase 3: assert NO tenant-creation audit events fired despite
     # the new membership rows.
-    tenant_created = audit_logger.query(action=AuditActions.TENANT_CREATED)
-    boot_created = audit_logger.query(
+    tenant_created = audit_logger.query_all_events(action=AuditActions.TENANT_CREATED)
+    boot_created = audit_logger.query_all_events(
         action=AuditActions.AUTH_BOOTSTRAP_CREATED_TENANT
     )
     assert tenant_created == [], (

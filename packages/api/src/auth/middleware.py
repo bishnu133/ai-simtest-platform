@@ -45,6 +45,7 @@ from src.api.errors import (
     UnknownProviderOrgRole,
     WorkspaceNotFound,
 )
+from src.audit._compat import to_pretenant_audit_event, to_tenant_audit_event
 from src.audit.logger import AuditActions, audit_logger
 from src.auth.bootstrap import bootstrap
 from src.api.errors import TenantStateInvalid
@@ -183,21 +184,19 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
             # Can't audit with an actor — emit an audit event with the
             # reserved "anonymous" placeholder, to keep the auth stream
             # complete.
-            anon_ctx = TenantContext(
-                tenant_id="00000000-0000-0000-0000-000000000000",
-                workspace_id="00000000-0000-0000-0000-000000000000",
-                actor=ActorRef(actor_id="anonymous", actor_type="human"),
-            )
-            audit_logger.write(
-                ctx=anon_ctx,
-                action=AuditActions.AUTH_REJECTED,
-                resource_type="auth",
-                resource_id="request",
-                metadata={
-                    "step": "extract_bearer",
-                    "reason": "missing_bearer_token",
-                    "path": path,
-                },
+            await audit_logger.aemit_pretenant_event_safe(
+                to_pretenant_audit_event(
+                    action=AuditActions.AUTH_REJECTED,
+                    actor_id="anonymous",
+                    actor_type="human",
+                    metadata={
+                        "step": "extract_bearer",
+                        "reason": "missing_bearer_token",
+                        "path": path,
+                        "resource_type": "auth",
+                        "resource_id": "request",
+                    },
+                )
             )
             return _error_response(
                 401,
@@ -216,22 +215,20 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
         try:
             claims = await self._provider.verify(request)
         except (AuthCredentialMissing, AuthCredentialInvalid) as exc:
-            anon_ctx = TenantContext(
-                tenant_id="00000000-0000-0000-0000-000000000000",
-                workspace_id="00000000-0000-0000-0000-000000000000",
-                actor=ActorRef(actor_id="anonymous", actor_type="human"),
-            )
-            audit_logger.write(
-                ctx=anon_ctx,
-                action=AuditActions.AUTH_REJECTED,
-                resource_type="auth",
-                resource_id="request",
-                metadata={
-                    "step": "provider.verify",
-                    "reason": exc.code,
-                    "provider": self._provider.provider_name,
-                    "path": path,
-                },
+            await audit_logger.aemit_pretenant_event_safe(
+                to_pretenant_audit_event(
+                    action=AuditActions.AUTH_REJECTED,
+                    actor_id="anonymous",
+                    actor_type="human",
+                    metadata={
+                        "step": "provider.verify",
+                        "reason": exc.code,
+                        "provider": self._provider.provider_name,
+                        "path": path,
+                        "resource_type": "auth",
+                        "resource_id": "request",
+                    },
+                )
             )
             return _error_response(
                 exc.http_status,
@@ -335,16 +332,18 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
                     details=exc.details or None,
                 )
             except WorkspaceNotFound as exc:
-                audit_ctx = _build_audit_ctx_from_claims(claims)
-                audit_logger.write(
-                    ctx=audit_ctx,
-                    action=AuditActions.AUTH_REJECTED,
-                    resource_type="workspace",
-                    resource_id=claims.workspace_id or "unknown",
-                    metadata={
-                        "step": "bootstrap",
-                        "reason": "workspace_not_found",
-                    },
+                await audit_logger.aemit_pretenant_event_safe(
+                    to_pretenant_audit_event(
+                        action=AuditActions.AUTH_REJECTED,
+                        actor_id=claims.user_id if claims else "unknown",
+                        actor_type="human",
+                        metadata={
+                            "step": "bootstrap",
+                            "reason": "workspace_not_found",
+                            "resource_type": "workspace",
+                            "resource_id": claims.workspace_id or "unknown",
+                        },
+                    )
                 )
                 return _error_response(
                     exc.http_status,
@@ -391,16 +390,18 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
                 )
             except Exception:
                 logger.exception("Unexpected error during bootstrap")
-                audit_ctx = _build_audit_ctx_from_claims(claims)
-                audit_logger.write(
-                    ctx=audit_ctx,
-                    action=AuditActions.AUTH_REJECTED,
-                    resource_type="auth",
-                    resource_id="bootstrap",
-                    metadata={
-                        "step": "bootstrap",
-                        "reason": "tenant_bootstrap_failed",
-                    },
+                await audit_logger.aemit_pretenant_event_safe(
+                    to_pretenant_audit_event(
+                        action=AuditActions.AUTH_REJECTED,
+                        actor_id=claims.user_id if claims else "unknown",
+                        actor_type="human",
+                        metadata={
+                            "step": "bootstrap",
+                            "reason": "tenant_bootstrap_failed",
+                            "resource_type": "auth",
+                            "resource_id": "bootstrap",
+                        },
+                    )
                 )
                 return _error_response(
                     500,
@@ -443,17 +444,19 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
             request.state.tenant_context = ctx
 
         # Emit auth.accepted audit event for this request.
-        audit_logger.write(
-            ctx=ctx,
-            action=AuditActions.AUTH_ACCEPTED,
-            resource_type="auth",
-            resource_id="request",
-            metadata={
-                "provider": self._provider.provider_name,
-                "role": result.role,
-                "is_first_user": result.is_first_user,
-                "path": path,
-            },
+        await audit_logger.aemit_tenant_event_safe(
+            to_tenant_audit_event(
+                ctx=ctx,
+                action=AuditActions.AUTH_ACCEPTED,
+                resource_type="auth",
+                resource_id="request",
+                metadata={
+                    "provider": self._provider.provider_name,
+                    "role": result.role,
+                    "is_first_user": result.is_first_user,
+                    "path": path,
+                },
+            )
         )
 
         return await call_next(request)

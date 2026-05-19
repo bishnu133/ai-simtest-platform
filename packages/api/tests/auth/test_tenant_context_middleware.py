@@ -111,7 +111,7 @@ async def test_missing_bearer_returns_401_missing_bearer_token(
     clean_db: str,
 ) -> None:
     """Step 1 failure — no Authorization header."""
-    audit_logger.clear()
+    audit_logger.clear_all()
     sm = get_sessionmaker()
     provider = StubAuthProvider(exc=AuthCredentialInvalid("should not be called"))
     app = _make_app(provider, sm)
@@ -120,7 +120,7 @@ async def test_missing_bearer_returns_401_missing_bearer_token(
 
     assert resp.status_code == 401
     assert resp.json()["error"]["code"] == "missing_bearer_token"
-    events = audit_logger.query(action=AuditActions.AUTH_REJECTED)
+    events = audit_logger.query_all_events(action=AuditActions.AUTH_REJECTED)
     assert len(events) == 1
     assert events[0].metadata.get("reason") == "missing_bearer_token"
 
@@ -129,7 +129,7 @@ async def test_malformed_bearer_returns_401_missing_bearer_token(
     clean_db: str,
 ) -> None:
     """Step 1 failure — header present but not Bearer-shaped."""
-    audit_logger.clear()
+    audit_logger.clear_all()
     sm = get_sessionmaker()
     provider = StubAuthProvider(exc=AuthCredentialInvalid("should not be called"))
     app = _make_app(provider, sm)
@@ -144,7 +144,7 @@ async def test_provider_verify_failure_returns_401_and_audits_rejection(
     clean_db: str,
 ) -> None:
     """Step 2 failure — verify raises AuthCredentialInvalid."""
-    audit_logger.clear()
+    audit_logger.clear_all()
     sm = get_sessionmaker()
     provider = StubAuthProvider(
         exc=AuthCredentialInvalid(
@@ -157,7 +157,7 @@ async def test_provider_verify_failure_returns_401_and_audits_rejection(
 
     assert resp.status_code == 401
     assert resp.json()["error"]["code"] == "auth_credential_invalid"
-    events = audit_logger.query(action=AuditActions.AUTH_REJECTED)
+    events = audit_logger.query_all_events(action=AuditActions.AUTH_REJECTED)
     assert len(events) == 1
     assert events[0].metadata.get("step") == "provider.verify"
 
@@ -171,7 +171,7 @@ async def test_missing_provider_org_role_returns_403_membership_denied(
     That path requires a valid role claim, and missing fails closed
     per v0.5.1 MF-2.
     """
-    audit_logger.clear()
+    audit_logger.clear_all()
     sm = get_sessionmaker()
 
     # Seed: first user establishes the tenant as owner
@@ -184,7 +184,7 @@ async def test_missing_provider_org_role_returns_403_membership_denied(
     async with sm() as s:
         await bootstrap(s, seed)
 
-    audit_logger.clear()  # discard seeding events; focus on middleware call
+    audit_logger.clear_all()  # discard seeding events; focus on middleware call
 
     # Second user arrives with NO role claim
     second = VerifiedClaims(
@@ -198,7 +198,7 @@ async def test_missing_provider_org_role_returns_403_membership_denied(
 
     assert resp.status_code == 403
     assert resp.json()["error"]["code"] == "missing_provider_org_role"
-    denied = audit_logger.query(action=AuditActions.AUTH_MEMBERSHIP_DENIED)
+    denied = audit_logger.query_all_events(action=AuditActions.AUTH_MEMBERSHIP_DENIED)
     assert len(denied) >= 1
 
 
@@ -206,7 +206,7 @@ async def test_happy_path_first_user_attaches_context_and_audits_accept(
     clean_db: str,
 ) -> None:
     """Step 5 success — first-user path bootstraps as owner, emits auth.accepted."""
-    audit_logger.clear()
+    audit_logger.clear_all()
     sm = get_sessionmaker()
 
     claims = VerifiedClaims(
@@ -225,7 +225,7 @@ async def test_happy_path_first_user_attaches_context_and_audits_accept(
     assert body["tenant_id"]
     assert body["workspace_id"]
 
-    accepted = audit_logger.query(action=AuditActions.AUTH_ACCEPTED)
+    accepted = audit_logger.query_all_events(action=AuditActions.AUTH_ACCEPTED)
     assert len(accepted) == 1
     assert accepted[0].metadata.get("is_first_user") is True
     assert accepted[0].metadata.get("role") == "owner"
@@ -239,7 +239,7 @@ async def test_happy_path_returning_user_fast_path_skips_role_mapping(
     Even when provider_org_role is missing on the second request —
     proves the v0.4 §5.6 fast-path.
     """
-    audit_logger.clear()
+    audit_logger.clear_all()
     sm = get_sessionmaker()
 
     # First login establishes user + dual membership as owner (first-user rule)
@@ -251,7 +251,7 @@ async def test_happy_path_returning_user_fast_path_skips_role_mapping(
     async with sm() as s:
         await bootstrap(s, first)
 
-    audit_logger.clear()
+    audit_logger.clear_all()
 
     # Second login — provider_org_role dropped, should still succeed
     second = VerifiedClaims(
@@ -265,14 +265,14 @@ async def test_happy_path_returning_user_fast_path_skips_role_mapping(
 
     assert resp.status_code == 200
     assert resp.json()["role"] == "owner"
-    accepted = audit_logger.query(action=AuditActions.AUTH_ACCEPTED)
+    accepted = audit_logger.query_all_events(action=AuditActions.AUTH_ACCEPTED)
     assert len(accepted) == 1
     assert accepted[0].metadata.get("is_first_user") is False
 
 
 async def test_exempt_path_skips_middleware(clean_db: str) -> None:
     """/health bypasses the pipeline entirely — no bearer required, no audit."""
-    audit_logger.clear()
+    audit_logger.clear_all()
     sm = get_sessionmaker()
     provider = StubAuthProvider(exc=AuthCredentialInvalid("should not be called"))
     app = _make_app(provider, sm, exempt_paths=("/health",))
@@ -281,13 +281,13 @@ async def test_exempt_path_skips_middleware(clean_db: str) -> None:
 
     assert resp.status_code == 200
     assert resp.json() == {"ok": True}
-    assert audit_logger.query(action=AuditActions.AUTH_REJECTED) == []
-    assert audit_logger.query(action=AuditActions.AUTH_ACCEPTED) == []
+    assert audit_logger.query_all_events(action=AuditActions.AUTH_REJECTED) == []
+    assert audit_logger.query_all_events(action=AuditActions.AUTH_ACCEPTED) == []
 
 
 async def test_tenant_context_attached_to_request_state(clean_db: str) -> None:
     """Confirms middleware attaches ctx at request.state.tenant_context."""
-    audit_logger.clear()
+    audit_logger.clear_all()
     sm = get_sessionmaker()
 
     claims = VerifiedClaims(

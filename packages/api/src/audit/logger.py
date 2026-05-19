@@ -15,16 +15,30 @@ Slice 5 additions (additive only, Option A locked at v0.3.4):
   - AuditLogger now accepts an AuditEventRepository at construction
     (default: InMemoryAuditEventRepository). Sync write() is unchanged.
   - Two async methods aemit_tenant_event / aemit_pretenant_event delegate
-    to the repository for Tier-1 RLS-aware persistence. The existing 26
-    sync write() call sites are NOT migrated in this slice — that work
-    is Slices 7-8.
+    to the repository for Tier-1 RLS-aware persistence.
 
 Slice 6 additions (additive only):
   - bind_repository(repo) setter mutates self._audit_repository in-place.
     Used by app_factory._bind_services to swap PostgresAuditEventRepository
     into the module singleton when settings.use_postgres_audit_events=True.
-    Setter (not re-instantiation) preserves singleton identity for the
-    9 production + 16 test files that cache the audit_logger reference.
+
+Slice 7 additions (additive only):
+  - aemit_tenant_event_safe / aemit_pretenant_event_safe — fail-open
+    variants of the Slice 5 aemit_* methods. Suppress exceptions, log
+    them, return None on failure. Used by Tier-1 auth-path call sites
+    where audit must NOT break auth.
+  - query_all_events — unified read across sync _events list AND the
+    bound async repository (when InMemoryAuditEventRepository). Used by
+    auth tests after the 8-site migration.
+  - clear_all — reset BOTH sync _events AND async repository for test
+    isolation across both paths.
+
+  Slice 7 migrates 8 of 11 Tier-1 call sites. The other 3 (M3, M4, M6 —
+  sentinel-context auth.membership_denied / auth.tenant_state_invalid)
+  are deferred to FH-S7.5-Sentinel-Auth-Audit-Semantics because the
+  PRETENANT_ACTION_ALLOWLIST only permits auth.rejected — collapsing
+  semantically distinct actions into auth.rejected would lose dashboard-
+  alert design intent.
 """
 from __future__ import annotations
 
@@ -68,10 +82,8 @@ class AuditActions:
     CONVERSATION_STORED = "conversation.stored"
     CONVERSATION_FETCHED = "conversation.fetched"
     CONVERSATION_DELETED = "conversation.deleted"
-    # Week 6a Turn 2 additions — read-sensitive audit events (v1.2.2 §11.8)
     CONVERSATION_TRANSCRIPT_VIEWED = "conversation.transcript_viewed"
     CONVERSATION_DOWNLOAD_URL_ISSUED = "conversation.download_url_issued"
-    # Week 6a Turn 3 additions — comparison audit events (v1.2.2 §11.8)
     COMPARISON_CREATED = "comparison.created"
     COMPARISON_VIEWED = "comparison.viewed"
 
@@ -80,32 +92,14 @@ class AuditActions:
     WORKSPACE_CREATED = "workspace.created"
     USER_INVITED = "user.invited"
 
-    # Turn 3 additions — auth lifecycle events (plan §8.5 mandatory
-    # audit events). Emission wired by TenantContextMiddleware and the
-    # bootstrap lifecycle in src/auth/.
-    #   AUTH_ACCEPTED: credentials verified and membership resolved
-    #   AUTH_REJECTED: 401 — missing/invalid credentials
-    #   AUTH_MEMBERSHIP_DENIED: 403 — credentials ok but no role mapping
-    #                           (missing provider_org_role or unknown value)
-    #   AUTH_BOOTSTRAP_CREATED_TENANT: first-use tenant provisioning
+    # Turn 3 additions — auth lifecycle events.
     AUTH_ACCEPTED = "auth.accepted"
     AUTH_REJECTED = "auth.rejected"
     AUTH_MEMBERSHIP_DENIED = "auth.membership_denied"
     AUTH_BOOTSTRAP_CREATED_TENANT = "auth.bootstrap_created_tenant"
-    # Turn 4 — bootstrap detected a structural state inconsistency
-    # (e.g. tenant row present but missing default workspace, or retry
-    # budget exhausted). Distinct from AUTH_REJECTED (which is for
-    # credential-shaped failures) and AUTH_MEMBERSHIP_DENIED (which is
-    # for membership-row absence).
     AUTH_TENANT_STATE_INVALID = "auth.tenant_state_invalid"
 
-    # Turn 2 additions — secret-rejection event codes (constants only).
-    # Per Turn 2 plan v0.6 §5.2, Turn 2 ships these as constants only;
-    # no emission logic, no handler wiring. The Turn 3 FastAPI exception
-    # handler for SecretLeakDetected / ValidationError consumes these
-    # constants when it wires runtime audit emission. See
-    # src/secrets/denylist.py::SecretLeakDetected for the validator that
-    # surfaces these conditions at the API boundary as HTTP 422.
+    # Turn 2 — secret-rejection event codes (constants only, no emission).
     ASSET_CREATE_REJECTED_SECRET_LEAK = "asset.create_rejected_secret_leak"
     RUN_CREATE_REJECTED_SECRET_LEAK = "run.create_rejected_secret_leak"
     COMPARISON_CREATE_REJECTED_SECRET_LEAK = "comparison.create_rejected_secret_leak"
@@ -135,18 +129,7 @@ class AuditEvent:
 class AuditLogger:
     """Append-only audit event logger.
 
-    In-memory implementation for testing; production uses the `audit_events`
-    PG table. The interface is identical so swapping is transparent.
-
-    Slice 5 (Option A): constructor accepts an AuditEventRepository for the
-    async path (aemit_tenant_event / aemit_pretenant_event). The default
-    value `None` resolves to InMemoryAuditEventRepository(), preserving
-    backward compatibility with the existing `audit_logger = AuditLogger()`
-    module-level singleton. The synchronous write() method is unchanged.
-
-    Slice 6: bind_repository(repo) setter mutates the bound repository
-    in-place after construction. Used by app_factory to wire
-    PostgresAuditEventRepository into the module singleton at startup.
+    See module docstring for slice-by-slice surface evolution.
     """
 
     def __init__(
@@ -155,30 +138,13 @@ class AuditLogger:
     ) -> None:
         self._events: list[AuditEvent] = []
         # Slice 5 Q1=B1 + Q4=N2: constructor injection with InMemory default.
-        # Slice 6 (app_factory) uses bind_repository() to swap in
-        # PostgresAuditEventRepository for production wiring (see below).
+        # Slice 6 uses bind_repository() to swap in Postgres for production.
         self._audit_repository: AuditEventRepository = (
             repository if repository is not None else InMemoryAuditEventRepository()
         )
 
     def bind_repository(self, repository: AuditEventRepository) -> None:
-        """Replace the bound async repository in-place.
-
-        Slice 6 Q1=B2 (locked at Plan v0.2): the audit_logger module
-        singleton at the bottom of this file is instantiated once at
-        module load with the InMemory default. In production,
-        app_factory._bind_services calls this setter to swap in
-        PostgresAuditEventRepository per the use_postgres_audit_events
-        feature flag.
-
-        Why a setter, not constructor re-instantiation? The module
-        singleton is cached by reference at import time by 9 production
-        source files and 16 test files. Re-assigning
-        src.audit.logger.audit_logger from app_factory would leave their
-        cached references pointing to the original (stale) instance.
-        The setter mutates self in-place so all consumers see the new
-        repository transparently.
-        """
+        """Replace the bound async repository in-place. Slice 6 Q1=B2."""
         self._audit_repository = repository
 
     def write(
@@ -222,19 +188,8 @@ class AuditLogger:
         event: TenantAuditEvent,
         session: AsyncSession | None = None,
     ) -> UUID:
-        """Async persist a tenant-scoped audit event via the bound repository.
-
-        Slice 5 (Option A): additive alongside sync write(). The 26 existing
-        audit_logger.write() call sites remain on the sync path. New Tier-1
-        code paths can call this method to get durable, RLS-aware audit
-        persistence via the AuditEventRepository contract from Slice 4.
-
-        Returns the UUID of the persisted row (Slice 5 Q3=R1).
-
-        Failure semantics (Slice 5 Q2=F1): exceptions from the underlying
-        repository propagate to the caller. Audit failures during Tier-1
-        paths must not be silently swallowed. Callers decide retry/fallback
-        policy per-site.
+        """Slice 5: async persist a tenant-scoped audit event via the
+        bound repository. Failure semantics Q2=F1: exceptions propagate.
         """
         return await self._audit_repository.append_tenant_event(event, session=session)
 
@@ -243,22 +198,60 @@ class AuditLogger:
         event: PretenantAuditEvent,
         session: AsyncSession | None = None,
     ) -> UUID:
-        """Async persist a pretenant (NULL tenant_id) audit event.
-
-        Used for events that occur before a tenant context is established
-        (e.g. auth.rejected with missing credentials). Delegates to
-        AuditEventRepository.append_pretenant_event which routes through
-        the SECURITY DEFINER function audit_pretenant_insert (Slice 0
-        migration 0006) to bypass RLS for this narrow case.
-
-        Returns the UUID of the persisted row (Slice 5 Q3=R1).
-
-        Failure semantics (Slice 5 Q2=F1): exceptions propagate. In
-        particular, AuditEventInsertRejected is raised when the
-        SECURITY DEFINER function rejects a pretenant event (e.g. action
-        outside the PRETENANT_ACTION_ALLOWLIST).
+        """Slice 5: async persist a pretenant audit event via the
+        bound repository's SECURITY DEFINER path. Failure semantics
+        Q2=F1: exceptions propagate.
         """
         return await self._audit_repository.append_pretenant_event(event, session=session)
+
+    async def aemit_tenant_event_safe(
+        self,
+        event: TenantAuditEvent,
+        session: AsyncSession | None = None,
+    ) -> UUID | None:
+        """Slice 7 Q4: fail-open variant of aemit_tenant_event.
+
+        Suppresses all exceptions from the underlying repository, logs
+        them via the module logger, and returns None on failure. On
+        success returns the persisted row UUID.
+
+        Used by Tier-1 auth-path call sites (M8 in middleware.py, B1/B2/B3
+        in bootstrap.py) where audit must NOT break auth. A failed audit
+        emit is a monitoring concern, not a request-failure concern.
+        """
+        try:
+            return await self.aemit_tenant_event(event, session=session)
+        except Exception:
+            logger.exception(
+                "audit aemit_tenant_event suppressed (action=%s, resource=%s/%s)",
+                event.action,
+                event.resource_type,
+                event.resource_id,
+            )
+            return None
+
+    async def aemit_pretenant_event_safe(
+        self,
+        event: PretenantAuditEvent,
+        session: AsyncSession | None = None,
+    ) -> UUID | None:
+        """Slice 7 Q4: fail-open variant of aemit_pretenant_event.
+
+        Suppresses all exceptions (including AuditEventInsertRejected
+        from the SECURITY DEFINER function), logs them, and returns None.
+
+        Used by Tier-1 pretenant call sites (M1, M2, M5, M7 in
+        middleware.py) where audit must NOT break auth.
+        """
+        try:
+            return await self.aemit_pretenant_event(event, session=session)
+        except Exception:
+            logger.exception(
+                "audit aemit_pretenant_event suppressed (action=%s, actor=%s)",
+                event.action,
+                event.actor_id,
+            )
+            return None
 
     def query(
         self,
@@ -267,7 +260,13 @@ class AuditLogger:
         action: str | None = None,
         resource_id: str | None = None,
     ) -> list[AuditEvent]:
-        """Query audit events (for tests and compliance exports)."""
+        """Query the sync in-memory _events list only.
+
+        Slice 5 sacred — signature and body byte-identical.
+
+        Slice 7 note: callers that need events from BOTH sync and
+        migrated async paths should use query_all_events() instead.
+        """
         results = self._events
         if tenant_id:
             results = [e for e in results if e.tenant_id == tenant_id]
@@ -279,9 +278,117 @@ class AuditLogger:
             results = [e for e in results if e.resource_id == resource_id]
         return results
 
+    def query_all_events(
+        self,
+        action: str | None = None,
+        tenant_id: str | None = None,
+        workspace_id: str | None = None,
+        resource_id: str | None = None,
+    ) -> list[AuditEvent]:
+        """Slice 7: unified read across sync (_events) and async
+        (InMemoryAuditEventRepository) audit paths.
+
+        Returns events from BOTH:
+          * sync _events list (sync write() — unmigrated call sites)
+          * bound async repository (aemit_*_safe — migrated call sites
+            in middleware.py M1/M2/M5/M7/M8 and bootstrap.py B1/B2/B3)
+
+        Async events are coerced to AuditEvent shape for type-compatible
+        iteration. Pretenant events have empty tenant_id/workspace_id/
+        resource_type/resource_id (those fields don't exist in
+        PretenantAuditEvent — they're folded into details by the
+        _compat helper).
+
+        Returns [] from the async path when bound to a non-InMemory
+        repository (e.g. PostgresAuditEventRepository). Tests that
+        need durable-path verification should use the Slice 5/db tests
+        which assert directly against PG rows.
+
+        Used by tests/auth/*.py after the Slice 7 migration. Tests
+        replace audit_logger.query(...) calls with
+        audit_logger.query_all_events(...) — single sed substitution.
+        """
+        # Sync path: already in AuditEvent shape.
+        results: list[AuditEvent] = list(self._events)
+
+        # Async path: coerce TenantAuditEvent / PretenantAuditEvent to
+        # AuditEvent shape so the return type is uniform.
+        if isinstance(self._audit_repository, InMemoryAuditEventRepository):
+            for tenant_event in self._audit_repository._tenant.values():
+                results.append(
+                    AuditEvent(
+                        event_id=str(uuid.uuid4()),
+                        tenant_id=str(tenant_event.context.tenant_id),
+                        workspace_id=(
+                            str(tenant_event.context.workspace_id)
+                            if tenant_event.context.workspace_id
+                            else ""
+                        ),
+                        actor=ActorRef(
+                            actor_id=tenant_event.context.actor_id,
+                            actor_type=tenant_event.context.actor_type,
+                        ),
+                        action=tenant_event.action,
+                        resource_type=tenant_event.resource_type,
+                        resource_id=tenant_event.resource_id,
+                        metadata=dict(tenant_event.details),
+                        correlation_id=tenant_event.context.correlation_id,
+                    )
+                )
+            for pretenant_event in self._audit_repository._pretenant.values():
+                results.append(
+                    AuditEvent(
+                        event_id=str(uuid.uuid4()),
+                        tenant_id="",  # pretenant has no tenant_id
+                        workspace_id="",  # pretenant has no workspace_id
+                        actor=ActorRef(
+                            actor_id=pretenant_event.actor_id,
+                            actor_type=pretenant_event.actor_type,
+                        ),
+                        action=pretenant_event.action,
+                        resource_type="",  # not a PretenantAuditEvent field
+                        resource_id="",  # not a PretenantAuditEvent field
+                        metadata=dict(pretenant_event.details),
+                        correlation_id=pretenant_event.correlation_id,
+                    )
+                )
+
+        # Apply filters — mirror existing query() filter semantics.
+        if action:
+            results = [e for e in results if e.action == action]
+        if tenant_id:
+            results = [e for e in results if e.tenant_id == tenant_id]
+        if workspace_id:
+            results = [e for e in results if e.workspace_id == workspace_id]
+        if resource_id:
+            results = [e for e in results if e.resource_id == resource_id]
+        return results
+
     def clear(self) -> None:
-        """Reset the in-memory log. Test-only."""
+        """Reset the in-memory log (sync _events list). Test-only.
+
+        Slice 5 sacred — signature and body byte-identical.
+
+        Slice 7 note: callers that need cross-path test isolation
+        should use clear_all() to reset both sync and async storage.
+        """
         self._events.clear()
+
+    def clear_all(self) -> None:
+        """Slice 7: reset BOTH sync _events AND async repository.
+
+        Used by auth tests for cross-path isolation after the Slice 7
+        migration. Equivalent to clear() + repository state reset.
+
+        When bound to PostgresAuditEventRepository, only sync _events
+        clears — the PG audit_events table is NOT truncated (production
+        safety). Tests that need PG isolation should use the
+        clean_db / migrated_db fixtures from tests/db/conftest.py.
+        """
+        self._events.clear()
+        if isinstance(self._audit_repository, InMemoryAuditEventRepository):
+            self._audit_repository._tenant.clear()
+            self._audit_repository._pretenant.clear()
 
 
 # Module-level singleton. Services import this directly.

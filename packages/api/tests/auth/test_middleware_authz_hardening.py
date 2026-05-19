@@ -293,7 +293,7 @@ async def test_middleware_does_not_override_existing_context(
     designed split: audit reflects what auth actually verified, route
     sees whatever the outer composition wants it to see.
     """
-    audit_logger.clear()
+    audit_logger.clear_all()
     sm = get_sessionmaker()
 
     sentinel_tenant = "00000000-0000-0000-0000-0000000bee5f"
@@ -354,7 +354,7 @@ async def test_middleware_does_not_override_existing_context(
     # credential-resolved actor, NOT the sentinel. This is the
     # designed split: audit captures truth-of-auth even when the
     # outer composition replaces what the route observes.
-    accepted = audit_logger.query(action=AuditActions.AUTH_ACCEPTED)
+    accepted = audit_logger.query_all_events(action=AuditActions.AUTH_ACCEPTED)
     assert len(accepted) == 1, (
         f"expected exactly one auth.accepted event; got {len(accepted)}"
     )
@@ -384,7 +384,7 @@ async def test_correlation_id_propagates_into_context(clean_db: str) -> None:
         ran and saw a fully populated request.state — proves both
         middlewares cooperated on this request)
     """
-    audit_logger.clear()
+    audit_logger.clear_all()
     sm = get_sessionmaker()
 
     claims = VerifiedClaims(
@@ -444,7 +444,7 @@ async def test_correlation_id_propagates_into_context(clean_db: str) -> None:
     )
 
     # And auth ran successfully — proves both middlewares cooperated.
-    accepted = audit_logger.query(action=AuditActions.AUTH_ACCEPTED)
+    accepted = audit_logger.query_all_events(action=AuditActions.AUTH_ACCEPTED)
     assert len(accepted) == 1, (
         f"expected exactly one auth.accepted event, got {len(accepted)}"
     )
@@ -656,7 +656,7 @@ async def test_middleware_workspace_not_found_returns_404_and_audits(
     exception directly. This isolates the middleware's branch handling
     from bootstrap's internals.
     """
-    audit_logger.clear()
+    audit_logger.clear_all()
     sm = get_sessionmaker()
 
     claims = VerifiedClaims(
@@ -695,7 +695,7 @@ async def test_middleware_workspace_not_found_returns_404_and_audits(
     )
 
     # Audit: an AUTH_REJECTED with reason=workspace_not_found.
-    rejected = audit_logger.query(action=AuditActions.AUTH_REJECTED)
+    rejected = audit_logger.query_all_events(action=AuditActions.AUTH_REJECTED)
     matching = [
         evt for evt in rejected
         if evt.metadata.get("reason") == "workspace_not_found"
@@ -726,7 +726,7 @@ async def test_middleware_auth_provider_misconfigured_returns_500(
     the credential-shaped AUTH_REJECTED stream. Asserting "no auth
     audit event was written" guards that distinction.
     """
-    audit_logger.clear()
+    audit_logger.clear_all()
     sm = get_sessionmaker()
 
     misconfigured_exc = AuthProviderMisconfigured(
@@ -748,9 +748,9 @@ async def test_middleware_auth_provider_misconfigured_returns_500(
     )
 
     # Operator-facing — no auth.* audit events should be written.
-    rejected = audit_logger.query(action=AuditActions.AUTH_REJECTED)
-    accepted = audit_logger.query(action=AuditActions.AUTH_ACCEPTED)
-    denied = audit_logger.query(action=AuditActions.AUTH_MEMBERSHIP_DENIED)
+    rejected = audit_logger.query_all_events(action=AuditActions.AUTH_REJECTED)
+    accepted = audit_logger.query_all_events(action=AuditActions.AUTH_ACCEPTED)
+    denied = audit_logger.query_all_events(action=AuditActions.AUTH_MEMBERSHIP_DENIED)
     assert len(rejected) == 0, (
         "AuthProviderMisconfigured is operator-facing — no AUTH_REJECTED "
         f"event should be written; got {len(rejected)}"
@@ -789,7 +789,7 @@ async def test_middleware_self_serve_disabled_via_app_state_settings_blocks_unkn
       * NO tenant row created (verified via the absence of an
         AUTH_ACCEPTED event)
     """
-    audit_logger.clear()
+    audit_logger.clear_all()
     sm = get_sessionmaker()
 
     claims = VerifiedClaims(
@@ -821,7 +821,7 @@ async def test_middleware_self_serve_disabled_via_app_state_settings_blocks_unkn
     )
 
     # AUTH_TENANT_STATE_INVALID audit fired (Turn 4 distinct stream).
-    state_invalid = audit_logger.query(
+    state_invalid = audit_logger.query_all_events(
         action=AuditActions.AUTH_TENANT_STATE_INVALID
     )
     assert len(state_invalid) == 1, (
@@ -850,7 +850,7 @@ async def test_middleware_self_serve_disabled_via_app_state_settings_blocks_unkn
     )
 
     # No AUTH_ACCEPTED — request was rejected before context attachment.
-    accepted = audit_logger.query(action=AuditActions.AUTH_ACCEPTED)
+    accepted = audit_logger.query_all_events(action=AuditActions.AUTH_ACCEPTED)
     assert len(accepted) == 0, (
         "no AUTH_ACCEPTED should be emitted when self-serve is disabled "
         f"and the org_id is unknown; got {len(accepted)}"

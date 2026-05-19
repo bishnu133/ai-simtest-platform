@@ -487,7 +487,7 @@ async def test_new_user_missing_role_emits_membership_denied_audit(
             session, _claims(user_id="founder", org_id="org_deny_missing")
         )
 
-    audit_logger.clear()
+    audit_logger.clear_all()
 
     async with sm() as session:
         with pytest.raises(MissingProviderOrgRole):
@@ -513,7 +513,7 @@ async def test_new_user_missing_role_emits_membership_denied_audit(
                     ),
                 )
 
-    events = audit_logger.query(action=AuditActions.AUTH_MEMBERSHIP_DENIED)
+    events = audit_logger.query_all_events(action=AuditActions.AUTH_MEMBERSHIP_DENIED)
     assert len(events) == 1
     assert events[0].metadata.get("reason") == "missing_provider_org_role"
     assert events[0].metadata.get("provider_org_role") is None
@@ -530,7 +530,7 @@ async def test_new_user_unknown_role_emits_membership_denied_audit(
             session, _claims(user_id="founder", org_id="org_deny_unknown")
         )
 
-    audit_logger.clear()
+    audit_logger.clear_all()
 
     t = await PostgresTenantRepository().get_by_clerk_org_id("org_deny_unknown")
     w = await PostgresWorkspaceRepository().get_default_for_tenant(t.id)
@@ -549,7 +549,7 @@ async def test_new_user_unknown_role_emits_membership_denied_audit(
                     ),
                 )
 
-    events = audit_logger.query(action=AuditActions.AUTH_MEMBERSHIP_DENIED)
+    events = audit_logger.query_all_events(action=AuditActions.AUTH_MEMBERSHIP_DENIED)
     assert len(events) == 1
     assert events[0].metadata.get("reason") == "unknown_provider_org_role"
     assert events[0].metadata.get("provider_org_role") == "archmage"
@@ -652,7 +652,7 @@ async def test_tenant_created_audit_emitted_on_first_use(
 ) -> None:
     """First-use bootstrap emits both AUTH_BOOTSTRAP_CREATED_TENANT and
     TENANT_CREATED audit events after the transaction commits."""
-    audit_logger.clear()
+    audit_logger.clear_all()
     sm = get_sessionmaker()
     async with sm() as session:
         result = await bootstrap(
@@ -660,8 +660,8 @@ async def test_tenant_created_audit_emitted_on_first_use(
             _claims(user_id="founder_audit", org_id="org_audit_first"),
         )
 
-    tenant_created = audit_logger.query(action=AuditActions.TENANT_CREATED)
-    boot_created = audit_logger.query(
+    tenant_created = audit_logger.query_all_events(action=AuditActions.TENANT_CREATED)
+    boot_created = audit_logger.query_all_events(
         action=AuditActions.AUTH_BOOTSTRAP_CREATED_TENANT
     )
     assert len(tenant_created) == 1
