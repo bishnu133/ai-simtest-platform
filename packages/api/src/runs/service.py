@@ -22,6 +22,7 @@ from __future__ import annotations
 import logging
 from typing import Callable
 
+from src.audit._compat import to_tenant_audit_event
 from src.audit.logger import AuditActions, audit_logger
 from src.common.models import TenantContext
 from src.runs.models import RunRecord, RunStatus
@@ -76,13 +77,18 @@ class RunStateTransition:
         record = await self._repo._update_status(ctx, run_id, new_status)
 
         # Step 2: audit event emission
+        # Slice 8 FH-Tier-1 F4(a): non-safe aemit + preserved CONSISTENCY_WARNING
+        # wrapper. This site is uniquely instrumented for ops alerting; the
+        # CONSISTENCY_WARNING token is load-bearing and must remain.
         try:
-            audit_logger.write(
-                ctx,
-                action=_STATUS_TO_AUDIT_ACTION[new_status],
-                resource_type="run",
-                resource_id=run_id,
-                metadata={"new_status": new_status.value},
+            await audit_logger.aemit_tenant_event(
+                to_tenant_audit_event(
+                    ctx,
+                    action=_STATUS_TO_AUDIT_ACTION[new_status],
+                    resource_type="run",
+                    resource_id=run_id,
+                    metadata={"new_status": new_status.value},
+                )
             )
         except Exception as audit_exc:
             logger.error(

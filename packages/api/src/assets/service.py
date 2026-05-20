@@ -20,6 +20,7 @@ import json
 import uuid
 from typing import Any
 
+from src.audit._compat import to_tenant_audit_event
 from src.audit.logger import AuditActions, audit_logger
 from src.common.models import (
     ActorRef,
@@ -249,18 +250,20 @@ class AssetService:
             self._records[self._record_key(ctx, asset_id, version)] = record
             self._slug_index[slug_key] = asset_id
 
-            audit_logger.write(
-                ctx,
-                AuditActions.ASSET_CREATED,
-                resource_type="asset",
-                resource_id=asset_id,
-                metadata={
-                    "asset_type": req.asset_type.value,
-                    "slug": req.slug,
-                    "version": version,
-                    "storage_tier": tier.value,
-                    "content_hash": content_hash,
-                },
+            await audit_logger.aemit_tenant_event_safe(
+                to_tenant_audit_event(
+                    ctx,
+                    AuditActions.ASSET_CREATED,
+                    resource_type="asset",
+                    resource_id=asset_id,
+                    metadata={
+                        "asset_type": req.asset_type.value,
+                        "slug": req.slug,
+                        "version": version,
+                        "storage_tier": tier.value,
+                        "content_hash": content_hash,
+                    },
+                )
             )
             return record
 
@@ -387,12 +390,14 @@ class AssetService:
             updated.updated_at = utcnow()
             self._records[self._record_key(ctx, asset_id, version)] = updated
 
-            audit_logger.write(
-                ctx,
-                AuditActions.ASSET_UPDATED,
-                resource_type="asset",
-                resource_id=asset_id,
-                metadata={"version": version, "fields": _changed_fields(req)},
+            await audit_logger.aemit_tenant_event_safe(
+                to_tenant_audit_event(
+                    ctx,
+                    AuditActions.ASSET_UPDATED,
+                    resource_type="asset",
+                    resource_id=asset_id,
+                    metadata={"version": version, "fields": _changed_fields(req)},
+                )
             )
             return updated
 
@@ -431,18 +436,20 @@ class AssetService:
             )
             self._records[self._record_key(ctx, asset_id, new_version)] = new_record
 
-            audit_logger.write(
-                ctx,
-                AuditActions.ASSET_VERSION_CREATED,
-                resource_type="asset",
-                resource_id=asset_id,
-                metadata={
-                    "version": new_version,
-                    "parent_version": current_version,
-                    "changelog": req.changelog,
-                    "content_hash": content_hash,
-                    "storage_tier": tier.value,
-                },
+            await audit_logger.aemit_tenant_event_safe(
+                to_tenant_audit_event(
+                    ctx,
+                    AuditActions.ASSET_VERSION_CREATED,
+                    resource_type="asset",
+                    resource_id=asset_id,
+                    metadata={
+                        "version": new_version,
+                        "parent_version": current_version,
+                        "changelog": req.changelog,
+                        "content_hash": content_hash,
+                        "storage_tier": tier.value,
+                    },
+                )
             )
             return new_record
 
@@ -470,12 +477,14 @@ class AssetService:
             if req.changelog_note:
                 record.changelog = f"{record.changelog}\n\nApproval note: {req.changelog_note}"
 
-            audit_logger.write(
-                ctx,
-                AuditActions.ASSET_APPROVED,
-                resource_type="asset",
-                resource_id=asset_id,
-                metadata={"version": version, "approver": ctx.actor.actor_id},
+            await audit_logger.aemit_tenant_event_safe(
+                to_tenant_audit_event(
+                    ctx,
+                    AuditActions.ASSET_APPROVED,
+                    resource_type="asset",
+                    resource_id=asset_id,
+                    metadata={"version": version, "approver": ctx.actor.actor_id},
+                )
             )
             return record
 
@@ -490,12 +499,14 @@ class AssetService:
             record.status = AssetStatus.DEPRECATED
             record.updated_at = utcnow()
 
-            audit_logger.write(
-                ctx,
-                AuditActions.ASSET_DEPRECATED,
-                resource_type="asset",
-                resource_id=asset_id,
-                metadata={"version": version},
+            await audit_logger.aemit_tenant_event_safe(
+                to_tenant_audit_event(
+                    ctx,
+                    AuditActions.ASSET_DEPRECATED,
+                    resource_type="asset",
+                    resource_id=asset_id,
+                    metadata={"version": version},
+                )
             )
             return record
 
@@ -547,16 +558,18 @@ class AssetService:
             self._records[self._record_key(ctx, new_asset_id, 1)] = cloned
             self._slug_index[slug_key] = new_asset_id
 
-            audit_logger.write(
-                ctx,
-                AuditActions.ASSET_CLONED,
-                resource_type="asset",
-                resource_id=new_asset_id,
-                metadata={
-                    "source_asset_id": asset_id,
-                    "source_version": source_version,
-                    "new_slug": new_slug,
-                },
+            await audit_logger.aemit_tenant_event_safe(
+                to_tenant_audit_event(
+                    ctx,
+                    AuditActions.ASSET_CLONED,
+                    resource_type="asset",
+                    resource_id=new_asset_id,
+                    metadata={
+                        "source_asset_id": asset_id,
+                        "source_version": source_version,
+                        "new_slug": new_slug,
+                    },
+                )
             )
             return cloned
 

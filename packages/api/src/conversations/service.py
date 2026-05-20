@@ -27,6 +27,7 @@ import json
 import uuid
 from typing import Any
 
+from src.audit._compat import to_tenant_audit_event
 from src.audit.logger import AuditActions, audit_logger
 from src.common.models import TenantContext, utcnow
 from src.conversations.models import (
@@ -146,19 +147,21 @@ class ConversationService:
 
         await self._summary_repo.upsert(summary)
 
-        audit_logger.write(
-            ctx,
-            AuditActions.CONVERSATION_STORED,
-            resource_type="conversation",
-            resource_id=conversation_id,
-            metadata={
-                "run_id": run_id,
-                "persona_id": persona_id,
-                "turn_count": summary.turn_count,
-                "verdict": verdict,
-                "transcript_size_bytes": ref.size_bytes,
-                "transcript_hash": ref.content_hash,
-            },
+        await audit_logger.aemit_tenant_event_safe(
+            to_tenant_audit_event(
+                ctx,
+                AuditActions.CONVERSATION_STORED,
+                resource_type="conversation",
+                resource_id=conversation_id,
+                metadata={
+                    "run_id": run_id,
+                    "persona_id": persona_id,
+                    "turn_count": summary.turn_count,
+                    "verdict": verdict,
+                    "transcript_size_bytes": ref.size_bytes,
+                    "transcript_hash": ref.content_hash,
+                },
+            )
         )
         return summary
 
@@ -208,12 +211,14 @@ class ConversationService:
                 f"got {obj.ref.content_hash[:12]}"
             )
 
-        audit_logger.write(
-            ctx,
-            AuditActions.CONVERSATION_FETCHED,
-            resource_type="conversation",
-            resource_id=conversation_id,
-            metadata={"run_id": summary.run_id, "size_bytes": obj.ref.size_bytes},
+        await audit_logger.aemit_tenant_event_safe(
+            to_tenant_audit_event(
+                ctx,
+                AuditActions.CONVERSATION_FETCHED,
+                resource_type="conversation",
+                resource_id=conversation_id,
+                metadata={"run_id": summary.run_id, "size_bytes": obj.ref.size_bytes},
+            )
         )
 
         data = json.loads(obj.data.decode("utf-8"))
@@ -236,16 +241,18 @@ class ConversationService:
             method="GET",
             expires_in=timedelta(seconds=ttl_seconds),
         )
-        audit_logger.write(
-            ctx,
-            AuditActions.CONVERSATION_FETCHED,
-            resource_type="conversation",
-            resource_id=conversation_id,
-            metadata={
-                "run_id": summary.run_id,
-                "access_mode": "signed_url",
-                "ttl_seconds": ttl_seconds,
-            },
+        await audit_logger.aemit_tenant_event_safe(
+            to_tenant_audit_event(
+                ctx,
+                AuditActions.CONVERSATION_FETCHED,
+                resource_type="conversation",
+                resource_id=conversation_id,
+                metadata={
+                    "run_id": summary.run_id,
+                    "access_mode": "signed_url",
+                    "ttl_seconds": ttl_seconds,
+                },
+            )
         )
         return signed
 
@@ -275,12 +282,14 @@ class ConversationService:
 
         deleted = len(deleted_summaries)
         if deleted:
-            audit_logger.write(
-                ctx,
-                AuditActions.CONVERSATION_DELETED,
-                resource_type="conversation",
-                resource_id=run_id,
-                metadata={"run_id": run_id, "deleted_count": deleted},
+            await audit_logger.aemit_tenant_event_safe(
+                to_tenant_audit_event(
+                    ctx,
+                    AuditActions.CONVERSATION_DELETED,
+                    resource_type="conversation",
+                    resource_id=run_id,
+                    metadata={"run_id": run_id, "deleted_count": deleted},
+                )
             )
         return deleted
 

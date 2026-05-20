@@ -5,6 +5,7 @@ import uuid
 from datetime import timedelta
 
 from src.api.errors import APIError
+from src.audit._compat import to_tenant_audit_event
 from src.audit.logger import AuditActions, audit_logger
 from src.common.models import TenantContext, utcnow
 from src.common.write_context import WriteContext
@@ -152,12 +153,14 @@ class ComparisonService:
         await self._repo.create(record, write_ctx=write_ctx)
 
         # Audit
-        audit_logger.write(
-            ctx,
-            AuditActions.COMPARISON_CREATED,
-            resource_type="comparison",
-            resource_id=record.id,
-            metadata={"left_run_id": left_run_id, "right_run_id": right_run_id},
+        await audit_logger.aemit_tenant_event_safe(
+            to_tenant_audit_event(
+                ctx,
+                AuditActions.COMPARISON_CREATED,
+                resource_type="comparison",
+                resource_id=record.id,
+                metadata={"left_run_id": left_run_id, "right_run_id": right_run_id},
+            )
         )
 
         # Remember idempotency
@@ -170,11 +173,13 @@ class ComparisonService:
 
     async def get_comparison(self, ctx: TenantContext, comparison_id: str) -> ComparisonRecord:
         record = await self._repo.get(ctx, comparison_id)
-        audit_logger.write(
-            ctx,
-            AuditActions.COMPARISON_VIEWED,
-            resource_type="comparison",
-            resource_id=comparison_id,
+        await audit_logger.aemit_tenant_event_safe(
+            to_tenant_audit_event(
+                ctx,
+                AuditActions.COMPARISON_VIEWED,
+                resource_type="comparison",
+                resource_id=comparison_id,
+            )
         )
         return record
 

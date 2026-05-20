@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 
 from src.api.deps import get_tenant_context
 from src.api.errors import APIError, InvalidCursor
+from src.audit._compat import to_tenant_audit_event
 from src.audit.logger import AuditActions, audit_logger
 from src.common.models import TenantContext, utcnow
 from src.conversations.models import ConversationSummary, ConversationVerdict
@@ -162,11 +163,13 @@ async def get_transcript(
         raise TranscriptNotFound(str(exc))
 
     # Audit read-sensitive action (v1.2.2 §11.8)
-    audit_logger.write(
-        ctx,
-        action=AuditActions.CONVERSATION_TRANSCRIPT_VIEWED,
-        resource_type="conversation",
-        resource_id=conversation_id,
+    await audit_logger.aemit_tenant_event_safe(
+        to_tenant_audit_event(
+            ctx,
+            action=AuditActions.CONVERSATION_TRANSCRIPT_VIEWED,
+            resource_type="conversation",
+            resource_id=conversation_id,
+        )
     )
 
     return TranscriptResponse(
@@ -200,11 +203,13 @@ async def get_download_url(
     except Exception as exc:
         raise SignedUrlUnavailable(f"Could not generate signed URL: {exc}")
 
-    audit_logger.write(
-        ctx,
-        action=AuditActions.CONVERSATION_DOWNLOAD_URL_ISSUED,
-        resource_type="conversation",
-        resource_id=conversation_id,
+    await audit_logger.aemit_tenant_event_safe(
+        to_tenant_audit_event(
+            ctx,
+            action=AuditActions.CONVERSATION_DOWNLOAD_URL_ISSUED,
+            resource_type="conversation",
+            resource_id=conversation_id,
+        )
     )
 
     correlation_id = getattr(request.state, "correlation_id", None)
