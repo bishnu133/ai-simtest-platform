@@ -832,20 +832,22 @@ async def test_middleware_self_serve_disabled_via_app_state_settings_blocks_unkn
     # The middleware writes metadata.reason = exc.code (which is the
     # error-class code "tenant_state_invalid"); the bootstrap's specific
     # refusal reason ("unknown_org_id_self_serve_disabled") lives on
-    # metadata.details.reason. Both layers are asserted here so a
+    # metadata.error_details.reason. Both layers are asserted here so a
     # future refactor that loses either one fails loud.
+    # FH-S7.5 MF-3 (B.5): metadata key renamed `details` → `error_details`
+    # to disambiguate from the top-level ErrorEnvelope.details field.
     assert state_invalid[0].metadata.get("reason") == "tenant_state_invalid", (
         "audit metadata.reason should carry the typed exception code "
         f"(got {state_invalid[0].metadata.get('reason')!r})"
     )
-    details = state_invalid[0].metadata.get("details") or {}
-    assert details.get("reason") == "unknown_org_id_self_serve_disabled", (
-        "audit metadata.details.reason should carry the bootstrap's "
+    error_details = state_invalid[0].metadata.get("error_details") or {}
+    assert error_details.get("reason") == "unknown_org_id_self_serve_disabled", (
+        "audit metadata.error_details.reason should carry the bootstrap's "
         "specific refusal code (got "
-        f"{details.get('reason')!r})"
+        f"{error_details.get('reason')!r})"
     )
-    assert details.get("org_id") == "org_unknown_blocked", (
-        "audit metadata.details.org_id should preserve the rejected "
+    assert error_details.get("org_id") == "org_unknown_blocked", (
+        "audit metadata.error_details.org_id should preserve the rejected "
         "claim's org_id for forensic traceability"
     )
 
