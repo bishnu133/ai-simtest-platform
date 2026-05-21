@@ -197,8 +197,9 @@ def test_pretenant_audit_event_construction_defaults():
 
 
 def test_pretenant_audit_event_rejects_non_allowlist_action():
-    """action must be in PRETENANT_ACTION_ALLOWLIST (currently only
-    'auth.rejected')."""
+    """action must be in PRETENANT_ACTION_ALLOWLIST. Uses 'auth.accepted'
+    as the rejection target — non-allowlisted both pre- and post-
+    FH-S7.5 widening that added 'auth.tenant_state_invalid'."""
     with pytest.raises(ValueError, match="allowlist"):
         PretenantAuditEvent(action="auth.accepted")  # type: ignore[arg-type]
 
@@ -410,12 +411,15 @@ def test_tenant_audit_event_is_frozen_dataclass():
 # Module-level invariants (3 tests)
 # ============================================================================
 
-def test_pretenant_action_allowlist_is_frozenset_with_auth_rejected():
+def test_pretenant_action_allowlist_contents():
     """The pretenant action allowlist is exactly {'auth.rejected'} as a
     frozenset. Widening requires migration + function + CHECK constraint
     update (lockstep across 4 layers per v0.3.4 §5)."""
     assert isinstance(PRETENANT_ACTION_ALLOWLIST, frozenset)
-    assert PRETENANT_ACTION_ALLOWLIST == frozenset({"auth.rejected"})
+    assert PRETENANT_ACTION_ALLOWLIST == frozenset({
+        "auth.rejected",
+        "auth.tenant_state_invalid",
+    })
 
 
 def test_actor_type_allowlist_contains_exactly_four_values():
