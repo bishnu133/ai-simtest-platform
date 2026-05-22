@@ -41,6 +41,9 @@ from httpx import ASGITransport, AsyncClient
 from src.api.errors import (
     APIError,
     AuthProviderMisconfigured,
+    CrossTenantForbidden,
+    NotMemberOfTenant,
+    TenantStateInvalid,
     WorkspaceNotFound,
     api_error_handler,
 )
@@ -857,3 +860,490 @@ async def test_middleware_self_serve_disabled_via_app_state_settings_blocks_unkn
         "no AUTH_ACCEPTED should be emitted when self-serve is disabled "
         f"and the org_id is unknown; got {len(accepted)}"
     )
+
+# ============================================================================
+# FH-S7.5 §9.2.5 — middleware integration tests for the B.5-migrated
+# M3 / M4 / M6 catch blocks (5 tests, includes SR-1).
+#
+#   Test 1: M3 happy path (NotMemberOfTenant → AUTH_MEMBERSHIP_DENIED tenant)
+#   Test 2: M3 defensive — fail-loud when exc.details missing tenant_id
+#           (locks risk R8 — corrupt-row prevention)
+#   Test 3: M4 happy path (CrossTenantForbidden with B.4-enriched details)
+#   Test 4: M6 happy path (TenantStateInvalid → AUTH_TENANT_STATE_INVALID
+#           pretenant, monkey-patched bootstrap — complements B.5.1's
+#           settings-based natural-trigger test)
+#   Test 5: SR-1 — pretenant emission has tenant_id IS NULL
+#           (separate from test 4 so a regression routing M6 through
+#           the tenant path fails this test in isolation)
+#
+# All 5 tests use the M5 monkey-patch-bootstrap pattern (line 641
+# anchor) for isolation — testing middleware branch handling without
+# coupling to bootstrap internals.
+# ============================================================================
+
+async def test_middleware_m3_emits_tenant_event_via_aemit(
+        clean_db: str,
+) -> None:
+    """FH-S7.5 §7.1 + §9.2.5: M3 catch block (NotMemberOfTenant) emits
+    an AUTH_MEMBERSHIP_DENIED tenant audit event via async
+    aemit_tenant_event_safe after the B.5 migration.
+
+    Sources tenant_id from exc.details (populated at the raise site
+    in src/auth/authz.py:154 per B.4-style enrichment). Confirms the
+    full pipeline end-to-end:
+
+        enriched-exception
+          → to_tenant_audit_event_from_exc helper
+          → aemit_tenant_event_safe
+          → InMemoryAuditEventRepository.append_tenant_event
+          → query_all_events readback
+    """
+    audit_logger.clear_all()
+    sm = get_sessionmaker()
+
+    enriched_tenant_id = "11111111-1111-1111-1111-111111111111"
+
+    claims = VerifiedClaims(
+        user_id="user_m3",
+        org_id="org_m3",
+        workspace_id=None,
+        provider_org_role="admin",
+    )
+
+    import src.auth.middleware as mw_module
+
+    async def _raising_bootstrap(*args, **kwargs):
+        raise NotMemberOfTenant(
+            "User user_m3 is not a member of tenant.",
+            details={"tenant_id": enriched_tenant_id, "user_id": "user_m3"},
+        )
+
+    original_bootstrap = mw_module.bootstrap
+    mw_module.bootstrap = _raising_bootstrap
+    try:
+        app = _make_middleware_app(StubAuthProvider(claims=claims), sm)
+        resp = await _get(
+            app, "/probe", headers={"Authorization": "Bearer any"}
+        )
+    finally:
+        mw_module.bootstrap = original_bootstrap
+
+    assert resp.status_code == 403, resp.text
+    body = resp.json()
+    assert body["error"]["code"] == "not_member_of_tenant", (
+        f"expected not_member_of_tenant; got {body['error']['code']!r}"
+    )
+
+    denied = audit_logger.query_all_events(
+        action=AuditActions.AUTH_MEMBERSHIP_DENIED
+    )
+    assert len(denied) == 1, (
+        f"expected exactly one AUTH_MEMBERSHIP_DENIED event, got {len(denied)}"
+    )
+    event = denied[0]
+
+    # Tenant-scoped audit: tenant_id sourced from exc.details by the helper.
+    assert str(event.tenant_id) == enriched_tenant_id, (
+        f"AUTH_MEMBERSHIP_DENIED audit row should carry the enriched "
+        f"tenant_id from exc.details (got {event.tenant_id!r}, "
+        f"expected {enriched_tenant_id!r})"
+    )
+    assert event.metadata.get("step") == "bootstrap"
+    assert event.metadata.get("reason") == "not_member_of_tenant"
+
+async def test_middleware_m3_fails_loud_when_exc_details_missing_tenant_id(
+        clean_db: str,
+) -> None:
+    """FH-S7.5 §6.1 risk R8 + §9.2.5: when middleware catches
+    NotMemberOfTenant with exc.details MISSING tenant_id, the
+    to_tenant_audit_event_from_exc helper raises ValueError (fail-loud).
+    This is the defensive contract preventing silent emission of a
+    corrupt audit row with a sentinel or placeholder tenant_id.
+
+    Observable behavior (the helper's ValueError fires at argument
+    evaluation BEFORE await aemit_tenant_event_safe; Python does not
+    route exceptions raised inside an except block to sibling except
+    clauses of the same try, so the ValueError propagates out of
+    the middleware's dispatch entirely):
+      * AUTH_MEMBERSHIP_DENIED is NEVER emitted (helper blocked it —
+        the corrupt-row-prevention contract holds)
+      * ValueError surfaces to the caller. In production with a
+        framework-level ServerErrorMiddleware this becomes a 500
+        response; in this test harness (httpx AsyncClient +
+        ASGITransport) the exception is raised directly into the
+        test code, which is what pytest.raises observes.
+
+    Backlog F-15 tracks whether to add an explicit try/except wrapper
+    around the M3/M4 audit emission in src/auth/middleware.py to
+    guarantee 500-conversion regardless of outer ASGI stack. For now
+    the load-bearing contract (no corrupt row + observable failure)
+    is fully verified."""
+    audit_logger.clear_all()
+    sm = get_sessionmaker()
+
+    claims = VerifiedClaims(
+        user_id="user_m3_no_details",
+        org_id="org_m3_no_details",
+        workspace_id=None,
+        provider_org_role="admin",
+    )
+
+    import src.auth.middleware as mw_module
+
+    async def _raising_bootstrap_missing_tenant_id(*args, **kwargs):
+        # Crucial: details has NO 'tenant_id' key — simulates a future
+        # raise site that forgot to enrich the exception per B.4 pattern.
+        raise NotMemberOfTenant(
+            "User user_m3_no_details is not a member of tenant.",
+            details={"user_id": "user_m3_no_details"},  # tenant_id MISSING
+        )
+
+    original_bootstrap = mw_module.bootstrap
+    mw_module.bootstrap = _raising_bootstrap_missing_tenant_id
+    try:
+        app = _make_middleware_app(StubAuthProvider(claims=claims), sm)
+        # The helper's ValueError escapes the middleware dispatch and
+        # surfaces here. The match pattern locks on the helper's
+        # fail-loud error-message shape (from src/audit/_compat.py
+        # to_tenant_audit_event_from_exc).
+        with pytest.raises(
+            ValueError,
+            match=r"has no tenant_id in exc\.details",
+        ):
+            await _get(
+                app, "/probe", headers={"Authorization": "Bearer any"}
+            )
+    finally:
+        mw_module.bootstrap = original_bootstrap
+
+    # M3's intended AUTH_MEMBERSHIP_DENIED was BLOCKED by helper's
+    # fail-loud guard — no such row should exist. This is THE
+    # corrupt-row-prevention contract.
+    denied = audit_logger.query_all_events(
+        action=AuditActions.AUTH_MEMBERSHIP_DENIED
+    )
+    assert len(denied) == 0, (
+        "AUTH_MEMBERSHIP_DENIED must NOT be emitted when "
+        "to_tenant_audit_event_from_exc rejects the malformed exception. "
+        f"Got {len(denied)} (expected 0). Helper's fail-loud is the "
+        "contract that prevents silent corrupt audit rows."
+    )
+    """FH-S7.5 §7.2 + B.4 + §9.2.5: M4 catch block (CrossTenantForbidden)
+    emits an AUTH_MEMBERSHIP_DENIED tenant audit event with tenant_id
+    sourced from exc.details — populated by B.4 raise-site enrichment
+    in src/workspaces/repository.py:134 (in-memory) and :235 (Postgres).
+
+    Confirms enriched details flow:
+      workspace_repo.get_by_id (B.4 §8.1/§8.2 enrichment)
+        → CrossTenantForbidden(details={tenant_id, workspace_id})
+        → bootstrap propagation
+        → M4 catch block (B.5 §7.2)
+        → to_tenant_audit_event_from_exc helper
+        → tenant-scoped audit row with real tenant_id"""
+    audit_logger.clear_all()
+    sm = get_sessionmaker()
+
+    enriched_tenant_id = "22222222-2222-2222-2222-222222222222"
+    enriched_workspace_id = "33333333-3333-3333-3333-333333333333"
+
+    claims = VerifiedClaims(
+        user_id="user_m4",
+        org_id="org_m4",
+        workspace_id=enriched_workspace_id,
+        provider_org_role="admin",
+    )
+
+    import src.auth.middleware as mw_module
+
+    async def _raising_bootstrap(*args, **kwargs):
+        # Simulates the bootstrap chain reaching workspace_repo.get_by_id
+        # and triggering the §5.7 info-leak guard with B.4-enriched details.
+        raise CrossTenantForbidden(
+            f"Workspace {enriched_workspace_id} belongs to a different tenant",
+            details={
+                "tenant_id": enriched_tenant_id,
+                "workspace_id": enriched_workspace_id,
+            },
+        )
+
+    original_bootstrap = mw_module.bootstrap
+    mw_module.bootstrap = _raising_bootstrap
+    try:
+        app = _make_middleware_app(StubAuthProvider(claims=claims), sm)
+        resp = await _get(
+            app, "/probe", headers={"Authorization": "Bearer any"}
+        )
+    finally:
+        mw_module.bootstrap = original_bootstrap
+
+    assert resp.status_code == 403, resp.text
+    body = resp.json()
+    assert body["error"]["code"] == "cross_tenant_forbidden", (
+        f"expected cross_tenant_forbidden; got {body['error']['code']!r}"
+    )
+
+    denied = audit_logger.query_all_events(
+        action=AuditActions.AUTH_MEMBERSHIP_DENIED
+    )
+    matching = [
+        evt for evt in denied
+        if evt.metadata.get("reason") == "cross_tenant_workspace_claim"
+    ]
+    assert len(matching) == 1, (
+        f"expected exactly one AUTH_MEMBERSHIP_DENIED with "
+        f"reason=cross_tenant_workspace_claim, got {len(matching)} "
+        f"(total denied: {len(denied)})"
+    )
+    event = matching[0]
+
+    # Enriched tenant_id flowed B.4 raise site → exc.details → helper
+    # → AuditContext → audit row. This is THE FH-S7.5 contract.
+    assert str(event.tenant_id) == enriched_tenant_id, (
+        f"audit row should carry the enriched tenant_id from exc.details "
+        f"(got {event.tenant_id!r}, expected {enriched_tenant_id!r}). "
+        f"Failure here means B.4 raise-site enrichment is not flowing "
+        f"through the B.5 M4 catch block correctly."
+    )
+    assert event.metadata.get("step") == "bootstrap"
+    assert event.metadata.get("org_id") == "org_m4"
+
+async def test_middleware_m6_emits_pretenant_event_with_tenant_state_invalid(
+        clean_db: str,
+) -> None:
+    """FH-S7.5 §7.3 + §9.2.5: M6 catch block (TenantStateInvalid) emits
+    an AUTH_TENANT_STATE_INVALID pretenant audit event via the
+    aemit_pretenant_event_safe path. The pretenant routing is correct
+    because TenantStateInvalid raises BEFORE tenant context resolves
+    (bootstrap.py:144) — no tenant_id exists to scope the audit row.
+
+    Complement to test_middleware_self_serve_disabled_via_app_state_settings_blocks_unknown_org
+    (B.5.1-updated test): that test exercises the M6 path via the
+    natural settings-based trigger (allow_self_serve_provisioning=False).
+    This test isolates the audit-emission contract via monkey-patched
+    bootstrap, locking the behavior independently of any trigger
+    refactor."""
+    audit_logger.clear_all()
+    sm = get_sessionmaker()
+
+    claims = VerifiedClaims(
+        user_id="user_m6",
+        org_id="org_m6_unknown",
+        workspace_id=None,
+        provider_org_role="admin",
+    )
+
+    import src.auth.middleware as mw_module
+
+    async def _raising_bootstrap(*args, **kwargs):
+        raise TenantStateInvalid(
+            "No tenant exists for this credential's org_id.",
+            details={
+                "org_id": "org_m6_unknown",
+                "reason": "unknown_org_id_self_serve_disabled",
+            },
+        )
+
+    original_bootstrap = mw_module.bootstrap
+    mw_module.bootstrap = _raising_bootstrap
+    try:
+        app = _make_middleware_app(StubAuthProvider(claims=claims), sm)
+        resp = await _get(
+            app, "/probe", headers={"Authorization": "Bearer any"}
+        )
+    finally:
+        mw_module.bootstrap = original_bootstrap
+
+    assert resp.status_code == 409, resp.text
+    body = resp.json()
+    assert body["error"]["code"] == "tenant_state_invalid", (
+        f"expected tenant_state_invalid; got {body['error']['code']!r}"
+    )
+
+    state_invalid = audit_logger.query_all_events(
+        action=AuditActions.AUTH_TENANT_STATE_INVALID
+    )
+    assert len(state_invalid) == 1, (
+        f"expected exactly one AUTH_TENANT_STATE_INVALID event, "
+        f"got {len(state_invalid)}"
+    )
+    event = state_invalid[0]
+    assert event.metadata.get("step") == "bootstrap"
+    assert event.metadata.get("reason") == "tenant_state_invalid"
+
+    # MF-3 metadata key: error_details (renamed from "details" in B.5).
+    error_details = event.metadata.get("error_details") or {}
+    assert error_details.get("org_id") == "org_m6_unknown", (
+        f"audit metadata.error_details.org_id should preserve the "
+        f"rejected claim's org_id (got {error_details.get('org_id')!r})"
+    )
+    assert error_details.get("reason") == "unknown_org_id_self_serve_disabled", (
+        f"audit metadata.error_details.reason should carry the bootstrap's "
+        f"specific refusal code (got {error_details.get('reason')!r})"
+    )
+
+async def test_middleware_m6_pretenant_emission_has_no_tenant_id(
+        clean_db: str,
+) -> None:
+    """FH-S7.5 SR-1 + §9.2.5: positive assurance for M6's pretenant
+    semantics. The AUTH_TENANT_STATE_INVALID audit row MUST carry
+    tenant_id IS NULL — confirming it routes through the SECURITY
+    DEFINER pretenant path (audit_pretenant_insert / migration 0009
+    widened) rather than the tenant-scoped RLS policy.
+
+    Critical safety property: at the bootstrap.py:144 raise site, no
+    tenant context exists yet (the credential's org_id failed to
+    resolve to any known tenant). Emitting an audit row with a
+    fabricated or sentinel tenant_id would corrupt the audit table;
+    the pretenant path is the semantically-correct routing.
+
+    Companion to test_middleware_m6_emits_pretenant_event_with_tenant_state_invalid
+    — that test asserts event content; this test locks the
+    tenant_id IS NULL invariant SEPARATELY so a regression that
+    started routing M6 through the tenant path would fail this test
+    in isolation (not silently merged with content-shape assertions)."""
+    audit_logger.clear_all()
+    sm = get_sessionmaker()
+
+    claims = VerifiedClaims(
+        user_id="user_m6_sr1",
+        org_id="org_m6_sr1_unknown",
+        workspace_id=None,
+        provider_org_role="admin",
+    )
+
+    import src.auth.middleware as mw_module
+
+    async def _raising_bootstrap(*args, **kwargs):
+        raise TenantStateInvalid(
+            "No tenant exists for this credential's org_id.",
+            details={
+                "org_id": "org_m6_sr1_unknown",
+                "reason": "unknown_org_id_self_serve_disabled",
+            },
+        )
+
+    original_bootstrap = mw_module.bootstrap
+    mw_module.bootstrap = _raising_bootstrap
+    try:
+        app = _make_middleware_app(StubAuthProvider(claims=claims), sm)
+        resp = await _get(
+            app, "/probe", headers={"Authorization": "Bearer any"}
+        )
+    finally:
+        mw_module.bootstrap = original_bootstrap
+
+    assert resp.status_code == 409, resp.text
+
+    state_invalid = audit_logger.query_all_events(
+        action=AuditActions.AUTH_TENANT_STATE_INVALID
+    )
+    assert len(state_invalid) == 1, (
+        f"expected exactly one AUTH_TENANT_STATE_INVALID event, "
+        f"got {len(state_invalid)}"
+    )
+    event = state_invalid[0]
+
+    # SR-1 invariant: pretenant audit rows carry NO tenant identity.
+    # Per src/audit/logger.py::query_all_events: pretenant events are
+    # coerced to AuditEvent shape with tenant_id='' (empty STRING, not
+    # None) because those fields don't exist on PretenantAuditEvent —
+    # they're folded into details by the _compat helper. Truthy-check
+    # is the right idiom: handles both the current '' coercion and
+    # any future shift to None without test churn.
+    assert not event.tenant_id, (
+        f"M6 audit row MUST be pretenant (tenant_id empty/falsy); got "
+        f"tenant_id={event.tenant_id!r}. A truthy tenant_id here "
+        f"indicates M6 routed through the tenant path, which is "
+        f"INCORRECT — no tenant context is resolved at the "
+        f"bootstrap.py:144 raise site, so any tenant_id would be "
+        f"fabricated/sentinel and would corrupt the audit table."
+    )
+    # Workspace_id likewise empty/falsy for pretenant events.
+    assert not event.workspace_id, (
+        f"M6 audit row workspace_id must be empty/falsy for pretenant "
+        f"events; got {event.workspace_id!r}"
+    )
+
+
+async def test_middleware_m4_emits_tenant_event_with_enriched_details(
+    clean_db: str,
+) -> None:
+    """FH-S7.5 §7.2 + B.4 + §9.2.5: M4 catch block (CrossTenantForbidden)
+    emits an AUTH_MEMBERSHIP_DENIED tenant audit event with tenant_id
+    sourced from exc.details — populated by B.4 raise-site enrichment
+    in src/workspaces/repository.py:134 (in-memory) and :235 (Postgres).
+
+    Confirms enriched details flow:
+      workspace_repo.get_by_id (B.4 §8.1/§8.2 enrichment)
+        → CrossTenantForbidden(details={tenant_id, workspace_id})
+        → bootstrap propagation
+        → M4 catch block (B.5 §7.2)
+        → to_tenant_audit_event_from_exc helper
+        → tenant-scoped audit row with real tenant_id
+
+    Re-appended at EOF after B.6.4 mid-file edit accidentally dropped
+    it from its original position between m3_fails_loud and m6_emits.
+    Module-level test functions can live in any order; pytest discovers
+    by function name."""
+    audit_logger.clear_all()
+    sm = get_sessionmaker()
+
+    enriched_tenant_id = "22222222-2222-2222-2222-222222222222"
+    enriched_workspace_id = "33333333-3333-3333-3333-333333333333"
+
+    claims = VerifiedClaims(
+        user_id="user_m4",
+        org_id="org_m4",
+        workspace_id=enriched_workspace_id,
+        provider_org_role="admin",
+    )
+
+    import src.auth.middleware as mw_module
+
+    async def _raising_bootstrap(*args, **kwargs):
+        raise CrossTenantForbidden(
+            f"Workspace {enriched_workspace_id} belongs to a different tenant",
+            details={
+                "tenant_id": enriched_tenant_id,
+                "workspace_id": enriched_workspace_id,
+            },
+        )
+
+    original_bootstrap = mw_module.bootstrap
+    mw_module.bootstrap = _raising_bootstrap
+    try:
+        app = _make_middleware_app(StubAuthProvider(claims=claims), sm)
+        resp = await _get(
+            app, "/probe", headers={"Authorization": "Bearer any"}
+        )
+    finally:
+        mw_module.bootstrap = original_bootstrap
+
+    assert resp.status_code == 403, resp.text
+    body = resp.json()
+    assert body["error"]["code"] == "cross_tenant_forbidden", (
+        f"expected cross_tenant_forbidden; got {body['error']['code']!r}"
+    )
+
+    denied = audit_logger.query_all_events(
+        action=AuditActions.AUTH_MEMBERSHIP_DENIED
+    )
+    matching = [
+        evt for evt in denied
+        if evt.metadata.get("reason") == "cross_tenant_workspace_claim"
+    ]
+    assert len(matching) == 1, (
+        f"expected exactly one AUTH_MEMBERSHIP_DENIED with "
+        f"reason=cross_tenant_workspace_claim, got {len(matching)} "
+        f"(total denied: {len(denied)})"
+    )
+    event = matching[0]
+
+    assert str(event.tenant_id) == enriched_tenant_id, (
+        f"audit row should carry the enriched tenant_id from exc.details "
+        f"(got {event.tenant_id!r}, expected {enriched_tenant_id!r}). "
+        f"Failure here means B.4 raise-site enrichment is not flowing "
+        f"through the B.5 M4 catch block correctly."
+    )
+    assert event.metadata.get("step") == "bootstrap"
+    assert event.metadata.get("org_id") == "org_m4"
