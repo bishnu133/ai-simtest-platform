@@ -219,11 +219,18 @@ async def test_factory_built_app_serves_one_authenticated_request_end_to_end_pos
     # (c) Audit trail — auth.accepted written by the middleware.
     # The seed events were cleared before the HTTP call, so the
     # accepted event here is the one that came out of the request.
-    accepted = audit_logger.query(action=AuditActions.AUTH_ACCEPTED)
+    # FH-S7.5 B.5 fix-forward: M8 (auth.accepted) was migrated from
+    # sync audit_logger.write() to async aemit_tenant_event_safe(),
+    # so .query() (sync-only view) no longer sees AUTH_ACCEPTED events.
+    # query_all_events() is the Slice 7 unified view across sync + async
+    # paths. The broader .query()/_events migration across other tests
+    # is tracked as a Slice 7 tail item (memory: F-16).
+    accepted = audit_logger.query_all_events(action=AuditActions.AUTH_ACCEPTED)
     assert len(accepted) >= 1, (
         f"expected at least one AUTH_ACCEPTED event, got {len(accepted)}. "
-        f"All events: {[e.action for e in audit_logger._events]}"
+        f"All events: {[e.action for e in audit_logger.query_all_events()]}"
     )
+
     # The audited actor matches the user who made the request.
     assert any(
         e.actor.actor_id == first_user_claims.user_id for e in accepted
