@@ -45,7 +45,11 @@ from src.api.errors import (
     UnknownProviderOrgRole,
     WorkspaceNotFound,
 )
-from src.audit._compat import to_pretenant_audit_event, to_tenant_audit_event
+from src.audit._compat import (
+    to_pretenant_audit_event,
+    to_tenant_audit_event,
+    to_tenant_audit_event_from_exc,
+)
 from src.audit.logger import AuditActions, audit_logger
 from src.auth.bootstrap import bootstrap
 from src.api.errors import TenantStateInvalid
@@ -112,6 +116,14 @@ def _extract_bearer(request: Request) -> str | None:
     return token or None
 
 
+# DEPRECATED — kept per zero-removal policy; no current call sites as
+# of FH-S7.5 (May 2026). After M3/M4/M6 migrated to async aemit_* paths,
+# this helper has zero references. Retained pending zero-removal policy
+# clarification (backlog F-2). Do NOT use in new code; new audit
+# emission should route through src.audit._compat helpers + async
+# aemit_* methods directly. Per SR-3 (FH-S7.5 plan v0.2.1), no runtime
+# DeprecationWarning is emitted — the comment is sufficient and runtime
+# warnings risk noisy tests / CI confusion.
 def _build_audit_ctx_from_claims(
     claims, tenant_id: str | None = None, workspace_id: str | None = None
 ) -> TenantContext:
@@ -121,6 +133,9 @@ def _build_audit_ctx_from_claims(
     not completed. We fill in placeholder IDs when tenant/workspace
     haven't been resolved yet; the audit write captures whatever we
     know at the time of failure.
+
+    DEPRECATED post FH-S7.5 — no live call sites. See module-level
+    comment above this function for the retention rationale.
     """
     return TenantContext(
         tenant_id=tenant_id or "00000000-0000-0000-0000-000000000000",
@@ -297,13 +312,19 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
                 # Explicit non-membership failure (future-proofing; bootstrap
                 # does not currently raise this itself, but step-4-like
                 # handlers may).
-                audit_ctx = _build_audit_ctx_from_claims(claims)
-                audit_logger.write(
-                    ctx=audit_ctx,
-                    action=AuditActions.AUTH_MEMBERSHIP_DENIED,
-                    resource_type="membership",
-                    resource_id=claims.user_id,
-                    metadata={"step": "bootstrap", "reason": exc.code},
+                # FH-S7.5 §7.1: migrated to async aemit_tenant_event_safe;
+                # tenant_id pulled from exc.details (enriched at
+                # src/auth/authz.py:154). actor_type stays "human" per
+                # §0.1 lock — F-1 backlog tracks system/human review.
+                await audit_logger.aemit_tenant_event_safe(
+                    to_tenant_audit_event_from_exc(
+                        exc=exc,
+                        actor_id=claims.user_id,
+                        action=AuditActions.AUTH_MEMBERSHIP_DENIED,
+                        resource_type="membership",
+                        resource_id=claims.user_id,
+                        metadata={"step": "bootstrap", "reason": exc.code},
+                    )
                 )
                 return _error_response(
                     exc.http_status,
@@ -313,17 +334,22 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
                 )
             except CrossTenantForbidden as exc:
                 # Explicit workspace claim crossed tenants — 403.
-                audit_ctx = _build_audit_ctx_from_claims(claims)
-                audit_logger.write(
-                    ctx=audit_ctx,
-                    action=AuditActions.AUTH_MEMBERSHIP_DENIED,
-                    resource_type="workspace",
-                    resource_id=claims.workspace_id or "unknown",
-                    metadata={
-                        "step": "bootstrap",
-                        "reason": "cross_tenant_workspace_claim",
-                        "org_id": claims.org_id,
-                    },
+                # FH-S7.5 §7.2: migrated to async aemit_tenant_event_safe;
+                # tenant_id pulled from exc.details (enriched at
+                # src/workspaces/repository.py:134 + 235 per B.4).
+                await audit_logger.aemit_tenant_event_safe(
+                    to_tenant_audit_event_from_exc(
+                        exc=exc,
+                        actor_id=claims.user_id,
+                        action=AuditActions.AUTH_MEMBERSHIP_DENIED,
+                        resource_type="workspace",
+                        resource_id=claims.workspace_id or "unknown",
+                        metadata={
+                            "step": "bootstrap",
+                            "reason": "cross_tenant_workspace_claim",
+                            "org_id": claims.org_id,
+                        },
+                    )
                 )
                 return _error_response(
                     exc.http_status,
@@ -356,17 +382,27 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
                 # bootstrap. Distinct audit action so dashboards can
                 # alert on it independently of the credential-shaped
                 # AUTH_REJECTED stream.
-                audit_ctx = _build_audit_ctx_from_claims(claims)
-                audit_logger.write(
-                    ctx=audit_ctx,
-                    action=AuditActions.AUTH_TENANT_STATE_INVALID,
-                    resource_type="tenant",
-                    resource_id=claims.org_id or "unknown",
-                    metadata={
-                        "step": "bootstrap",
-                        "reason": exc.code,
-                        "details": exc.details or {},
-                    },
+                # FH-S7.5 §7.3: migrated to async aemit_pretenant_event_safe;
+                # uses the widened PRETENANT_ACTION_ALLOWLIST (B.2 added
+                # "auth.tenant_state_invalid"). At the bootstrap.py:144
+                # raise site, no tenant context exists yet — pretenant path
+                # is semantically correct. MF-3 metadata key is
+                # "error_details" (product-friendly, was "details").
+                await audit_logger.aemit_pretenant_event_safe(
+                    to_pretenant_audit_event(
+                        action=AuditActions.AUTH_TENANT_STATE_INVALID,
+                        actor_id=claims.user_id if claims else "unknown",
+                        actor_type="human",
+                        metadata={
+                            "step": "bootstrap",
+                            "reason": exc.code,
+                            "org_id": claims.org_id,
+                            "resource_type": "tenant",
+                            "resource_id": claims.org_id or "unknown",
+                            "error_details": exc.details or {},
+                        },
+                        correlation_id=None,
+                    )
                 )
                 logger.error(
                     "TenantStateInvalid during bootstrap (org_id=%s): %s",

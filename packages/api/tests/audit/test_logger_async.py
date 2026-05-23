@@ -1,6 +1,6 @@
 """Slice 5: unit tests for AuditLogger async surface.
 
-Tests cover (7 sacred names locked at Plan v0.2):
+Tests cover (9 sacred names; 7 from Slice 5 + 2 from FH-S7.5 B.6.2):
   1. test_aemit_tenant_event_returns_uuid_from_repository
   2. test_aemit_pretenant_event_returns_uuid_from_repository
   3. test_aemit_tenant_event_delegates_to_injected_repository
@@ -8,6 +8,8 @@ Tests cover (7 sacred names locked at Plan v0.2):
   5. test_aemit_tenant_event_propagates_repository_exceptions
   6. test_aemit_pretenant_event_propagates_audit_event_insert_rejected
   7. test_audit_logger_default_constructor_binds_inmemory_repository
+  8. test_aemit_pretenant_event_safe_accepts_auth_tenant_state_invalid
+  9. test_aemit_pretenant_event_safe_still_rejects_non_allowlist_action
 
 No DB required. Uses a spy variant of AuditEventRepository for delegation
 checks and a raising variant for failure-propagation checks (Q2=F1).
@@ -210,3 +212,76 @@ def test_audit_logger_default_constructor_binds_inmemory_repository():
         audit_logger_under_test._audit_repository,
         InMemoryAuditEventRepository,
     )
+
+# ============================================================================
+# FH-S7.5 widening — companion tests for aemit_pretenant_event_safe
+# carrying the new auth.tenant_state_invalid action (plan v0.2.1 §9.2.2).
+# Covers the fail-open Slice 7 variant used by middleware M3/M4/M6 (B.5).
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_aemit_pretenant_event_safe_accepts_auth_tenant_state_invalid():
+    """FH-S7.5 §5 + §7.3: aemit_pretenant_event_safe accepts a
+    PretenantAuditEvent carrying the newly-allowed action
+    'auth.tenant_state_invalid' and delegates to the injected repository.
+
+    End-to-end positive companion to
+    test_pretenant_audit_event_accepts_auth_tenant_state_invalid
+    (test_context.py) — that test covers dataclass construction;
+    this test covers the full async bridge through the Slice 7
+    fail-open variant used by middleware M6 (B.5)."""
+    spy = _SpyRepository()
+    audit_logger_under_test = AuditLogger(repository=spy)
+    event = PretenantAuditEvent(
+        action="auth.tenant_state_invalid",
+        actor_id="anonymous_fh_s75",
+        actor_type="system",
+        details={
+            "step": "bootstrap",
+            "reason": "unknown_org_id_self_serve_disabled",
+        },
+        correlation_id="cor_fh_s75_tsi",
+    )
+
+    result = await audit_logger_under_test.aemit_pretenant_event_safe(event)
+
+    # Returns UUID (not None) because underlying aemit_pretenant_event
+    # succeeded — fail-open only kicks in on exception.
+    assert isinstance(result, UUID)
+    assert result == spy.next_pretenant_uuid
+    # Spy captured exactly one call with the TSI event verbatim.
+    assert len(spy.pretenant_calls) == 1
+    captured_event, captured_session = spy.pretenant_calls[0]
+    assert captured_event is event
+    assert captured_event.action == "auth.tenant_state_invalid"
+    assert captured_session is None
+
+
+@pytest.mark.asyncio
+async def test_aemit_pretenant_event_safe_still_rejects_non_allowlist_action():
+    """FH-S7.5 regression: aemit_pretenant_event_safe's fail-open
+    try/except CANNOT swallow PretenantAuditEvent __post_init__
+    ValueError, because __post_init__ runs at argument evaluation
+    BEFORE the safe variant is invoked.
+
+    Critical safety property: the Slice 7 fail-open design only
+    suppresses repository-level (DB) failures — never caller-bug
+    construction errors. A future refactor that moved event
+    construction INSIDE the safe variant (wrapping it in the same
+    try/except) would silently lose this regression test.
+
+    Target action: 'auth.accepted'. After B.2 widened the pretenant
+    allowlist to {'auth.rejected', 'auth.tenant_state_invalid'},
+    'auth.accepted' remains outside — confirming the widening did
+    not accidentally widen too far."""
+    audit_logger_under_test = AuditLogger(repository=_SpyRepository())
+
+    with pytest.raises(ValueError, match="allowlist"):
+        # PretenantAuditEvent(action="auth.accepted") raises ValueError
+        # at __post_init__ — argument evaluation order means the safe
+        # variant is never entered. The fail-open try/except therefore
+        # has no chance to swallow this.
+        await audit_logger_under_test.aemit_pretenant_event_safe(
+            PretenantAuditEvent(action="auth.accepted")
+        )

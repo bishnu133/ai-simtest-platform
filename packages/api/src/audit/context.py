@@ -43,13 +43,29 @@ Runtime type strictness (enforced in ``__post_init__``):
 
 Defense in depth for the pretenant action allowlist:
 
-  Layer 1: ``PretenantAction = Literal["auth.rejected"]`` (type system)
+  Layer 1: ``PretenantAction = Literal[...]`` (type system)
   Layer 2: ``PretenantAuditEvent.__post_init__`` raises (runtime)
-  Layer 3: ``audit_pretenant_insert`` function body (Slice 0 / 0008)
-  Layer 4: ``ck_audit_tenant_required_or_pretenant`` CHECK (Slice 0 / 0005)
+  Layer 3: ``audit_pretenant_insert`` function body (Slice 0 / 0008,
+           widened in FH-Tier-1 Slice 7.5 / 0009)
+  Layer 4: ``ck_audit_tenant_required_or_pretenant`` CHECK (Slice 0 / 0005,
+           widened in FH-Tier-1 Slice 7.5 / 0009)
 
-  Widening (e.g., adding ``'auth.suspended'``) requires lockstep changes
-  at all four layers via a coordinated migration. See plan v0.3.4 §5.
+  Current allowlist (post FH-S7.5): ``auth.rejected`` and
+  ``auth.tenant_state_invalid``. The second action was added per
+  FH-Tier-1 Slice 7.5 to route bootstrap.py:144 ``TenantStateInvalid``
+  audit emissions through the pretenant SECURITY DEFINER path
+  (tenant_id is genuinely None at that raise site).
+
+  Future widening of ``PRETENANT_ACTION_ALLOWLIST`` requires an
+  explicit per-slice sacred-surface unlock approval (analogous to the
+  FH-S7.5 unlock that added ``auth.tenant_state_invalid``). The 4-layer
+  coordination always applies — all four layers must widen in lockstep
+  within a single migration. Any candidate widening proposal must
+  enumerate the four affected sites and confirm test-side allowlist
+  assertions (notably ``tests/audit/test_context.py::
+  test_pretenant_action_allowlist_contents``) are updated atomically
+  with the unlock. See FH-S7.5 plan v0.2.1 §10.2 B.2 for the established
+  pattern.
 
 Future-1 convergence note:
 
@@ -81,8 +97,11 @@ from uuid import UUID
 # Type aliases — closed sets at the type system layer
 # ============================================================================
 
-PretenantAction = Literal["auth.rejected"]
-"""Closed set of pretenant action values. Widening requires migration."""
+PretenantAction = Literal["auth.rejected", "auth.tenant_state_invalid"]
+"""Closed set of pretenant action values. Widening requires a coordinated
+4-layer migration (Layer 1 / 2 here; Layers 3 / 4 in alembic). See module
+docstring "Defense in depth for the pretenant action allowlist" section
+for the per-slice sacred-surface unlock policy."""
 
 ActorType = Literal["human", "service_account", "system", "support"]
 """Closed set of actor_type values. Matches the audit_events table
@@ -94,11 +113,16 @@ allowlist."""
 # Sentinels — single source of truth for pretenant / actor semantics
 # ============================================================================
 
-PRETENANT_ACTION_ALLOWLIST: Final[frozenset[str]] = frozenset({"auth.rejected"})
+PRETENANT_ACTION_ALLOWLIST: Final[frozenset[str]] = frozenset({
+    "auth.rejected",
+    "auth.tenant_state_invalid",
+})
 """Runtime allowlist of actions permitted for pretenant audit events.
 
-Mirrors the audit_pretenant_insert function's IF-block (Slice 0 / 0008)
-and the ck_audit_tenant_required_or_pretenant CHECK constraint (0005).
+Mirrors the audit_pretenant_insert function's IF-block (Slice 0 / 0008,
+widened in FH-Tier-1 Slice 7.5 / 0009) and the
+ck_audit_tenant_required_or_pretenant CHECK constraint (0005, widened
+in 0009).
 """
 
 ACTOR_TYPE_ALLOWLIST: Final[frozenset[str]] = frozenset(

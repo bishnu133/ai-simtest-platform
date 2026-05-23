@@ -18,6 +18,17 @@ Protocol contract:
 The schema enforces "at most one default workspace per tenant" with a
 partial unique index (Turn 1a migration, plan §7.2). A second insert
 with is_default=True for the same tenant raises `DuplicateWorkspace`.
+
+FH-S7.5 raise-site enrichment (plan v0.2.1 §8.1 / §8.2):
+  The two `CrossTenantForbidden` raise sites in `get_by_id` (in-memory
+  and Postgres info-leak-guard branches) populate
+  ``details={"tenant_id": ctx.tenant_id, "workspace_id": workspace_id}``
+  so the M4 middleware catch block (auth/middleware.py:317) can route
+  the audit event through ``to_tenant_audit_event_from_exc(...)`` and
+  emit an ``auth.membership_denied`` row with the real tenant context
+  resolved before the raise. Without this enrichment, M4's audit row
+  would carry a fabricated/sentinel tenant_id; the helper fails loud
+  via ValueError instead, which is strictly safer.
 """
 from __future__ import annotations
 
@@ -72,7 +83,9 @@ class WorkspaceRepository(Protocol):
         Raises:
           * CrossTenantForbidden — workspace exists but in a different tenant
             (info-leak guard: do not distinguish this from NotFound to
-            tenants that don't own the row)
+            tenants that don't own the row). FH-S7.5: carries
+            ``details={"tenant_id", "workspace_id"}`` so middleware-level
+            audit emission can include the real tenant context.
           * WorkspaceNotFound — no workspace with this id in any tenant
         """
         ...
@@ -130,9 +143,16 @@ class InMemoryWorkspaceRepository:
         if record is None:
             raise WorkspaceNotFound(f"Workspace {workspace_id} not found")
         if record.tenant_id != ctx.tenant_id:
-            # §5.7 info-leak guard: cross-tenant probe → 403, not 404
+            # §5.7 info-leak guard: cross-tenant probe → 403, not 404.
+            # FH-S7.5 §8.1: enrich exc.details with the resolved tenant
+            # context so the M4 middleware catch block can route the
+            # audit emission through to_tenant_audit_event_from_exc(...).
             raise CrossTenantForbidden(
-                f"Workspace {workspace_id} belongs to a different tenant"
+                f"Workspace {workspace_id} belongs to a different tenant",
+                details={
+                    "tenant_id": ctx.tenant_id,
+                    "workspace_id": workspace_id,
+                },
             )
         return record
 
@@ -228,12 +248,19 @@ class PostgresWorkspaceRepository:
             # Secondary: does it exist under a different tenant?
             # §5.7 info-leak guard — raise CrossTenantForbidden rather
             # than NotFound so existence probing across tenants is blocked.
+            # FH-S7.5 §8.2: enrich exc.details with the resolved tenant
+            # context so the M4 middleware catch block can route the
+            # audit emission through to_tenant_audit_event_from_exc(...).
             probe = await s.execute(
                 select(WorkspaceORM.id).where(WorkspaceORM.id == workspace_id)
             )
             if probe.scalar_one_or_none() is not None:
                 raise CrossTenantForbidden(
-                    f"Workspace {workspace_id} belongs to a different tenant"
+                    f"Workspace {workspace_id} belongs to a different tenant",
+                    details={
+                        "tenant_id": ctx.tenant_id,
+                        "workspace_id": workspace_id,
+                    },
                 )
             raise WorkspaceNotFound(f"Workspace {workspace_id} not found")
 
@@ -303,4 +330,3 @@ class PostgresWorkspaceRepository:
                 await s.commit()
                 await s.refresh(orm)
             return workspace_to_domain(orm)
-

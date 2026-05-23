@@ -1,6 +1,6 @@
 """Tests for ``src/audit/context.py`` — FH-Tier-1 Slice 1.
 
-29 sacred tests organized by concern:
+32 sacred tests organized by concern (29 from Slice 1 + 3 from FH-S7.5 B.6.1):
 
     AuditContext (7):
       - construction with required fields
@@ -11,7 +11,7 @@
       - with_correlation returns new instance (frozen-safe)
       - frozen-dataclass immutability
 
-    PretenantAuditEvent (14):
+    PretenantAuditEvent (16):
       - construction with defaults
       - rejects non-allowlist action
       - rejects invalid actor_type
@@ -23,13 +23,16 @@
       - to_function_args serializes details as JSON string
       - to_function_args handles UUID/datetime in details via default=str
       - to_function_args propagates full custom values
+      - accepts auth.tenant_state_invalid (FH-S7.5 widening companion)
+      - to_function_args serializes auth.tenant_state_invalid (FH-S7.5 widening)
 
-    TenantAuditEvent (5):
+    TenantAuditEvent (6):
       - construction with context
       - rejects pretenant-only action
       - rejects empty action
       - rejects non-dict details (TypeError)
       - frozen-dataclass immutability
+      - still rejects auth.tenant_state_invalid (FH-S7.5 widening regression)
 
     Module-level invariants (3):
       - PRETENANT_ACTION_ALLOWLIST shape
@@ -197,8 +200,9 @@ def test_pretenant_audit_event_construction_defaults():
 
 
 def test_pretenant_audit_event_rejects_non_allowlist_action():
-    """action must be in PRETENANT_ACTION_ALLOWLIST (currently only
-    'auth.rejected')."""
+    """action must be in PRETENANT_ACTION_ALLOWLIST. Uses 'auth.accepted'
+    as the rejection target — non-allowlisted both pre- and post-
+    FH-S7.5 widening that added 'auth.tenant_state_invalid'."""
     with pytest.raises(ValueError, match="allowlist"):
         PretenantAuditEvent(action="auth.accepted")  # type: ignore[arg-type]
 
@@ -410,12 +414,17 @@ def test_tenant_audit_event_is_frozen_dataclass():
 # Module-level invariants (3 tests)
 # ============================================================================
 
-def test_pretenant_action_allowlist_is_frozenset_with_auth_rejected():
-    """The pretenant action allowlist is exactly {'auth.rejected'} as a
-    frozenset. Widening requires migration + function + CHECK constraint
-    update (lockstep across 4 layers per v0.3.4 §5)."""
+def test_pretenant_action_allowlist_contents():
+    """The pretenant action allowlist is exactly {'auth.rejected',
+    'auth.tenant_state_invalid'} as a frozenset. Widening requires
+    migration + function + CHECK constraint update (lockstep across
+    4 layers per v0.3.4 §5). FH-S7.5 B.2 added 'auth.tenant_state_invalid'
+    via migration 0009 + the 4-layer coordinated unlock."""
     assert isinstance(PRETENANT_ACTION_ALLOWLIST, frozenset)
-    assert PRETENANT_ACTION_ALLOWLIST == frozenset({"auth.rejected"})
+    assert PRETENANT_ACTION_ALLOWLIST == frozenset({
+        "auth.rejected",
+        "auth.tenant_state_invalid",
+    })
 
 
 def test_actor_type_allowlist_contains_exactly_four_values():
@@ -425,6 +434,57 @@ def test_actor_type_allowlist_contains_exactly_four_values():
     assert ACTOR_TYPE_ALLOWLIST == frozenset(
         {"human", "service_account", "system", "support"}
     )
+
+# ============================================================================
+# FH-S7.5 widening — companion tests for the auth.tenant_state_invalid
+# pretenant action added by B.2 (migration 0009 + 4-layer coordinated
+# unlock per plan v0.2.1 §5). 3 tests:
+#
+#   1. positive — PretenantAuditEvent accepts the new action
+#   2. positive — to_function_args() serializes the new action cleanly
+#   3. regression — TenantAuditEvent still refuses the pretenant-only action
+# ============================================================================
+
+def test_pretenant_audit_event_accepts_auth_tenant_state_invalid():
+    """FH-S7.5 §5: PretenantAuditEvent accepts 'auth.tenant_state_invalid'
+    as the second pretenant action added by the sacred-surface unlock.
+
+    Positive companion to test_pretenant_audit_event_rejects_non_allowlist_action
+    — construction must succeed cleanly with no ValueError from the
+    __post_init__ allowlist check."""
+    event = PretenantAuditEvent(action="auth.tenant_state_invalid")
+    assert event.action == "auth.tenant_state_invalid"
+    # Sanity: defaults still fill in cleanly when only action is specified.
+    assert event.actor_id == PRETENANT_DEFAULT_ACTOR_ID
+    assert event.actor_type == PRETENANT_DEFAULT_ACTOR_TYPE
+
+
+def test_pretenant_audit_event_to_function_args_for_tsi():
+    """FH-S7.5 §5: to_function_args() serializes 'auth.tenant_state_invalid'
+    cleanly as the 'action' parameter for audit_pretenant_insert.
+
+    The 9-key dict shape is unchanged by allowlist widening — only the
+    set of accepted action values changes (Slice 4 §5 contract)."""
+    args = PretenantAuditEvent(action="auth.tenant_state_invalid").to_function_args()
+    assert args["action"] == "auth.tenant_state_invalid"
+    assert len(args) == 9
+
+
+def test_tenant_audit_event_still_rejects_auth_tenant_state_invalid():
+    """FH-S7.5 regression: TenantAuditEvent still refuses
+    'auth.tenant_state_invalid' even after the pretenant allowlist
+    widened to include it.
+
+    The tenant path goes through audit_events_insert under the standard
+    tenant_id-required RLS policy; routing TSI through that path would
+    emit a tenant-scoped row when the raise site (bootstrap.py:144) has
+    no tenant context. The pre-existing
+    test_tenant_audit_event_rejects_pretenant_action enforces the same
+    invariant for 'auth.rejected'; this test extends coverage to the
+    second pretenant action."""
+    ctx = _sample_audit_context()
+    with pytest.raises(ValueError, match="pretenant"):
+        TenantAuditEvent(action="auth.tenant_state_invalid", context=ctx)
 
 
 def test_audit_context_module_has_no_infrastructure_imports():

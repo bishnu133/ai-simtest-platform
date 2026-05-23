@@ -542,3 +542,208 @@ async def test_append_tenant_event_returns_uuid_matching_persisted_row(
         persisted_id = result.scalar_one()
 
     assert returned_id == persisted_id
+
+# ============================================================================
+# FH-S7.5 widening — companion DB tests for auth.tenant_state_invalid
+# (plan v0.2.1 §9.2.3). 4 tests across 3 layers:
+#
+#   1. application path  — repo wrapper + function + CHECK
+#   2. function path     — raw SQL function call, observes SQLSTATE 23514
+#   3. constraint path   — direct INSERT bypassing function (accepts TSI)
+#   4. constraint path   — direct INSERT bypassing function (rejects others)
+#
+# Layers 3 & 4 are defense-in-depth: they confirm the CHECK constraint
+# itself was correctly widened by migration 0009, independently of the
+# SECURITY DEFINER function's IF-block validation.
+# ============================================================================
+
+
+async def test_audit_pretenant_insert_accepts_tenant_state_invalid(
+    clean_db: str,
+):
+    """FH-S7.5 §5: audit_pretenant_insert (Postgres SECURITY DEFINER
+    function) accepts the newly-allowed 'auth.tenant_state_invalid'
+    action and persists a row with tenant_id IS NULL.
+
+    Application-path coverage — goes through repo.append_pretenant_event,
+    which executes ``SELECT audit_pretenant_insert(...)`` via the wrapper.
+    Confirms B.1's migration 0009 + B.2's domain-layer widening flow
+    cleanly end-to-end."""
+    await _ensure_test_tenants_and_workspaces()
+
+    repo = PostgresAuditEventRepository()
+    marker = _marker("pre_tsi_accept")
+    event = PretenantAuditEvent(
+        action="auth.tenant_state_invalid",
+        actor_id=marker,
+        actor_type="system",
+        details={
+            "step": "bootstrap",
+            "reason": "unknown_org_id_self_serve_disabled",
+        },
+        correlation_id="cor_fh_s75_app_tsi",
+    )
+
+    new_id = await repo.append_pretenant_event(event)
+
+    assert isinstance(new_id, uuid.UUID)
+
+    # Verify the row persisted with tenant_id IS NULL and the widened
+    # action made it through both function-IF and CHECK constraint.
+    async with raw_admin_session() as s:
+        result = await s.execute(
+            sa.text("""
+                SELECT tenant_id, action, actor_id, correlation_id
+                FROM audit_events
+                WHERE id = :id
+            """),
+            {"id": new_id},
+        )
+        row = result.one()
+        assert row.tenant_id is None
+        assert row.action == "auth.tenant_state_invalid"
+        assert row.actor_id == marker
+        assert row.correlation_id == "cor_fh_s75_app_tsi"
+
+
+async def test_audit_pretenant_insert_rejects_auth_accepted(
+    clean_db: str,
+):
+    """FH-S7.5 regression: audit_pretenant_insert (Postgres SECURITY
+    DEFINER function) STILL rejects 'auth.accepted' as p_action after
+    B.2's pretenant allowlist widening to {auth.rejected,
+    auth.tenant_state_invalid}.
+
+    Layer coverage distinct from existing
+    test_append_pretenant_event_rejects_disallowed_action (line 275):
+      * existing test goes through the repo wrapper, catches the wrapped
+        ``AuditEventInsertRejected`` and asserts the message
+      * THIS test calls the SQL function directly via raw_admin_session,
+        catches raw ``DBAPIError``, and asserts the underlying SQLSTATE
+        is '23514' (check_violation)
+
+    The two tests together prove (1) the function's RAISE fires for
+    disallowed actions, AND (2) the repo correctly maps that to
+    ``AuditEventInsertRejected``."""
+    await _ensure_test_tenants_and_workspaces()
+
+    with pytest.raises(DBAPIError) as excinfo:
+        async with raw_admin_session() as s:
+            await s.execute(
+                sa.text("""
+                    SELECT audit_pretenant_insert(
+                        :action,
+                        :actor_id,
+                        :actor_type,
+                        :resource_type,
+                        :resource_id,
+                        :correlation_id,
+                        CAST(:details AS jsonb),
+                        CAST(:ip_address AS inet),
+                        :user_agent
+                    )
+                """),
+                {
+                    "action": "auth.accepted",  # outside the widened allowlist
+                    "actor_id": _marker("fn_raw_reject"),
+                    "actor_type": "system",
+                    "resource_type": "auth",
+                    "resource_id": "session",
+                    "correlation_id": None,
+                    "details": "{}",
+                    "ip_address": None,
+                    "user_agent": None,
+                },
+            )
+
+    # Confirm the rejection is SQLSTATE 23514 (check_violation) — proves
+    # the function-level RAISE fired on the disallowed action.
+    assert excinfo.value.orig is not None
+    assert getattr(excinfo.value.orig, "pgcode", None) == "23514", (
+        f"expected SQLSTATE 23514 (check_violation), got "
+        f"{getattr(excinfo.value.orig, 'pgcode', None)!r}"
+    )
+
+
+async def test_ck_constraint_accepts_tenant_state_invalid_with_null_tenant_via_bypass(
+    clean_db: str,
+):
+    """FH-S7.5 §5: the widened ck_audit_tenant_required_or_pretenant
+    CHECK constraint accepts a row with action='auth.tenant_state_invalid'
+    AND tenant_id IS NULL.
+
+    Bypass coverage: goes AROUND the SECURITY DEFINER function and
+    INSERTs directly into ``audit_events``. The function's IF-block
+    validation is bypassed; only the table-level CHECK constraint
+    remains. This is defense-in-depth — confirms migration 0009 widened
+    the CHECK itself (not just the function), so even a hypothetical
+    bug that let a row past the function would still be guarded if it
+    carried an action outside the allowlist with NULL tenant_id.
+
+    Note: ``raw_admin_session`` uses the ``neondb_owner`` role which
+    BYPASSRLS — necessary to INSERT directly to audit_events outside
+    the SECURITY DEFINER function path."""
+    await _ensure_test_tenants_and_workspaces()
+
+    async with raw_admin_session() as s:
+        result = await s.execute(
+            sa.text("""
+                INSERT INTO audit_events (action, actor_id, actor_type)
+                VALUES (:action, :actor_id, :actor_type)
+                RETURNING id, tenant_id, action
+            """),
+            {
+                "action": "auth.tenant_state_invalid",
+                "actor_id": _marker("ck_bypass_tsi"),
+                "actor_type": "system",
+                # tenant_id intentionally omitted — column nullable=True,
+                # no server_default → defaults to NULL.
+            },
+        )
+        row = result.one()
+
+    # CHECK passed: row exists with tenant_id IS NULL and the widened action.
+    assert isinstance(row.id, uuid.UUID)
+    assert row.tenant_id is None
+    assert row.action == "auth.tenant_state_invalid"
+
+
+async def test_ck_constraint_rejects_other_actions_with_null_tenant(
+    clean_db: str,
+):
+    """FH-S7.5 §5: the widened ck_audit_tenant_required_or_pretenant
+    CHECK constraint REJECTS rows where ``tenant_id IS NULL`` and the
+    action is outside the pretenant allowlist (e.g., 'asset.created').
+
+    Bypass coverage — direct INSERT to audit_events, no function path.
+    Confirms the widening didn't accidentally make the constraint
+    permissive for arbitrary actions; it still requires either:
+      * tenant_id IS NOT NULL, OR
+      * action IN {auth.rejected, auth.tenant_state_invalid}
+
+    'asset.created' satisfies neither → CHECK fires SQLSTATE 23514."""
+    await _ensure_test_tenants_and_workspaces()
+
+    with pytest.raises(DBAPIError) as excinfo:
+        async with raw_admin_session() as s:
+            await s.execute(
+                sa.text("""
+                    INSERT INTO audit_events (action, actor_id, actor_type)
+                    VALUES (:action, :actor_id, :actor_type)
+                """),
+                {
+                    "action": "asset.created",  # not in pretenant allowlist
+                    "actor_id": _marker("ck_bypass_reject"),
+                    "actor_type": "system",
+                    # tenant_id omitted → NULL → CHECK fails for non-allowlist
+                    # action.
+                },
+            )
+
+    # Confirm the rejection is SQLSTATE 23514 (check_violation) — proves
+    # the table-level CHECK fired, NOT some other constraint.
+    assert excinfo.value.orig is not None
+    assert getattr(excinfo.value.orig, "pgcode", None) == "23514", (
+        f"expected SQLSTATE 23514 (check_violation), got "
+        f"{getattr(excinfo.value.orig, 'pgcode', None)!r}"
+    )
