@@ -954,30 +954,28 @@ async def test_middleware_m3_emits_tenant_event_via_aemit(
 async def test_middleware_m3_fails_loud_when_exc_details_missing_tenant_id(
         clean_db: str,
 ) -> None:
-    """FH-S7.5 §6.1 risk R8 + §9.2.5: when middleware catches
-    NotMemberOfTenant with exc.details MISSING tenant_id, the
-    to_tenant_audit_event_from_exc helper raises ValueError (fail-loud).
-    This is the defensive contract preventing silent emission of a
-    corrupt audit row with a sentinel or placeholder tenant_id.
+    """FH-S7.5 §6.1 risk R8 + §9.2.5 + FH-S7.6 B.1 F-15 closure:
+    when middleware catches NotMemberOfTenant with exc.details MISSING
+    tenant_id, the to_tenant_audit_event_from_exc helper raises
+    ValueError (fail-loud). This is the defensive contract preventing
+    silent emission of a corrupt audit row with a sentinel or
+    placeholder tenant_id.
 
-    Observable behavior (the helper's ValueError fires at argument
-    evaluation BEFORE await aemit_tenant_event_safe; Python does not
-    route exceptions raised inside an except block to sibling except
-    clauses of the same try, so the ValueError propagates out of
-    the middleware's dispatch entirely):
-      * AUTH_MEMBERSHIP_DENIED is NEVER emitted (helper blocked it —
-        the corrupt-row-prevention contract holds)
-      * ValueError surfaces to the caller. In production with a
-        framework-level ServerErrorMiddleware this becomes a 500
-        response; in this test harness (httpx AsyncClient +
-        ASGITransport) the exception is raised directly into the
-        test code, which is what pytest.raises observes.
+    FH-S7.6 B.1 F-15: the M3 catch block in src/auth/middleware.py
+    now wraps the helper+emit in a narrow try/except ValueError. The
+    wrapper converts the helper's ValueError to a controlled HTTP 500
+    response via _error_response(500, 'internal_error', ...) with a
+    structured logger.exception() entry, independent of the outer
+    ASGI stack (plan v0.2.1 §6.1 literal contract).
 
-    Backlog F-15 tracks whether to add an explicit try/except wrapper
-    around the M3/M4 audit emission in src/auth/middleware.py to
-    guarantee 500-conversion regardless of outer ASGI stack. For now
-    the load-bearing contract (no corrupt row + observable failure)
-    is fully verified."""
+    Observable behavior post-F-15:
+      * AUTH_MEMBERSHIP_DENIED is NEVER emitted — helper blocked it
+        BEFORE any aemit_tenant_event_safe call (the load-bearing
+        corrupt-row-prevention contract STILL holds)
+      * ValueError does NOT escape the middleware (B.1 wrapper catches)
+      * HTTP response: 500 with body.error.code == 'internal_error'
+        and body.error.message == 'Audit enrichment failed.'
+      * Structured log emitted at ERROR level for traceability"""
     audit_logger.clear_all()
     sm = get_sessionmaker()
 
@@ -1002,23 +1000,28 @@ async def test_middleware_m3_fails_loud_when_exc_details_missing_tenant_id(
     mw_module.bootstrap = _raising_bootstrap_missing_tenant_id
     try:
         app = _make_middleware_app(StubAuthProvider(claims=claims), sm)
-        # The helper's ValueError escapes the middleware dispatch and
-        # surfaces here. The match pattern locks on the helper's
-        # fail-loud error-message shape (from src/audit/_compat.py
-        # to_tenant_audit_event_from_exc).
-        with pytest.raises(
-            ValueError,
-            match=r"has no tenant_id in exc\.details",
-        ):
-            await _get(
-                app, "/probe", headers={"Authorization": "Bearer any"}
-            )
+        # FH-S7.6 B.1 F-15: the M3 wrapper at src/auth/middleware.py:333
+        # catches the helper's ValueError and returns a controlled 500
+        # via _error_response. No exception escapes the middleware.
+        resp = await _get(
+            app, "/probe", headers={"Authorization": "Bearer any"}
+        )
     finally:
         mw_module.bootstrap = original_bootstrap
 
-    # M3's intended AUTH_MEMBERSHIP_DENIED was BLOCKED by helper's
-    # fail-loud guard — no such row should exist. This is THE
-    # corrupt-row-prevention contract.
+    # F-15 contract: controlled 500 (not framework fallthrough, not a
+    # ValueError leak). Body shape per _error_response at line ~89:
+    # {"error": {"code", "message", "details", "correlation_id"}}.
+    assert resp.status_code == 500, resp.text
+    body = resp.json()
+    assert body["error"]["code"] == "internal_error", body
+    assert body["error"]["message"] == "Audit enrichment failed.", body
+
+    # Load-bearing invariant (unchanged by F-15): M3's intended
+    # AUTH_MEMBERSHIP_DENIED was BLOCKED by helper's fail-loud guard
+    # BEFORE any emit could occur — no such row should exist. This is
+    # THE corrupt-row-prevention contract; F-15 only changes how the
+    # caller observes the failure, not whether a corrupt row leaks.
     denied = audit_logger.query_all_events(
         action=AuditActions.AUTH_MEMBERSHIP_DENIED
     )
