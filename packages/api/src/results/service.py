@@ -74,7 +74,14 @@ class DashboardService:
         # Verify the run exists and is accessible (raises 404/403 cleanly)
         await self._runs.get_run(ctx, run_id)
 
-        events = audit_logger.query(
+        # FH-S7.6 B.3 F-16: migrated query() -> query_all_events() per
+        # plan v0.2.1 §6 + Q-8 negative finding. Sync query() reads
+        # only _events; query_all_events reads both sync and async-bound
+        # repository, so this timeline now reflects all run events
+        # regardless of emit path (e.g., runs/service.py:80 async emit
+        # per Slice 8 Pattern B). Contract pinned by B.3.1 test in
+        # tests/test_results_router.py.
+        events = audit_logger.query_all_events(
             tenant_id=ctx.tenant_id,
             workspace_id=ctx.workspace_id,
             resource_id=run_id,
