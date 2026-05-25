@@ -41,7 +41,7 @@ from datetime import timedelta
 
 @pytest.fixture
 def setup():
-    audit_logger.clear()
+    audit_logger.clear_all()
     cmp_repo = InMemoryComparisonRepository()
     run_repo = InMemoryRunRepository()
     cmp_svc = ComparisonService(cmp_repo, RunService(run_repo), provider=None, idempotency=InMemoryIdempotencyStore())

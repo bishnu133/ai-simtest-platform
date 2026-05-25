@@ -71,7 +71,7 @@ def test_update_status_not_in_public_protocol():
 @pytest.mark.asyncio
 async def test_run_state_transition_full_sequence(repo, sample_run, ctx_tenant_a):
     """Happy path: repo update -> audit event -> cache invalidation."""
-    audit_logger.clear()
+    audit_logger.clear_all()
     invalidated: list[str] = []
     set_dashboard_invalidator(lambda run_id: invalidated.append(run_id))
     try:
@@ -84,7 +84,7 @@ async def test_run_state_transition_full_sequence(repo, sample_run, ctx_tenant_a
         assert record.started_at is not None
 
         # Audit event was emitted with the canonical action code
-        events = audit_logger.query(action=AuditActions.RUN_STARTED)
+        events = audit_logger.query_all_events(action=AuditActions.RUN_STARTED)
         assert len(events) == 1
         assert events[0].resource_id == "run_001"
 

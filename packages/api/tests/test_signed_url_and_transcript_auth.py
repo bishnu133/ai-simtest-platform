@@ -29,7 +29,7 @@ def _ctx(tenant: str) -> TenantContext:
 
 @pytest_asyncio.fixture
 async def setup(tmp_path):
-    audit_logger.clear()
+    audit_logger.clear_all()
     storage = LocalFilesystemAdapter(root=str(tmp_path / "s"), bucket="b", signing_secret="x")
     svc = ConversationService(storage)
     ctx_a = _ctx("t_a")
@@ -57,16 +57,16 @@ def test_ownership_pre_check_before_signed_url(setup):
     r = client.get(f"/v1/conversations/{cid}/download-url")
     assert r.status_code == 404
     # Audit MUST NOT contain a download_url_issued event for this attempt
-    events = audit_logger.query(action=AuditActions.CONVERSATION_DOWNLOAD_URL_ISSUED)
+    events = audit_logger.query_all_events(action=AuditActions.CONVERSATION_DOWNLOAD_URL_ISSUED)
     assert len(events) == 0
 
 
 def test_signed_url_audit_event_payload(setup):
     _, client, cid = setup
-    audit_logger.clear()
+    audit_logger.clear_all()
     r = client.get(f"/v1/conversations/{cid}/download-url")
     assert r.status_code == 200
-    events = audit_logger.query(action=AuditActions.CONVERSATION_DOWNLOAD_URL_ISSUED)
+    events = audit_logger.query_all_events(action=AuditActions.CONVERSATION_DOWNLOAD_URL_ISSUED)
     assert len(events) == 1
     assert events[0].resource_type == "conversation"
     assert events[0].resource_id == cid
@@ -75,9 +75,9 @@ def test_signed_url_audit_event_payload(setup):
 
 def test_transcript_view_audit_event_payload(setup):
     _, client, cid = setup
-    audit_logger.clear()
+    audit_logger.clear_all()
     client.get(f"/v1/conversations/{cid}/transcript")
-    events = audit_logger.query(action=AuditActions.CONVERSATION_TRANSCRIPT_VIEWED)
+    events = audit_logger.query_all_events(action=AuditActions.CONVERSATION_TRANSCRIPT_VIEWED)
     assert len(events) == 1
     assert events[0].resource_id == cid
 

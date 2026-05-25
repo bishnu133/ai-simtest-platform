@@ -91,7 +91,7 @@ async def test_factory_built_app_serves_one_authenticated_request_end_to_end_pos
     validated against the real infrastructure boundary that Turn 4.5
     will exercise with Neon + Clerk.
     """
-    audit_logger.clear()
+    audit_logger.clear_all()
 
     # ------------------------------------------------------------------
     # Phase 1 — pre-seed tenant + workspace + membership so we know
@@ -119,7 +119,7 @@ async def test_factory_built_app_serves_one_authenticated_request_end_to_end_pos
     tenant_id = seed_result.tenant_id
     workspace_id = seed_result.workspace_id
 
-    audit_logger.clear()  # discard seed events; focus on the HTTP-request audit
+    audit_logger.clear_all()  # discard seed events; focus on the HTTP-request audit
 
     # ------------------------------------------------------------------
     # Phase 2 — build the factory app. Auth on, real sessionmaker

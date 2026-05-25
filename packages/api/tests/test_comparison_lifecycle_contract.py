@@ -39,7 +39,7 @@ def _ctx_member():
 
 @pytest.fixture
 def setup():
-    audit_logger.clear()
+    audit_logger.clear_all()
     run_repo = InMemoryRunRepository()
     cmp_repo = InMemoryComparisonRepository()
     idem = InMemoryIdempotencyStore()
@@ -134,7 +134,7 @@ def test_eligibility_run_not_completed(setup):
 
 def test_audit_event_emitted_on_create(setup):
     _, client = setup
-    audit_logger.clear()
+    audit_logger.clear_all()
     client.post("/v1/comparisons", json={"left_run_id": "r1", "right_run_id": "r2"})
-    events = audit_logger.query(action="comparison.created")
+    events = audit_logger.query_all_events(action="comparison.created")
     assert len(events) == 1

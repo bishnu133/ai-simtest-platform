@@ -147,7 +147,7 @@ async def test_valid_jwt_for_invalid_tenant_state_returns_409_conflict(
     field and the bootstrap raise-site. Session 2 Step 6.5 shipped
     both; this test is the integration-level proof they work end-to-end.
     """
-    audit_logger.clear()
+    audit_logger.clear_all()
 
     app = _build_factory_app(clean_db, allow_self_serve_provisioning=False)
 
@@ -174,7 +174,7 @@ async def test_valid_jwt_for_invalid_tenant_state_returns_409_conflict(
     assert details.get("reason") == "unknown_org_id_self_serve_disabled"
 
     # --- Audit trail -----------------------------------------------------
-    events = audit_logger.query(
+    events = audit_logger.query_all_events(
         action=AuditActions.AUTH_TENANT_STATE_INVALID
     )
     assert len(events) == 1, (
@@ -237,7 +237,7 @@ membership_denied`` in tests/auth/test_tenant_context_middleware.py
     by running through the real factory composition root instead of
     the minimal _make_app harness. Same invariant; different harness.
     """
-    audit_logger.clear()
+    audit_logger.clear_all()
 
     # --- Step 1: seed first user via bootstrap directly (not via HTTP) ---
     sm = get_sessionmaker()
@@ -254,7 +254,7 @@ membership_denied`` in tests/auth/test_tenant_context_middleware.py
             allow_self_serve_provisioning=True,
         )
 
-    audit_logger.clear()  # discard seed events; focus on the real test path
+    audit_logger.clear_all()  # discard seed events; focus on the real test path
 
     # --- Step 2: build a factory app, let self-serve default for
     # app_env="test" (which is True), then make the denied call ------------
@@ -281,12 +281,12 @@ membership_denied`` in tests/auth/test_tenant_context_middleware.py
     # --- Audit trail -----------------------------------------------------
     # The middleware writes AUTH_MEMBERSHIP_DENIED (not AUTH_REJECTED)
     # for role-mapping failures — the v0.5.1 MF-2 audit contract.
-    denied_events = audit_logger.query(
+    denied_events = audit_logger.query_all_events(
         action=AuditActions.AUTH_MEMBERSHIP_DENIED
     )
     assert len(denied_events) == 1, (
         f"expected 1 AUTH_MEMBERSHIP_DENIED event, got {len(denied_events)}. "
-        f"All events: {[e.action for e in audit_logger._events]}"
+        f"All events: {[e.action for e in audit_logger.query_all_events()]}"
     )
 
     # --- DB state: user_second has no memberships ------------------------
@@ -359,7 +359,7 @@ async def test_cross_tenant_workspace_claim_returns_403_at_endpoint_layer(
     plan wanted, using the guard the live tree actually raises. The
     delivery report documents the substitution.
     """
-    audit_logger.clear()
+    audit_logger.clear_all()
 
     # --- Seed tenant A ---------------------------------------------------
     sm = get_sessionmaker()
@@ -393,7 +393,7 @@ async def test_cross_tenant_workspace_claim_returns_403_at_endpoint_layer(
     # Capture workspace_b for the cross-tenant claim attempt.
     workspace_b_id = result_b.workspace_id
 
-    audit_logger.clear()  # discard seeding events
+    audit_logger.clear_all()  # discard seeding events
 
     # --- Build factory app + make the bad call ---------------------------
     app = _build_factory_app(clean_db, allow_self_serve_provisioning=True)

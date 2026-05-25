@@ -83,9 +83,9 @@ def ctx_tenant_b(actor_bob) -> TenantContext:
 @pytest.fixture(autouse=True)
 def reset_audit_log():
     """Clear the audit log before every test to prevent cross-test pollution."""
-    audit_logger.clear()
+    audit_logger.clear_all()
     yield
-    audit_logger.clear()
+    audit_logger.clear_all()
 
 
 # ---------------------------------------------------------------------------

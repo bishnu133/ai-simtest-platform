@@ -40,7 +40,7 @@ def _ctx(tenant: str, role: str = "member") -> TenantContext:
 
 @pytest.fixture
 def setup():
-    audit_logger.clear()
+    audit_logger.clear_all()
     run_repo = InMemoryRunRepository()
     cmp_repo = InMemoryComparisonRepository()
     run_svc = RunService(run_repo)

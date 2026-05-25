@@ -40,7 +40,7 @@ def ctx_b():
 
 @pytest_asyncio.fixture
 async def app(tmp_path, ctx_a):
-    audit_logger.clear()
+    audit_logger.clear_all()
     storage = LocalFilesystemAdapter(
         root=str(tmp_path / "s"), bucket="b", signing_secret="x"
     )
@@ -146,16 +146,16 @@ def test_get_transcript_returns_redaction_shell(client):
 
 def test_get_transcript_emits_audit_event(client):
     cid = client.get("/v1/conversations").json()["items"][0]["id"]
-    audit_logger.clear()
+    audit_logger.clear_all()
     client.get(f"/v1/conversations/{cid}/transcript")
-    events = audit_logger.query(action=AuditActions.CONVERSATION_TRANSCRIPT_VIEWED)
+    events = audit_logger.query_all_events(action=AuditActions.CONVERSATION_TRANSCRIPT_VIEWED)
     assert len(events) == 1
     assert events[0].resource_id == cid
 
 
 def test_download_url_locked_response_shape_and_audit(client):
     cid = client.get("/v1/conversations").json()["items"][0]["id"]
-    audit_logger.clear()
+    audit_logger.clear_all()
     resp = client.get(f"/v1/conversations/{cid}/download-url")
     assert resp.status_code == 200, resp.text
     body = resp.json()
@@ -171,7 +171,7 @@ def test_download_url_locked_response_shape_and_audit(client):
     assert body["expires_in_seconds"] == 300
     assert body["url"].startswith(("http", "file://"))
 
-    events = audit_logger.query(action=AuditActions.CONVERSATION_DOWNLOAD_URL_ISSUED)
+    events = audit_logger.query_all_events(action=AuditActions.CONVERSATION_DOWNLOAD_URL_ISSUED)
     assert len(events) == 1
 
 

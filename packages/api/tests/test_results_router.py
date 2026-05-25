@@ -43,7 +43,7 @@ def ctx_b(actor) -> TenantContext:
 
 @pytest.fixture
 def app(ctx_a):
-    audit_logger.clear()
+    audit_logger.clear_all()
     run_repo = InMemoryRunRepository()
     artifact_repo = InMemoryDashboardArtifactRepository()
     cache = DashboardCache()
@@ -156,7 +156,7 @@ def test_judges_404_for_unknown_run(client):
 
 
 def test_timeline_filters_to_run_lifecycle_whitelist(client, app, ctx_a):
-    audit_logger.clear()
+    audit_logger.clear_all()
     audit_logger.write(ctx_a, AuditActions.RUN_QUEUED, "run", "run_1")
     audit_logger.write(ctx_a, AuditActions.RUN_STARTED, "run", "run_1")
     audit_logger.write(ctx_a, AuditActions.RUN_COMPLETED, "run", "run_1")
@@ -174,3 +174,102 @@ def test_timeline_cross_tenant_denial(client, app, ctx_b):
     app.state._test_ctx = ctx_b
     resp = client.get("/v1/runs/run_1/timeline")
     assert resp.status_code == 403
+
+
+def test_run_timeline_includes_async_emitted_run_state_events(actor):
+    """FH-S7.6 B.3.1 contract: F-16's query_all_events() migration in
+    src/results/service.py enables the run timeline to surface audit
+    events emitted via the ASYNC path (aemit_tenant_event from
+    runs/service.py:80, Slice 8 Pattern B).
+
+    Pre-B.3 the timeline reader used the sync query() API which (per
+    Q-8 negative finding) reads only sync _events. Async-bound events
+    were invisible, so the timeline silently missed real run-state
+    transitions. Post-B.3 query_all_events() reads BOTH sync _events
+    AND the async-bound InMemoryAuditEventRepository.
+
+    End-to-end path exercised:
+      RunService.transition(ctx, run_id, RUNNING)
+        -> runs/service.py:80 aemit_tenant_event (async)
+        -> bound InMemoryAuditEventRepository
+      GET /v1/runs/{run_id}/timeline
+        -> results/service.py query_all_events (B.3-migrated reader)
+        -> response includes the async-emitted RUN_STARTED event
+
+    Uses UUID-format tenant/workspace IDs to bypass F-18 C5 (Slice 8
+    UUID-parse regression in to_tenant_audit_event). C5 is orthogonal
+    to the F-16 contract being pinned here; the UUID workaround keeps
+    runs/service.py:80 from raising and lets B.3.1 demonstrate F-16
+    correctness in isolation."""
+    import asyncio
+
+    # UUID-format ctx avoids F-18 C5 in runs/service.py:80.
+    tenant_uuid = "00000000-0000-0000-0000-0000000000aa"
+    workspace_uuid = "00000000-0000-0000-0000-0000000000bb"
+
+    ctx_uuid = TenantContext(
+        tenant_id=tenant_uuid,
+        workspace_id=workspace_uuid,
+        actor=actor,
+    )
+
+    # CRITICAL: clear_all (not just .clear()) — Q-8 negative means we
+    # must reset both sync _events and async repository for true clean
+    # state. The existing app fixture in this file uses .clear() which
+    # only resets sync _events; that gets migrated in B.5b.
+    audit_logger.clear_all()
+
+    # Build minimal app: real RunService (so transition exercises the
+    # actual runs/service.py:80 aemit path) + real DashboardService
+    # (so /timeline exercises the B.3-migrated reader).
+    run_repo = InMemoryRunRepository()
+    artifact_repo = InMemoryDashboardArtifactRepository()
+    cache = DashboardCache()
+    run_svc = RunService(run_repo)
+    dash_svc = DashboardService(run_svc, artifact_repo, cache)
+
+    run = RunRecord(
+        run_id="run_b31",
+        tenant_id=tenant_uuid,
+        workspace_id=workspace_uuid,
+        status=RunStatus.QUEUED,
+    )
+
+    loop = asyncio.new_event_loop()
+    try:
+        loop.run_until_complete(run_repo.create(run))
+        # Trigger Slice 8 Pattern B async emit at runs/service.py:80.
+        # _STATUS_TO_AUDIT_ACTION[RUNNING] = RUN_STARTED (whitelisted
+        # in _TIMELINE_ACTION_WHITELIST + resource_type="run" — exactly
+        # what the timeline endpoint surfaces).
+        loop.run_until_complete(
+            run_svc.transitions.transition(ctx_uuid, "run_b31", RunStatus.RUNNING)
+        )
+    finally:
+        loop.close()
+
+    # Test app with ctx_uuid override (mirrors existing fixture pattern
+    # at line ~82 of this file; direct lambda since no mid-test ctx
+    # mutation is needed).
+    test_app = FastAPI()
+    test_app.add_exception_handler(APIError, api_error_handler)
+    test_app.include_router(results_router, prefix="/v1")
+    test_app.dependency_overrides[_get_dashboard_service] = lambda: dash_svc
+    test_app.dependency_overrides[get_tenant_context] = lambda: ctx_uuid
+
+    client = TestClient(test_app)
+    resp = client.get("/v1/runs/run_b31/timeline")
+
+    # Pre-B.3: this response would have events=[] because the
+    # transition's async emit was invisible to sync query().
+    # Post-B.3: query_all_events surfaces the async-bound event.
+    assert resp.status_code == 200, resp.text
+
+    actions = [e["action"] for e in resp.json()["events"]]
+    assert AuditActions.RUN_STARTED in actions, (
+        "F-16 contract violation: run timeline must include the "
+        "RUN_STARTED event emitted via the async path from "
+        "runs/service.py:80. Pre-B.3 sync-only query() would have "
+        f"returned []; post-B.3 query_all_events() should surface it. "
+        f"Got actions: {actions}"
+    )

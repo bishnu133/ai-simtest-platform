@@ -316,16 +316,31 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
                 # tenant_id pulled from exc.details (enriched at
                 # src/auth/authz.py:154). actor_type stays "human" per
                 # §0.1 lock — F-1 backlog tracks system/human review.
-                await audit_logger.aemit_tenant_event_safe(
-                    to_tenant_audit_event_from_exc(
-                        exc=exc,
-                        actor_id=claims.user_id,
-                        action=AuditActions.AUTH_MEMBERSHIP_DENIED,
-                        resource_type="membership",
-                        resource_id=claims.user_id,
-                        metadata={"step": "bootstrap", "reason": exc.code},
+                # FH-S7.6 B.1 F-15: narrow ValueError catch around helper+emit
+                # honors plan v0.2.1 §6.1 contract (ValueError → controlled 500
+                # via _error_response, not framework fallthrough).
+                try:
+                    await audit_logger.aemit_tenant_event_safe(
+                        to_tenant_audit_event_from_exc(
+                            exc=exc,
+                            actor_id=claims.user_id,
+                            action=AuditActions.AUTH_MEMBERSHIP_DENIED,
+                            resource_type="membership",
+                            resource_id=claims.user_id,
+                            metadata={"step": "bootstrap", "reason": exc.code},
+                        )
                     )
-                )
+                except ValueError:
+                    logger.exception(
+                        "M3 audit enrichment failed for NotMemberOfTenant (actor=%s); returning 500",
+                        claims.user_id,
+                    )
+                    return _error_response(
+                        500,
+                        "internal_error",
+                        "Audit enrichment failed.",
+                        details=None,
+                    )
                 return _error_response(
                     exc.http_status,
                     exc.code,
@@ -337,20 +352,36 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
                 # FH-S7.5 §7.2: migrated to async aemit_tenant_event_safe;
                 # tenant_id pulled from exc.details (enriched at
                 # src/workspaces/repository.py:134 + 235 per B.4).
-                await audit_logger.aemit_tenant_event_safe(
-                    to_tenant_audit_event_from_exc(
-                        exc=exc,
-                        actor_id=claims.user_id,
-                        action=AuditActions.AUTH_MEMBERSHIP_DENIED,
-                        resource_type="workspace",
-                        resource_id=claims.workspace_id or "unknown",
-                        metadata={
-                            "step": "bootstrap",
-                            "reason": "cross_tenant_workspace_claim",
-                            "org_id": claims.org_id,
-                        },
+                # FH-S7.6 B.1 F-15: narrow ValueError catch around helper+emit
+                # honors plan v0.2.1 §6.1 contract (ValueError → controlled 500
+                # via _error_response, not framework fallthrough).
+                try:
+                    await audit_logger.aemit_tenant_event_safe(
+                        to_tenant_audit_event_from_exc(
+                            exc=exc,
+                            actor_id=claims.user_id,
+                            action=AuditActions.AUTH_MEMBERSHIP_DENIED,
+                            resource_type="workspace",
+                            resource_id=claims.workspace_id or "unknown",
+                            metadata={
+                                "step": "bootstrap",
+                                "reason": "cross_tenant_workspace_claim",
+                                "org_id": claims.org_id,
+                            },
+                        )
                     )
-                )
+                except ValueError:
+                    logger.exception(
+                        "M4 audit enrichment failed for CrossTenantForbidden (actor=%s, workspace=%s); returning 500",
+                        claims.user_id,
+                        claims.workspace_id or "unknown",
+                    )
+                    return _error_response(
+                        500,
+                        "internal_error",
+                        "Audit enrichment failed.",
+                        details=None,
+                    )
                 return _error_response(
                     exc.http_status,
                     exc.code,
