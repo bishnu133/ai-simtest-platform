@@ -43,7 +43,7 @@ def ctx_b(actor) -> TenantContext:
 
 @pytest.fixture
 def app(ctx_a):
-    audit_logger.clear()
+    audit_logger.clear_all()
     run_repo = InMemoryRunRepository()
     artifact_repo = InMemoryDashboardArtifactRepository()
     cache = DashboardCache()
@@ -156,7 +156,7 @@ def test_judges_404_for_unknown_run(client):
 
 
 def test_timeline_filters_to_run_lifecycle_whitelist(client, app, ctx_a):
-    audit_logger.clear()
+    audit_logger.clear_all()
     audit_logger.write(ctx_a, AuditActions.RUN_QUEUED, "run", "run_1")
     audit_logger.write(ctx_a, AuditActions.RUN_STARTED, "run", "run_1")
     audit_logger.write(ctx_a, AuditActions.RUN_COMPLETED, "run", "run_1")
