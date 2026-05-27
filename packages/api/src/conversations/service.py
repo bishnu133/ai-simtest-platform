@@ -27,7 +27,7 @@ import json
 import uuid
 from typing import Any
 
-from src.audit._compat import to_tenant_audit_event
+from src.audit._compat import to_tenant_audit_event_lenient
 from src.audit.logger import AuditActions, audit_logger
 from src.common.models import TenantContext, utcnow
 from src.conversations.models import (
@@ -148,7 +148,7 @@ class ConversationService:
         await self._summary_repo.upsert(summary)
 
         await audit_logger.aemit_tenant_event_safe(
-            to_tenant_audit_event(
+            to_tenant_audit_event_lenient(
                 ctx,
                 AuditActions.CONVERSATION_STORED,
                 resource_type="conversation",
@@ -212,7 +212,7 @@ class ConversationService:
             )
 
         await audit_logger.aemit_tenant_event_safe(
-            to_tenant_audit_event(
+            to_tenant_audit_event_lenient(
                 ctx,
                 AuditActions.CONVERSATION_FETCHED,
                 resource_type="conversation",
@@ -242,7 +242,7 @@ class ConversationService:
             expires_in=timedelta(seconds=ttl_seconds),
         )
         await audit_logger.aemit_tenant_event_safe(
-            to_tenant_audit_event(
+            to_tenant_audit_event_lenient(
                 ctx,
                 AuditActions.CONVERSATION_FETCHED,
                 resource_type="conversation",
@@ -283,7 +283,7 @@ class ConversationService:
         deleted = len(deleted_summaries)
         if deleted:
             await audit_logger.aemit_tenant_event_safe(
-                to_tenant_audit_event(
+                to_tenant_audit_event_lenient(
                     ctx,
                     AuditActions.CONVERSATION_DELETED,
                     resource_type="conversation",

@@ -22,7 +22,7 @@ from __future__ import annotations
 import logging
 from typing import Callable
 
-from src.audit._compat import to_tenant_audit_event
+from src.audit._compat import to_tenant_audit_event_lenient
 from src.audit.logger import AuditActions, audit_logger
 from src.common.models import TenantContext
 from src.runs.models import RunRecord, RunStatus
@@ -82,7 +82,7 @@ class RunStateTransition:
         # CONSISTENCY_WARNING token is load-bearing and must remain.
         try:
             await audit_logger.aemit_tenant_event(
-                to_tenant_audit_event(
+                to_tenant_audit_event_lenient(
                     ctx,
                     action=_STATUS_TO_AUDIT_ACTION[new_status],
                     resource_type="run",

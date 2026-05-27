@@ -5,6 +5,8 @@ security-review surface for enterprise validation.
 """
 from __future__ import annotations
 
+from uuid import UUID, uuid5
+
 import pytest
 import pytest_asyncio
 from fastapi import FastAPI
@@ -18,6 +20,12 @@ from src.conversations.models import ConversationTranscript, Turn
 from src.conversations.router import _get_conversation_service, router as conv_router
 from src.conversations.service import ConversationService
 from src.storage.local import LocalFilesystemAdapter
+
+
+# Mirrors the locked private _TEST_SENTINEL_NAMESPACE in src/audit/_compat.py
+# per Slice 7.7 charter §13 — lenient helper synthesizes UUID5 from non-UUID
+# sentinels. Re-declared locally to avoid importing a private symbol.
+_TEST_SENTINEL_NAMESPACE = UUID("00000000-0000-0000-0000-000000000001")
 
 
 def _ctx(tenant: str) -> TenantContext:
@@ -70,7 +78,7 @@ def test_signed_url_audit_event_payload(setup):
     assert len(events) == 1
     assert events[0].resource_type == "conversation"
     assert events[0].resource_id == cid
-    assert events[0].tenant_id == "t_a"
+    assert events[0].tenant_id == str(uuid5(_TEST_SENTINEL_NAMESPACE, "t_a"))
 
 
 def test_transcript_view_audit_event_payload(setup):

@@ -5,7 +5,7 @@ import uuid
 from datetime import timedelta
 
 from src.api.errors import APIError
-from src.audit._compat import to_tenant_audit_event
+from src.audit._compat import to_tenant_audit_event_lenient
 from src.audit.logger import AuditActions, audit_logger
 from src.common.models import TenantContext, utcnow
 from src.common.write_context import WriteContext
@@ -154,7 +154,7 @@ class ComparisonService:
 
         # Audit
         await audit_logger.aemit_tenant_event_safe(
-            to_tenant_audit_event(
+            to_tenant_audit_event_lenient(
                 ctx,
                 AuditActions.COMPARISON_CREATED,
                 resource_type="comparison",
@@ -174,7 +174,7 @@ class ComparisonService:
     async def get_comparison(self, ctx: TenantContext, comparison_id: str) -> ComparisonRecord:
         record = await self._repo.get(ctx, comparison_id)
         await audit_logger.aemit_tenant_event_safe(
-            to_tenant_audit_event(
+            to_tenant_audit_event_lenient(
                 ctx,
                 AuditActions.COMPARISON_VIEWED,
                 resource_type="comparison",

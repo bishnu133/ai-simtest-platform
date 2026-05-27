@@ -20,7 +20,7 @@ import json
 import uuid
 from typing import Any
 
-from src.audit._compat import to_tenant_audit_event
+from src.audit._compat import to_tenant_audit_event_lenient
 from src.audit.logger import AuditActions, audit_logger
 from src.common.models import (
     ActorRef,
@@ -251,7 +251,7 @@ class AssetService:
             self._slug_index[slug_key] = asset_id
 
             await audit_logger.aemit_tenant_event_safe(
-                to_tenant_audit_event(
+                to_tenant_audit_event_lenient(
                     ctx,
                     AuditActions.ASSET_CREATED,
                     resource_type="asset",
@@ -391,7 +391,7 @@ class AssetService:
             self._records[self._record_key(ctx, asset_id, version)] = updated
 
             await audit_logger.aemit_tenant_event_safe(
-                to_tenant_audit_event(
+                to_tenant_audit_event_lenient(
                     ctx,
                     AuditActions.ASSET_UPDATED,
                     resource_type="asset",
@@ -437,7 +437,7 @@ class AssetService:
             self._records[self._record_key(ctx, asset_id, new_version)] = new_record
 
             await audit_logger.aemit_tenant_event_safe(
-                to_tenant_audit_event(
+                to_tenant_audit_event_lenient(
                     ctx,
                     AuditActions.ASSET_VERSION_CREATED,
                     resource_type="asset",
@@ -478,7 +478,7 @@ class AssetService:
                 record.changelog = f"{record.changelog}\n\nApproval note: {req.changelog_note}"
 
             await audit_logger.aemit_tenant_event_safe(
-                to_tenant_audit_event(
+                to_tenant_audit_event_lenient(
                     ctx,
                     AuditActions.ASSET_APPROVED,
                     resource_type="asset",
@@ -500,7 +500,7 @@ class AssetService:
             record.updated_at = utcnow()
 
             await audit_logger.aemit_tenant_event_safe(
-                to_tenant_audit_event(
+                to_tenant_audit_event_lenient(
                     ctx,
                     AuditActions.ASSET_DEPRECATED,
                     resource_type="asset",
@@ -559,7 +559,7 @@ class AssetService:
             self._slug_index[slug_key] = new_asset_id
 
             await audit_logger.aemit_tenant_event_safe(
-                to_tenant_audit_event(
+                to_tenant_audit_event_lenient(
                     ctx,
                     AuditActions.ASSET_CLONED,
                     resource_type="asset",

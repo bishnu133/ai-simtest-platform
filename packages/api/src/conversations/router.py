@@ -23,7 +23,7 @@ from pydantic import BaseModel, Field
 
 from src.api.deps import get_tenant_context
 from src.api.errors import APIError, InvalidCursor
-from src.audit._compat import to_tenant_audit_event
+from src.audit._compat import to_tenant_audit_event_lenient
 from src.audit.logger import AuditActions, audit_logger
 from src.common.models import TenantContext, utcnow
 from src.conversations.models import ConversationSummary, ConversationVerdict
@@ -164,7 +164,7 @@ async def get_transcript(
 
     # Audit read-sensitive action (v1.2.2 §11.8)
     await audit_logger.aemit_tenant_event_safe(
-        to_tenant_audit_event(
+        to_tenant_audit_event_lenient(
             ctx,
             action=AuditActions.CONVERSATION_TRANSCRIPT_VIEWED,
             resource_type="conversation",
@@ -204,7 +204,7 @@ async def get_download_url(
         raise SignedUrlUnavailable(f"Could not generate signed URL: {exc}")
 
     await audit_logger.aemit_tenant_event_safe(
-        to_tenant_audit_event(
+        to_tenant_audit_event_lenient(
             ctx,
             action=AuditActions.CONVERSATION_DOWNLOAD_URL_ISSUED,
             resource_type="conversation",
