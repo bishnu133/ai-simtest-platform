@@ -204,12 +204,12 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
                     action=AuditActions.AUTH_REJECTED,
                     actor_id="anonymous",
                     actor_type="human",
+                    resource_type="auth",
+                    resource_id="request",
                     metadata={
                         "step": "extract_bearer",
                         "reason": "missing_bearer_token",
                         "path": path,
-                        "resource_type": "auth",
-                        "resource_id": "request",
                     },
                 )
             )
@@ -235,13 +235,13 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
                     action=AuditActions.AUTH_REJECTED,
                     actor_id="anonymous",
                     actor_type="human",
+                    resource_type="auth",
+                    resource_id="request",
                     metadata={
                         "step": "provider.verify",
                         "reason": exc.code,
                         "provider": self._provider.provider_name,
                         "path": path,
-                        "resource_type": "auth",
-                        "resource_id": "request",
                     },
                 )
             )
@@ -394,11 +394,11 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
                         action=AuditActions.AUTH_REJECTED,
                         actor_id=claims.user_id if claims else "unknown",
                         actor_type="human",
+                        resource_type="workspace",
+                        resource_id=claims.workspace_id or "unknown",
                         metadata={
                             "step": "bootstrap",
                             "reason": "workspace_not_found",
-                            "resource_type": "workspace",
-                            "resource_id": claims.workspace_id or "unknown",
                         },
                     )
                 )
@@ -424,12 +424,12 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
                         action=AuditActions.AUTH_TENANT_STATE_INVALID,
                         actor_id=claims.user_id if claims else "unknown",
                         actor_type="human",
+                        resource_type="tenant",
+                        resource_id=claims.org_id or "unknown",
                         metadata={
                             "step": "bootstrap",
                             "reason": exc.code,
                             "org_id": claims.org_id,
-                            "resource_type": "tenant",
-                            "resource_id": claims.org_id or "unknown",
                             "error_details": exc.details or {},
                         },
                         correlation_id=None,
@@ -462,11 +462,11 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
                         action=AuditActions.AUTH_REJECTED,
                         actor_id=claims.user_id if claims else "unknown",
                         actor_type="human",
+                        resource_type="auth",
+                        resource_id="bootstrap",
                         metadata={
                             "step": "bootstrap",
                             "reason": "tenant_bootstrap_failed",
-                            "resource_type": "auth",
-                            "resource_id": "bootstrap",
                         },
                     )
                 )

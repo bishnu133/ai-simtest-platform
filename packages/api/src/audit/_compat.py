@@ -27,6 +27,8 @@ import logging
 from src.api.errors import APIError
 from src.audit.context import (
     AuditContext,
+    PRETENANT_DEFAULT_RESOURCE_ID,
+    PRETENANT_DEFAULT_RESOURCE_TYPE,
     PretenantAuditEvent,
     TenantAuditEvent,
 )
@@ -80,6 +82,8 @@ def to_pretenant_audit_event(
     actor_type: str,
     metadata: dict[str, Any] | None = None,
     correlation_id: str | None = None,
+    resource_type: str = PRETENANT_DEFAULT_RESOURCE_TYPE,
+    resource_id: str = PRETENANT_DEFAULT_RESOURCE_ID,
 ) -> PretenantAuditEvent:
     """Build a Slice 1 PretenantAuditEvent.
 
@@ -87,21 +91,31 @@ def to_pretenant_audit_event(
       * M1 (middleware.py) — auth.rejected, missing bearer
       * M2 (middleware.py) — auth.rejected, provider.verify failed
       * M5 (middleware.py) — auth.rejected, workspace not found
+      * M6 (middleware.py) — auth.tenant_state_invalid (FH-S7.5 §7.3)
       * M7 (middleware.py) — auth.rejected, generic bootstrap failure
 
     Per Slice 0/4 contract, action must be in PRETENANT_ACTION_ALLOWLIST
-    (currently only "auth.rejected"). Slice 1's PretenantAuditEvent
+    (Slice 7.5 §7.3 widened the allowlist to include
+    "auth.tenant_state_invalid"). Slice 1's PretenantAuditEvent
     __post_init__ validator enforces this — passing a disallowed action
     raises ValueError at construction.
 
-    PretenantAuditEvent has no tenant_id/workspace_id/resource_type/
-    resource_id fields. Callers that want to preserve resource_type and
-    resource_id semantics should fold them into the metadata dict.
+    PretenantAuditEvent has top-level resource_type and resource_id
+    fields (defaults PRETENANT_DEFAULT_RESOURCE_TYPE="auth" and
+    PRETENANT_DEFAULT_RESOURCE_ID="session"). Callers SHOULD pass
+    resource semantics via the resource_type and resource_id kwargs
+    (Slice 7.8 F-20) so they surface as top-level fields on the persisted
+    row rather than being buried in details. The audit_pretenant_insert
+    SECURITY DEFINER function binds both fields as SQL parameters; the
+    test-only query_all_events read path also surfaces them from
+    top-level fields (Slice 7.8 F-26).
     """
     return PretenantAuditEvent(
         action=action,
         actor_id=actor_id,
         actor_type=actor_type,
+        resource_type=resource_type,
+        resource_id=resource_id,
         details=dict(metadata) if metadata else {},
         correlation_id=correlation_id,
     )

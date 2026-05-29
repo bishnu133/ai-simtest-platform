@@ -294,10 +294,10 @@ class AuditLogger:
             in middleware.py M1/M2/M5/M7/M8 and bootstrap.py B1/B2/B3)
 
         Async events are coerced to AuditEvent shape for type-compatible
-        iteration. Pretenant events have empty tenant_id/workspace_id/
-        resource_type/resource_id (those fields don't exist in
-        PretenantAuditEvent — they're folded into details by the
-        _compat helper).
+        iteration. Pretenant events preserve resource_type/resource_id
+        from the PretenantAuditEvent top-level fields (Slice 7.8 F-26);
+        tenant_id/workspace_id remain empty because pretenant events have
+        no tenant/workspace context.
 
         Returns [] from the async path when bound to a non-InMemory
         repository (e.g. PostgresAuditEventRepository). Tests that
@@ -346,8 +346,8 @@ class AuditLogger:
                             actor_type=pretenant_event.actor_type,
                         ),
                         action=pretenant_event.action,
-                        resource_type="",  # not a PretenantAuditEvent field
-                        resource_id="",  # not a PretenantAuditEvent field
+                        resource_type=pretenant_event.resource_type,
+                        resource_id=pretenant_event.resource_id,
                         metadata=dict(pretenant_event.details),
                         correlation_id=pretenant_event.correlation_id,
                     )
