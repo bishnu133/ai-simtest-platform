@@ -181,3 +181,82 @@ async def test_aemit_pretenant_event_persists_row_via_security_definer_end_to_en
         ).one()
     assert row.id == new_id
     assert row.tenant_id is None
+
+
+# ---------------------------------------------------------------------------
+# B.2a (FH-Tier-2-S1): composition-root HTTP wiring regression pin
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_create_app_routes_http_rejected_request_to_bound_audit_repository(
+    pg_url: str,
+):
+    """FH-Tier-2-S1 B.2a: prove create_app's composition root wires the bound
+    audit repository into the live HTTP request path:
+
+        create_app -> TenantContextMiddleware -> audit_logger -> bound repo
+
+    The Slice-6 bind tests assert the bound type but drive no HTTP; the
+    tenant-context middleware tests drive HTTP but hand-build the app via
+    _make_app (not create_app). This closes that gap: a request with no
+    Authorization header hits the middleware Step-1 (extract_bearer) reject
+    branch, which emits an auth.rejected PRETENANT event. We bind a spy repo
+    after create_app and assert the spy received append_pretenant_event over
+    HTTP -- proving the composition-root binding reaches the request path.
+
+    Rejected/pretenant path is deliberate: no tenant resolution/provisioning,
+    fully deterministic. Tenant accepted persistence is covered by the Neon
+    B.0 proof, the repo-level tenant tests, and the middleware tests.
+    """
+    from httpx import ASGITransport, AsyncClient
+
+    from src.app_factory import create_app
+    from src.audit.logger import AuditActions, audit_logger
+    from src.config import AppSettings
+
+    class _SpyAuditEventRepository:
+        """Records calls; returns a uuid so aemit_*_safe stays clean."""
+
+        def __init__(self) -> None:
+            self.tenant_calls: list = []
+            self.pretenant_calls: list = []
+
+        async def append_tenant_event(self, event, *, session=None) -> UUID:
+            self.tenant_calls.append(event)
+            return uuid4()
+
+        async def append_pretenant_event(self, event, *, session=None) -> UUID:
+            self.pretenant_calls.append(event)
+            return uuid4()
+
+    settings = AppSettings(
+        app_env="test",
+        auth_enabled=True,
+        auth_provider="dev",
+        database_url=pg_url,
+        use_postgres_audit_events=False,
+    )
+    app = create_app(settings=settings)
+
+    spy = _SpyAuditEventRepository()
+    saved_repo = audit_logger._audit_repository
+    audit_logger.bind_repository(spy)
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            # No Authorization header -> Step-1 extract_bearer reject branch.
+            resp = await client.get("/v1/conversations")
+    finally:
+        audit_logger.bind_repository(saved_repo)
+
+    assert resp.status_code == 401
+    assert resp.json()["error"]["code"] == "missing_bearer_token"
+
+    # The composition-root-bound repo received the pretenant emit over HTTP.
+    assert len(spy.pretenant_calls) == 1
+    assert len(spy.tenant_calls) == 0
+    emitted = spy.pretenant_calls[0]
+    assert emitted.action == AuditActions.AUTH_REJECTED
+    assert emitted.details.get("reason") == "missing_bearer_token"
+

@@ -156,6 +156,13 @@ def _enforce_production_guardrails(settings: AppSettings) -> None:
                 f"Mixed mode is allowed only in app_env in "
                 f"('development', 'test')."
             )
+        if not settings.use_postgres_audit_events:
+            raise FatalConfigurationError(
+                f"In app_env='{settings.app_env}', use_postgres_audit_events "
+                f"must be True. Durable audit persistence is mandatory in real "
+                f"deployments; in-memory audit silently loses the audit trail. "
+                f"Set use_postgres_audit_events=True (requires database_url)."
+            )
 
 
 def _warn_on_risky_combinations(settings: AppSettings) -> None:

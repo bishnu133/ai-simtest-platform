@@ -276,6 +276,7 @@ async def test_staging_production_requires_comparison_idempotency_coupling(
         database_url=pg_url,
         use_postgres_comparisons=use_pg_cmp,
         use_postgres_idempotency=use_pg_idem,
+        use_postgres_audit_events=True,
     )
     if app_env == "production":
         # Avoid the production-specific auth-provider + auth_enabled
@@ -294,6 +295,53 @@ async def test_staging_production_requires_comparison_idempotency_coupling(
             create_app(settings=AppSettings(**settings_kwargs))
     else:
         # No raise; app constructs successfully
+        app = create_app(settings=AppSettings(**settings_kwargs))
+        assert app is not None
+
+
+# ---------------------------------------------------------------------------
+# Step 4 — audit-persistence guardrail (FH-Tier-2-S1 B.1)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "app_env,use_pg_audit,should_raise",
+    [
+        ("production", False, True),
+        ("staging", False, True),
+        ("staging", True, False),
+        ("test", False, False),
+    ],
+)
+async def test_staging_production_requires_audit_persistence(
+    pg_url: str,
+    app_env: str,
+    use_pg_audit: bool,
+    should_raise: bool,
+) -> None:
+    """FH-Tier-2-S1 B.1: in staging/production, use_postgres_audit_events must
+    be True (durable audit is mandatory in real deployments). In dev/test the
+    guard does not apply. cmp/idem are left at default (both False) so R-8 is
+    satisfied and the audit guard is the only failure mode under test.
+    """
+    settings_kwargs = dict(
+        app_env=app_env,
+        database_url=pg_url,
+        use_postgres_audit_events=use_pg_audit,
+    )
+    if app_env == "production":
+        settings_kwargs.update(
+            auth_enabled=True,
+            auth_provider="clerk",
+            clerk_jwks_url="https://example.test/jwks",
+            clerk_issuer="https://example.test",
+            clerk_audience="aud",
+        )
+
+    if should_raise:
+        with pytest.raises(FatalConfigurationError, match="use_postgres_audit_events"):
+            create_app(settings=AppSettings(**settings_kwargs))
+    else:
         app = create_app(settings=AppSettings(**settings_kwargs))
         assert app is not None
 

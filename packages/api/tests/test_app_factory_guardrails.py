@@ -273,10 +273,19 @@ def test_risky_combination_emits_startup_warning(caplog, monkeypatch):
         clerk_jwks_url="https://example.clerk.dev/.well-known/jwks.json",
         clerk_issuer="https://example.clerk.dev",
         clerk_audience="https://api.example.com",
+        use_postgres_audit_events=True,  # B.1: staging/prod requires durable audit
         allow_self_serve_provisioning=True,  # the risky override
     )
     # Derivation invariant: the explicit True survived.
     assert settings.allow_self_serve_provisioning is True
+
+    # B.1: with use_postgres_audit_events=True, create_app binds the PG audit
+    # repo into the audit_logger singleton. Pin it via monkeypatch so any bind
+    # is auto-restored at teardown and cannot leak to sibling tests.
+    from src.audit.logger import audit_logger
+    monkeypatch.setattr(
+        audit_logger, "_audit_repository", audit_logger._audit_repository
+    )
 
     with caplog.at_level(logging.WARNING, logger="src.app_factory"):
         # create_app may raise on downstream integration points (Clerk
