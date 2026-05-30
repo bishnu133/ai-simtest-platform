@@ -82,6 +82,9 @@ class ComparisonRecord(BaseModel):
 class CreateComparisonRequest(BaseModel):
     left_run_id: str
     right_run_id: str
+    # FH-Tier-2 Slice 2: user-supplied config. Plain dict at the boundary;
+    # secret-key rejection happens in the router (Design B) where ctx exists.
+    config: dict[str, Any] = Field(default_factory=dict)
 
 
 class ComparisonListResponse(BaseModel):

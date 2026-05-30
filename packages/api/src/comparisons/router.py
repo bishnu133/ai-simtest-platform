@@ -16,7 +16,10 @@ from typing import Any
 from fastapi import APIRouter, Depends, Header, Request, Response, status
 
 from src.api.deps import get_tenant_context, require_role
-from src.api.errors import APIError, InvalidCursor
+from src.api.errors import APIError, InvalidCursor, SecretLeakRejected
+from src.audit._compat import to_tenant_audit_event_lenient
+from src.audit.logger import AuditActions, audit_logger
+from src.secrets.denylist import SecretLeakDetected, check_no_secrets
 from src.common.models import TenantContext
 from src.comparisons.models import (
     ComparisonListResponse,
@@ -61,6 +64,27 @@ async def create_comparison(
     svc: ComparisonService = Depends(_get_comparison_service),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
+    # FH-Tier-2 Slice 2 (Design B): reject secret-shaped config at the HTTP
+    # boundary BEFORE any business workflow. ctx is resolved here, so the
+    # event is tenant-scoped; safe-emit keeps the response 422 even if audit
+    # persistence fails.
+    try:
+        check_no_secrets(body.config)
+    except SecretLeakDetected as leak:
+        await audit_logger.aemit_tenant_event_safe(
+            to_tenant_audit_event_lenient(
+                ctx,
+                AuditActions.COMPARISON_CREATE_REJECTED_SECRET_LEAK,
+                resource_type="comparison",
+                resource_id="comparison:create",
+                metadata={"field_path": leak.field_path, "reason": "secret_leak_detected"},
+            )
+        )
+        raise SecretLeakRejected(
+            "Comparison config contains a denylisted credential-shaped key",
+            details={"field_path": leak.field_path},
+        )
+
     try:
         record = await svc.create_comparison(
             ctx, body.left_run_id, body.right_run_id, idempotency_key=idempotency_key

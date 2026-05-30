@@ -55,6 +55,7 @@ class ErrorCodes:
     # row exists in a state inconsistent with the bootstrap flow) rather
     # than membership-shaped.
     TENANT_STATE_INVALID = "tenant_state_invalid"
+    SECRET_LEAK_DETECTED = "secret_leak_detected"
 
 
 # ---------------------------------------------------------------------------
@@ -168,6 +169,18 @@ class DuplicateMembership(APIError):
 
     code = ErrorCodes.DUPLICATE_MEMBERSHIP
     http_status = status.HTTP_409_CONFLICT
+
+
+class SecretLeakRejected(APIError):
+    """Raised when user-supplied JSONB (e.g. comparison ``config``) contains a
+    denylisted credential-shaped key. Rejected at the HTTP boundary before any
+    business workflow starts (FH-Tier-2 Slice 2, reject-only). The offending
+    dotted key path travels in ``details["field_path"]`` (never the value) and
+    is rendered as 422 by the existing ``api_error_handler``.
+    """
+
+    code = ErrorCodes.SECRET_LEAK_DETECTED
+    http_status = status.HTTP_422_UNPROCESSABLE_CONTENT
 
 
 class TenantContextMissing(APIError):

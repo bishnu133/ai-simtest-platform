@@ -173,3 +173,50 @@ def test_regression_signals_cross_tenant_denial(setup):
     app.state._test_ctx = _ctx("t_b")
     r = client.get(f"/v1/comparisons/{cid}/regression-signals")
     assert r.status_code == 403
+
+
+# --- FH-Tier-2 Slice 2: secret-leak reject at the HTTP boundary (additive) ---
+
+def test_create_secret_config_rejected_422(setup):
+    app, client = setup
+    resp = client.post(
+        "/v1/comparisons",
+        json={"left_run_id": "r1", "right_run_id": "r2", "config": {"api_key": "sk_live_x"}},
+    )
+    assert resp.status_code == 422
+    body = resp.json()
+    assert body["error"]["code"] == "secret_leak_detected"
+    assert body["error"]["details"]["field_path"] == "api_key"
+
+
+def test_create_secret_config_emits_audit(setup):
+    app, client = setup
+    client.post(
+        "/v1/comparisons",
+        json={"left_run_id": "r1", "right_run_id": "r2", "config": {"api_key": "sk_live_x"}},
+    )
+    leak = [e for e in audit_logger.query_all_events()
+            if e.action == "comparison.create_rejected_secret_leak"]
+    assert len(leak) == 1
+    assert leak[0].resource_id == "comparison:create"
+
+
+def test_create_secret_config_does_not_call_service(setup):
+    from unittest.mock import AsyncMock
+    app, client = setup
+    app.state._svc.create_comparison = AsyncMock()
+    resp = client.post(
+        "/v1/comparisons",
+        json={"left_run_id": "r1", "right_run_id": "r2", "config": {"password": "hunter2"}},
+    )
+    assert resp.status_code == 422
+    app.state._svc.create_comparison.assert_not_called()
+
+
+def test_create_clean_config_succeeds_201(setup):
+    app, client = setup
+    resp = client.post(
+        "/v1/comparisons",
+        json={"left_run_id": "r1", "right_run_id": "r2", "config": {"threshold": 0.8}},
+    )
+    assert resp.status_code == 201
