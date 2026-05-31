@@ -274,6 +274,18 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
                 "Internal error verifying credentials.",
             )
 
+        # ----- FH-Tier-2 Slice 3: provider-agnostic workspace selector -
+        # If the request carries an X-Workspace-Id header, route it through
+        # the existing claims.workspace_id validation path: bootstrap checks
+        # workspace-belongs-to-tenant + membership; repos enforce via ctx.
+        # Header absent -> unchanged default-workspace behavior. This canonical
+        # header overrides any provider-set workspace_id (e.g. dev X-Dev-*).
+        requested_workspace_id = request.headers.get("X-Workspace-Id")
+        if requested_workspace_id and requested_workspace_id.strip():
+            claims = claims.model_copy(
+                update={"workspace_id": requested_workspace_id.strip()}
+            )
+
         # ----- Steps 3 + 4: bootstrap (tenant + workspace + membership) --
         # bootstrap() owns its own transaction via `async with session.begin()`.
         # We open a session scoped to this middleware call and close it on

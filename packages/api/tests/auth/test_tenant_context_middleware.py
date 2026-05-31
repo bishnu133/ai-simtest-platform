@@ -307,3 +307,54 @@ async def test_tenant_context_attached_to_request_state(clean_db: str) -> None:
     assert body["workspace_id"]
     assert body["actor_id"] == "user_statetest"
     assert body["role"] == "owner"
+
+
+# ---------------------------------------------------------------------------
+# FH-Tier-2 Slice 3 — X-Workspace-Id provider-agnostic workspace selector
+# ---------------------------------------------------------------------------
+
+
+async def test_x_workspace_id_absent_uses_default_workspace(clean_db: str) -> None:
+    """No X-Workspace-Id header -> default workspace resolved (unchanged path)."""
+    audit_logger.clear_all()
+    sm = get_sessionmaker()
+    claims = VerifiedClaims(
+        user_id="user_ws_default",
+        org_id="org_ws_default",
+        provider_org_role="admin",
+        display_name="WS Default",
+    )
+    app = _make_app(StubAuthProvider(claims=claims), sm)
+    resp = await _get(app, "/probe", headers={"Authorization": "Bearer any"})
+    assert resp.status_code == 200
+    assert resp.json()["workspace_id"]  # bootstrapped default, non-empty
+
+
+async def test_x_workspace_id_nonexistent_returns_404(clean_db: str) -> None:
+    """X-Workspace-Id pointing at a nonexistent workspace is routed through
+    bootstrap validation and rejected 404 -- proving the header is read and
+    validated, not silently ignored."""
+    audit_logger.clear_all()
+    sm = get_sessionmaker()
+    claims = VerifiedClaims(
+        user_id="user_ws_404",
+        org_id="org_ws_404",
+        provider_org_role="admin",
+        display_name="WS 404",
+    )
+    # Seed tenant + default workspace + membership so the ONLY failing
+    # variable on the next call is the (invalid) workspace selector.
+    async with sm() as s:
+        await bootstrap(s, claims)
+    audit_logger.clear_all()
+    app = _make_app(StubAuthProvider(claims=claims), sm)
+    resp = await _get(
+        app,
+        "/probe",
+        headers={
+            "Authorization": "Bearer any",
+            "X-Workspace-Id": "00000000-0000-0000-0000-000000000000",
+        },
+    )
+    assert resp.status_code == 404
+    assert resp.json()["error"]["code"] == "workspace_not_found"
