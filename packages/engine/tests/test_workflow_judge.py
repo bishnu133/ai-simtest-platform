@@ -9,7 +9,7 @@ critical failure fields, applicability.
 import asyncio, tempfile
 from pathlib import Path
 import pytest, yaml
-from src.workflow_judge import (
+from ai_simtest_engine.workflow_judge import (
     BUILT_IN_WORKFLOWS, ConditionResult, ConditionStatus, EvaluationMode, FunctionalJudge,
     HardRule, HardRuleResult, HardRuleType, LLMWorkflowEvaluator, MatchType, OrderMode,
     RuleEngine, RuleSeverity, StepResult, SuccessCondition, TurnViolation,

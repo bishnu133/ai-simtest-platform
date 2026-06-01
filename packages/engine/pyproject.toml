@@ -74,7 +74,7 @@ dev = [
 ]
 
 [project.scripts]
-simtest = "src.cli:main"
+simtest = "ai_simtest_engine.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/bishnu133/ai-simtest"
@@ -83,7 +83,7 @@ Issues = "https://github.com/bishnu133/ai-simtest/issues"
 Documentation = "https://github.com/bishnu133/ai-simtest#readme"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src"]
+packages = ["ai_simtest_engine"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

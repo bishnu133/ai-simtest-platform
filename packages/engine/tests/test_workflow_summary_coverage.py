@@ -167,40 +167,40 @@ class TestWorkflowSummaryPanelInjection:
     """Test injecting workflow summary into HTML report top-level."""
 
     def test_basic_injection_succeeds(self, tmp_html, sample_exports):
-        from src.workflow_judge.workflow_summary_panel import inject_workflow_summary_into_report
+        from ai_simtest_engine.workflow_judge.workflow_summary_panel import inject_workflow_summary_into_report
         result = inject_workflow_summary_into_report(tmp_html, sample_exports)
         assert result is True
 
     def test_stat_cards_injected(self, tmp_html, sample_exports):
-        from src.workflow_judge.workflow_summary_panel import inject_workflow_summary_into_report
+        from ai_simtest_engine.workflow_judge.workflow_summary_panel import inject_workflow_summary_into_report
         inject_workflow_summary_into_report(tmp_html, sample_exports)
         content = tmp_html.read_text()
         assert "Workflow Pass Rate" in content
         assert "Workflow Violations" in content
 
     def test_compliance_banner_injected(self, tmp_html, sample_exports):
-        from src.workflow_judge.workflow_summary_panel import inject_workflow_summary_into_report
+        from ai_simtest_engine.workflow_judge.workflow_summary_panel import inject_workflow_summary_into_report
         inject_workflow_summary_into_report(tmp_html, sample_exports)
         content = tmp_html.read_text()
         assert "WorkflowSummaryPanel" in content
         assert "workflow(s) evaluated" in content
 
     def test_chart_injected(self, tmp_html, sample_exports):
-        from src.workflow_judge.workflow_summary_panel import inject_workflow_summary_into_report
+        from ai_simtest_engine.workflow_judge.workflow_summary_panel import inject_workflow_summary_into_report
         inject_workflow_summary_into_report(tmp_html, sample_exports)
         content = tmp_html.read_text()
         assert "workflowOverviewChart" in content
         assert "Workflow Scores" in content
 
     def test_chart_js_code_injected(self, tmp_html, sample_exports):
-        from src.workflow_judge.workflow_summary_panel import inject_workflow_summary_into_report
+        from ai_simtest_engine.workflow_judge.workflow_summary_panel import inject_workflow_summary_into_report
         inject_workflow_summary_into_report(tmp_html, sample_exports)
         content = tmp_html.read_text()
         assert "Workflow Overview Chart" in content
         assert "workflowOverviewChart" in content
 
     def test_idempotent_second_injection_skipped(self, tmp_html, sample_exports):
-        from src.workflow_judge.workflow_summary_panel import inject_workflow_summary_into_report
+        from ai_simtest_engine.workflow_judge.workflow_summary_panel import inject_workflow_summary_into_report
         inject_workflow_summary_into_report(tmp_html, sample_exports)
         content_first = tmp_html.read_text()
         result = inject_workflow_summary_into_report(tmp_html, sample_exports)
@@ -209,38 +209,38 @@ class TestWorkflowSummaryPanelInjection:
         assert content_first == content_second
 
     def test_nonexistent_file_returns_false(self, tmp_path, sample_exports):
-        from src.workflow_judge.workflow_summary_panel import inject_workflow_summary_into_report
+        from ai_simtest_engine.workflow_judge.workflow_summary_panel import inject_workflow_summary_into_report
         result = inject_workflow_summary_into_report(tmp_path / "nope.html", sample_exports)
         assert result is False
 
     def test_empty_exports_returns_false(self, tmp_html):
-        from src.workflow_judge.workflow_summary_panel import inject_workflow_summary_into_report
+        from ai_simtest_engine.workflow_judge.workflow_summary_panel import inject_workflow_summary_into_report
         result = inject_workflow_summary_into_report(tmp_html, [])
         assert result is False
 
     def test_all_passed_shows_green_status(self, tmp_html):
-        from src.workflow_judge.workflow_summary_panel import inject_workflow_summary_into_report
+        from ai_simtest_engine.workflow_judge.workflow_summary_panel import inject_workflow_summary_into_report
         exports = _sample_workflow_exports(1, 5, 1.0)
         inject_workflow_summary_into_report(tmp_html, exports)
         content = tmp_html.read_text()
         assert "ALL WORKFLOWS PASSED" in content
 
     def test_partial_shows_warning_status(self, tmp_html):
-        from src.workflow_judge.workflow_summary_panel import inject_workflow_summary_into_report
+        from ai_simtest_engine.workflow_judge.workflow_summary_panel import inject_workflow_summary_into_report
         exports = _sample_workflow_exports(1, 5, 0.6)
         inject_workflow_summary_into_report(tmp_html, exports)
         content = tmp_html.read_text()
         assert "PARTIAL COMPLIANCE" in content
 
     def test_all_failed_shows_red_status(self, tmp_html):
-        from src.workflow_judge.workflow_summary_panel import inject_workflow_summary_into_report
+        from ai_simtest_engine.workflow_judge.workflow_summary_panel import inject_workflow_summary_into_report
         exports = _sample_workflow_exports(1, 5, 0.0)
         inject_workflow_summary_into_report(tmp_html, exports)
         content = tmp_html.read_text()
         assert "ALL WORKFLOWS FAILED" in content
 
     def test_critical_violations_shows_alert(self, tmp_html):
-        from src.workflow_judge.workflow_summary_panel import inject_workflow_summary_into_report
+        from ai_simtest_engine.workflow_judge.workflow_summary_panel import inject_workflow_summary_into_report
         exports = _sample_workflow_exports(1, 5, 0.4)
         exports[0]["critical_failures"] = 3
         inject_workflow_summary_into_report(tmp_html, exports)
@@ -248,7 +248,7 @@ class TestWorkflowSummaryPanelInjection:
         assert "CRITICAL VIOLATIONS" in content
 
     def test_multi_workflow_names_displayed(self, tmp_html, multi_workflow_exports):
-        from src.workflow_judge.workflow_summary_panel import inject_workflow_summary_into_report
+        from ai_simtest_engine.workflow_judge.workflow_summary_panel import inject_workflow_summary_into_report
         inject_workflow_summary_into_report(tmp_html, multi_workflow_exports)
         content = tmp_html.read_text()
         assert "Test Workflow 1" in content
@@ -256,7 +256,7 @@ class TestWorkflowSummaryPanelInjection:
         assert "Test Workflow 3" in content
 
     def test_multi_workflow_chart_has_multiple_bars(self, tmp_html, multi_workflow_exports):
-        from src.workflow_judge.workflow_summary_panel import inject_workflow_summary_into_report
+        from ai_simtest_engine.workflow_judge.workflow_summary_panel import inject_workflow_summary_into_report
         inject_workflow_summary_into_report(tmp_html, multi_workflow_exports)
         content = tmp_html.read_text()
         # Chart labels should have all 3 workflow names
@@ -265,7 +265,7 @@ class TestWorkflowSummaryPanelInjection:
         assert '"Test Workflow 3"' in content
 
     def test_pass_rate_calculation_correct(self, tmp_html):
-        from src.workflow_judge.workflow_summary_panel import inject_workflow_summary_into_report
+        from ai_simtest_engine.workflow_judge.workflow_summary_panel import inject_workflow_summary_into_report
         exports = [{"workflow": "WF", "domain": "test", "total_conversations": 10,
                      "passed": 7, "failed": 3, "avg_score": 0.75, "critical_failures": 0}]
         inject_workflow_summary_into_report(tmp_html, exports)
@@ -273,7 +273,7 @@ class TestWorkflowSummaryPanelInjection:
         assert "70%" in content  # 7/10
 
     def test_html_escaping_in_workflow_names(self, tmp_html):
-        from src.workflow_judge.workflow_summary_panel import inject_workflow_summary_into_report
+        from ai_simtest_engine.workflow_judge.workflow_summary_panel import inject_workflow_summary_into_report
         exports = [{"workflow": "<script>alert('xss')</script>", "domain": "test",
                      "total_conversations": 5, "passed": 5, "failed": 0,
                      "avg_score": 0.9, "critical_failures": 0}]
@@ -283,7 +283,7 @@ class TestWorkflowSummaryPanelInjection:
         assert "&lt;script&gt;" in content
 
     def test_preserves_original_stat_cards(self, tmp_html, sample_exports):
-        from src.workflow_judge.workflow_summary_panel import inject_workflow_summary_into_report
+        from ai_simtest_engine.workflow_judge.workflow_summary_panel import inject_workflow_summary_into_report
         inject_workflow_summary_into_report(tmp_html, sample_exports)
         content = tmp_html.read_text()
         assert "Personas" in content
@@ -292,14 +292,14 @@ class TestWorkflowSummaryPanelInjection:
         assert "Pass Rate" in content
 
     def test_preserves_original_charts(self, tmp_html, sample_exports):
-        from src.workflow_judge.workflow_summary_panel import inject_workflow_summary_into_report
+        from ai_simtest_engine.workflow_judge.workflow_summary_panel import inject_workflow_summary_into_report
         inject_workflow_summary_into_report(tmp_html, sample_exports)
         content = tmp_html.read_text()
         assert "judgeChart" in content
         assert "labelChart" in content
 
     def test_banner_placed_before_charts(self, tmp_html, sample_exports):
-        from src.workflow_judge.workflow_summary_panel import inject_workflow_summary_into_report
+        from ai_simtest_engine.workflow_judge.workflow_summary_panel import inject_workflow_summary_into_report
         inject_workflow_summary_into_report(tmp_html, sample_exports)
         content = tmp_html.read_text()
         banner_pos = content.find("WorkflowSummaryPanel")
@@ -311,41 +311,41 @@ class TestWorkflowSummaryHelpers:
     """Test helper functions."""
 
     def test_score_class_pass(self):
-        from src.workflow_judge.workflow_summary_panel import _score_class
+        from ai_simtest_engine.workflow_judge.workflow_summary_panel import _score_class
         assert _score_class(0.85) == "pass"
         assert _score_class(0.80) == "pass"
 
     def test_score_class_warn(self):
-        from src.workflow_judge.workflow_summary_panel import _score_class
+        from ai_simtest_engine.workflow_judge.workflow_summary_panel import _score_class
         assert _score_class(0.65) == "warn"
         assert _score_class(0.50) == "warn"
 
     def test_score_class_fail(self):
-        from src.workflow_judge.workflow_summary_panel import _score_class
+        from ai_simtest_engine.workflow_judge.workflow_summary_panel import _score_class
         assert _score_class(0.3) == "fail"
         assert _score_class(0.0) == "fail"
 
     def test_score_color_pass(self):
-        from src.workflow_judge.workflow_summary_panel import _score_color
+        from ai_simtest_engine.workflow_judge.workflow_summary_panel import _score_color
         assert _score_color(0.9) == "#6ee7b7"
 
     def test_score_color_warn(self):
-        from src.workflow_judge.workflow_summary_panel import _score_color
+        from ai_simtest_engine.workflow_judge.workflow_summary_panel import _score_color
         assert _score_color(0.6) == "#fbbf24"
 
     def test_score_color_fail(self):
-        from src.workflow_judge.workflow_summary_panel import _score_color
+        from ai_simtest_engine.workflow_judge.workflow_summary_panel import _score_color
         assert _score_color(0.2) == "#f87171"
 
     def test_find_stats_row_closing(self):
-        from src.workflow_judge.workflow_summary_panel import _find_stats_row_closing
+        from ai_simtest_engine.workflow_judge.workflow_summary_panel import _find_stats_row_closing
         html = '<div class="stats-row"><div class="stat-card">X</div><div class="stat-card">Y</div></div>'
         pos = _find_stats_row_closing(html)
         assert pos > 0
         assert html[pos:pos + 6] == "</div>"
 
     def test_find_closing_div_nested(self):
-        from src.workflow_judge.workflow_summary_panel import _find_closing_div
+        from ai_simtest_engine.workflow_judge.workflow_summary_panel import _find_closing_div
         html = '<div class="outer"><div class="inner">A</div><div class="inner2">B</div></div>'
         pos = _find_closing_div(html, html.find("outer"))
         assert pos > 0
@@ -362,13 +362,13 @@ class TestWorkflowCoverageAnalysis:
     """Test workflow step coverage analysis."""
 
     def test_empty_exports_returns_zero_coverage(self):
-        from src.coverage.workflow_coverage import analyze_workflow_coverage
+        from ai_simtest_engine.coverage.workflow_coverage import analyze_workflow_coverage
         wc = analyze_workflow_coverage([])
         assert wc.score == 0.0
         assert wc.total_steps_defined == 0
 
     def test_single_workflow_basic_metrics(self, sample_exports):
-        from src.coverage.workflow_coverage import analyze_workflow_coverage
+        from ai_simtest_engine.coverage.workflow_coverage import analyze_workflow_coverage
         wc = analyze_workflow_coverage(sample_exports)
         assert wc.total_conversations == 5
         assert wc.total_passed == 4
@@ -376,18 +376,18 @@ class TestWorkflowCoverageAnalysis:
         assert len(wc.workflows_evaluated) == 1
 
     def test_workflow_pass_rate(self, sample_exports):
-        from src.coverage.workflow_coverage import analyze_workflow_coverage
+        from ai_simtest_engine.coverage.workflow_coverage import analyze_workflow_coverage
         wc = analyze_workflow_coverage(sample_exports)
         assert wc.workflow_pass_rate == pytest.approx(0.8, abs=0.01)
 
     def test_step_details_populated(self, sample_exports):
-        from src.coverage.workflow_coverage import analyze_workflow_coverage
+        from ai_simtest_engine.coverage.workflow_coverage import analyze_workflow_coverage
         wc = analyze_workflow_coverage(sample_exports)
         assert wc.total_steps_defined > 0
         assert len(wc.step_details) > 0
 
     def test_step_completion_rates(self, sample_exports):
-        from src.coverage.workflow_coverage import analyze_workflow_coverage
+        from ai_simtest_engine.coverage.workflow_coverage import analyze_workflow_coverage
         wc = analyze_workflow_coverage(sample_exports)
         # Greeting should be completed in all conversations
         greeting_steps = [s for s in wc.step_details if "Greeting" in s.step_name]
@@ -395,7 +395,7 @@ class TestWorkflowCoverageAnalysis:
         assert greeting_steps[0].completion_rate == 1.0
 
     def test_partially_exercised_steps(self, sample_exports):
-        from src.coverage.workflow_coverage import analyze_workflow_coverage
+        from ai_simtest_engine.coverage.workflow_coverage import analyze_workflow_coverage
         wc = analyze_workflow_coverage(sample_exports)
         # Confirm Resolution is missed in 1/5 conversations
         confirm_steps = [s for s in wc.step_details if "Confirm" in s.step_name]
@@ -404,7 +404,7 @@ class TestWorkflowCoverageAnalysis:
         assert confirm_steps[0].times_completed == 4
 
     def test_optional_step_tracked(self, sample_exports):
-        from src.coverage.workflow_coverage import analyze_workflow_coverage
+        from ai_simtest_engine.coverage.workflow_coverage import analyze_workflow_coverage
         wc = analyze_workflow_coverage(sample_exports)
         followup = [s for s in wc.step_details if "Follow" in s.step_name]
         assert len(followup) == 1
@@ -412,7 +412,7 @@ class TestWorkflowCoverageAnalysis:
         assert followup[0].times_partial > 0
 
     def test_never_exercised_steps_detected(self):
-        from src.coverage.workflow_coverage import analyze_workflow_coverage
+        from ai_simtest_engine.coverage.workflow_coverage import analyze_workflow_coverage
         exports = [{
             "workflow": "WF", "domain": "test",
             "total_conversations": 3, "passed": 0, "failed": 3,
@@ -430,20 +430,20 @@ class TestWorkflowCoverageAnalysis:
         assert "B" in wc.never_exercised_steps or wc.steps_never_exercised > 0
 
     def test_multi_workflow_aggregation(self, multi_workflow_exports):
-        from src.coverage.workflow_coverage import analyze_workflow_coverage
+        from ai_simtest_engine.coverage.workflow_coverage import analyze_workflow_coverage
         wc = analyze_workflow_coverage(multi_workflow_exports)
         assert len(wc.workflows_evaluated) == 3
         assert wc.total_conversations == 21  # 3 workflows × 7 conversations
 
     def test_score_ranges_valid(self, sample_exports):
-        from src.coverage.workflow_coverage import analyze_workflow_coverage
+        from ai_simtest_engine.coverage.workflow_coverage import analyze_workflow_coverage
         wc = analyze_workflow_coverage(sample_exports)
         assert 0.0 <= wc.score <= 1.0
         assert 0.0 <= wc.step_coverage_score <= 1.0
         assert 0.0 <= wc.workflow_pass_rate <= 1.0
 
     def test_critical_failures_tracked(self):
-        from src.coverage.workflow_coverage import analyze_workflow_coverage
+        from ai_simtest_engine.coverage.workflow_coverage import analyze_workflow_coverage
         exports = [{
             "workflow": "WF", "domain": "test",
             "total_conversations": 5, "passed": 2, "failed": 3,
@@ -454,14 +454,14 @@ class TestWorkflowCoverageAnalysis:
         assert wc.total_critical == 2
 
     def test_zero_critical_bonus(self, sample_exports):
-        from src.coverage.workflow_coverage import analyze_workflow_coverage
+        from ai_simtest_engine.coverage.workflow_coverage import analyze_workflow_coverage
         wc = analyze_workflow_coverage(sample_exports)
         # No critical failures → 10% bonus applies
         # Score should be higher than without bonus
         assert wc.score > wc.step_coverage_score * 0.60 + wc.workflow_pass_rate * 0.30
 
     def test_skipped_results_excluded(self):
-        from src.coverage.workflow_coverage import analyze_workflow_coverage
+        from ai_simtest_engine.coverage.workflow_coverage import analyze_workflow_coverage
         exports = [{
             "workflow": "WF", "domain": "test",
             "total_conversations": 3, "passed": 1, "failed": 1,
@@ -482,7 +482,7 @@ class TestWorkflowCoverageAnalysis:
         assert a_step[0].total_evaluated == 2  # skipped one excluded
 
     def test_fallback_to_completed_missed_lists(self):
-        from src.coverage.workflow_coverage import analyze_workflow_coverage
+        from ai_simtest_engine.coverage.workflow_coverage import analyze_workflow_coverage
         exports = [{
             "workflow": "WF", "domain": "test",
             "total_conversations": 2, "passed": 1, "failed": 1,
@@ -504,7 +504,7 @@ class TestWorkflowCoverageSerialization:
     """Test to_dict / from_dict round-trip."""
 
     def test_to_dict_has_required_keys(self, sample_exports):
-        from src.coverage.workflow_coverage import analyze_workflow_coverage
+        from ai_simtest_engine.coverage.workflow_coverage import analyze_workflow_coverage
         wc = analyze_workflow_coverage(sample_exports)
         d = wc.to_dict()
         assert "score" in d
@@ -513,7 +513,7 @@ class TestWorkflowCoverageSerialization:
         assert "never_exercised_steps" in d
 
     def test_round_trip_preserves_data(self, sample_exports):
-        from src.coverage.workflow_coverage import analyze_workflow_coverage, WorkflowCoverage
+        from ai_simtest_engine.coverage.workflow_coverage import analyze_workflow_coverage, WorkflowCoverage
         wc = analyze_workflow_coverage(sample_exports)
         d = wc.to_dict()
         wc2 = WorkflowCoverage.from_dict(d)
@@ -523,7 +523,7 @@ class TestWorkflowCoverageSerialization:
         assert len(wc2.step_details) == len(wc.step_details)
 
     def test_step_details_serialization(self, sample_exports):
-        from src.coverage.workflow_coverage import analyze_workflow_coverage, WorkflowCoverage
+        from ai_simtest_engine.coverage.workflow_coverage import analyze_workflow_coverage, WorkflowCoverage
         wc = analyze_workflow_coverage(sample_exports)
         d = wc.to_dict()
         for sd in d["step_details"]:
@@ -536,7 +536,7 @@ class TestWorkflowCoverageFromFiles:
     """Test loading workflow coverage from JSON files on disk."""
 
     def test_load_from_directory(self, tmp_path, sample_exports):
-        from src.coverage.workflow_coverage import load_workflow_coverage_from_exports
+        from ai_simtest_engine.coverage.workflow_coverage import load_workflow_coverage_from_exports
         # Write export files
         for i, exp in enumerate(sample_exports):
             with open(tmp_path / f"workflow_test_{i}.json", "w") as f:
@@ -546,17 +546,17 @@ class TestWorkflowCoverageFromFiles:
         assert wc.total_conversations > 0
 
     def test_no_workflow_files_returns_none(self, tmp_path):
-        from src.coverage.workflow_coverage import load_workflow_coverage_from_exports
+        from ai_simtest_engine.coverage.workflow_coverage import load_workflow_coverage_from_exports
         wc = load_workflow_coverage_from_exports(tmp_path)
         assert wc is None
 
     def test_nonexistent_dir_returns_none(self):
-        from src.coverage.workflow_coverage import load_workflow_coverage_from_exports
+        from ai_simtest_engine.coverage.workflow_coverage import load_workflow_coverage_from_exports
         wc = load_workflow_coverage_from_exports("/nonexistent/path")
         assert wc is None
 
     def test_malformed_json_skipped(self, tmp_path):
-        from src.coverage.workflow_coverage import load_workflow_coverage_from_exports
+        from ai_simtest_engine.coverage.workflow_coverage import load_workflow_coverage_from_exports
         (tmp_path / "workflow_bad.json").write_text("not valid json")
         (tmp_path / "workflow_good.json").write_text(json.dumps(
             _sample_workflow_exports(1, 3, 1.0)[0]
@@ -591,7 +591,7 @@ class TestWorkflowCoverageIntegration:
         return report
 
     def test_inject_adds_workflow_dimension(self, sample_exports):
-        from src.coverage.workflow_coverage import analyze_workflow_coverage, inject_workflow_coverage_into_report
+        from ai_simtest_engine.coverage.workflow_coverage import analyze_workflow_coverage, inject_workflow_coverage_into_report
         wc = analyze_workflow_coverage(sample_exports)
         report = self._make_mock_coverage_report()
         inject_workflow_coverage_into_report(report, wc)
@@ -599,7 +599,7 @@ class TestWorkflowCoverageIntegration:
         assert "workflow" in report.dimension_weights
 
     def test_inject_renormalizes_weights(self, sample_exports):
-        from src.coverage.workflow_coverage import analyze_workflow_coverage, inject_workflow_coverage_into_report
+        from ai_simtest_engine.coverage.workflow_coverage import analyze_workflow_coverage, inject_workflow_coverage_into_report
         wc = analyze_workflow_coverage(sample_exports)
         report = self._make_mock_coverage_report()
         inject_workflow_coverage_into_report(report, wc, weight=0.20)
@@ -607,21 +607,21 @@ class TestWorkflowCoverageIntegration:
         assert total_weight == pytest.approx(1.0, abs=0.01)
 
     def test_inject_workflow_weight_correct(self, sample_exports):
-        from src.coverage.workflow_coverage import analyze_workflow_coverage, inject_workflow_coverage_into_report
+        from ai_simtest_engine.coverage.workflow_coverage import analyze_workflow_coverage, inject_workflow_coverage_into_report
         wc = analyze_workflow_coverage(sample_exports)
         report = self._make_mock_coverage_report()
         inject_workflow_coverage_into_report(report, wc, weight=0.25)
         assert report.dimension_weights["workflow"] == 0.25
 
     def test_inject_preserves_existing_gaps(self, sample_exports):
-        from src.coverage.workflow_coverage import analyze_workflow_coverage, inject_workflow_coverage_into_report
+        from ai_simtest_engine.coverage.workflow_coverage import analyze_workflow_coverage, inject_workflow_coverage_into_report
         wc = analyze_workflow_coverage(sample_exports)
         report = self._make_mock_coverage_report()
         inject_workflow_coverage_into_report(report, wc)
         assert "Some existing gap" in report.gaps
 
     def test_inject_adds_workflow_gaps(self):
-        from src.coverage.workflow_coverage import analyze_workflow_coverage, inject_workflow_coverage_into_report
+        from ai_simtest_engine.coverage.workflow_coverage import analyze_workflow_coverage, inject_workflow_coverage_into_report
         exports = [{
             "workflow": "WF", "domain": "test",
             "total_conversations": 3, "passed": 0, "failed": 3,
@@ -640,7 +640,7 @@ class TestWorkflowCoverageIntegration:
         assert "never exercised" in gap_text or "critical" in gap_text.lower()
 
     def test_inject_updates_overall_coverage(self, sample_exports):
-        from src.coverage.workflow_coverage import analyze_workflow_coverage, inject_workflow_coverage_into_report
+        from ai_simtest_engine.coverage.workflow_coverage import analyze_workflow_coverage, inject_workflow_coverage_into_report
         wc = analyze_workflow_coverage(sample_exports)
         report = self._make_mock_coverage_report()
         old_coverage = report.overall_coverage
@@ -649,7 +649,7 @@ class TestWorkflowCoverageIntegration:
         assert isinstance(report.overall_coverage, float)
 
     def test_inject_adds_recommendations_for_low_coverage(self):
-        from src.coverage.workflow_coverage import analyze_workflow_coverage, inject_workflow_coverage_into_report
+        from ai_simtest_engine.coverage.workflow_coverage import analyze_workflow_coverage, inject_workflow_coverage_into_report
         exports = [{
             "workflow": "WF", "domain": "test",
             "total_conversations": 3, "passed": 0, "failed": 3,
@@ -672,8 +672,8 @@ class TestWorkflowCoverageHTMLSection:
 
     def test_coverage_html_dimensions_include_workflow(self, tmp_path, sample_exports):
         """When workflow data exists, coverage HTML should show workflow dimension."""
-        from src.coverage.workflow_coverage import analyze_workflow_coverage, inject_workflow_coverage_into_report
-        from src.coverage.models import CoverageReport, CoverageGrade
+        from ai_simtest_engine.coverage.workflow_coverage import analyze_workflow_coverage, inject_workflow_coverage_into_report
+        from ai_simtest_engine.coverage.models import CoverageReport, CoverageGrade
 
         # Build a real coverage report
         report = CoverageReport()
@@ -696,7 +696,7 @@ class TestWorkflowCoverageEdgeCases:
     """Edge cases and boundary conditions."""
 
     def test_single_conversation_single_step(self):
-        from src.coverage.workflow_coverage import analyze_workflow_coverage
+        from ai_simtest_engine.coverage.workflow_coverage import analyze_workflow_coverage
         exports = [{
             "workflow": "Simple", "domain": "test",
             "total_conversations": 1, "passed": 1, "failed": 0,
@@ -712,7 +712,7 @@ class TestWorkflowCoverageEdgeCases:
         assert wc.steps_never_exercised == 0
 
     def test_all_steps_missed(self):
-        from src.coverage.workflow_coverage import analyze_workflow_coverage
+        from ai_simtest_engine.coverage.workflow_coverage import analyze_workflow_coverage
         exports = [{
             "workflow": "Bad", "domain": "test",
             "total_conversations": 3, "passed": 0, "failed": 3,
@@ -731,7 +731,7 @@ class TestWorkflowCoverageEdgeCases:
         assert len(wc.never_exercised_steps) == 2
 
     def test_results_missing_step_results_key(self):
-        from src.coverage.workflow_coverage import analyze_workflow_coverage
+        from ai_simtest_engine.coverage.workflow_coverage import analyze_workflow_coverage
         exports = [{
             "workflow": "WF", "domain": "test",
             "total_conversations": 2, "passed": 1, "failed": 1,
@@ -745,7 +745,7 @@ class TestWorkflowCoverageEdgeCases:
         assert wc.total_steps_defined > 0
 
     def test_required_steps_weighted_higher(self):
-        from src.coverage.workflow_coverage import analyze_workflow_coverage
+        from ai_simtest_engine.coverage.workflow_coverage import analyze_workflow_coverage
         # Required step completed, optional missed
         exports = [{
             "workflow": "WF", "domain": "test",
@@ -764,7 +764,7 @@ class TestWorkflowCoverageEdgeCases:
         assert wc.step_coverage_score == pytest.approx(2.0 / 3.0, abs=0.01)
 
     def test_domain_tracking(self):
-        from src.coverage.workflow_coverage import analyze_workflow_coverage
+        from ai_simtest_engine.coverage.workflow_coverage import analyze_workflow_coverage
         exports = [
             {"workflow": "WF1", "domain": "healthcare", "total_conversations": 1,
              "passed": 1, "failed": 0, "avg_score": 1.0, "critical_failures": 0, "results": []},

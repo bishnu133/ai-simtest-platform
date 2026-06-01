@@ -7,15 +7,15 @@ score breakdown, failure taxonomy, needs-review, loader validation.
 """
 import asyncio
 import pytest
-from src.workflow_judge.models import (
+from ai_simtest_engine.workflow_judge.models import (
     BotTurn, FailureCategory, HardRule, HardRuleType, MatchType,
     ScoreBreakdown, StepEvidence, SuccessCondition, WorkflowDefinition,
     WorkflowResult, WorkflowStatus, WorkflowStep, WorkflowStepStatus,
 )
-from src.workflow_judge.judge import FunctionalJudge
-from src.workflow_judge.loader import WorkflowLoadError, WorkflowLoader
-from src.workflow_judge.rule_engine import RuleEngine
-from src.workflow_judge.llm_evaluator import LLMWorkflowEvaluator
+from ai_simtest_engine.workflow_judge.judge import FunctionalJudge
+from ai_simtest_engine.workflow_judge.loader import WorkflowLoadError, WorkflowLoader
+from ai_simtest_engine.workflow_judge.rule_engine import RuleEngine
+from ai_simtest_engine.workflow_judge.llm_evaluator import LLMWorkflowEvaluator
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

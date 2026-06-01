@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 import pytest
 
-from src.core.approval_gate import (
+from ai_simtest_engine.core.approval_gate import (
     APIApprovalGate,
     ApprovalGate,
     AuditEntry,

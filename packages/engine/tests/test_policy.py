@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from src.policy import (
+from ai_simtest_engine.policy import (
     BUILT_IN_POLICIES,
     ComplianceResult,
     ComplianceScorecard,

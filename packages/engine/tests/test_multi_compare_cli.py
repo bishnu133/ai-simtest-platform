@@ -17,8 +17,8 @@ Tests cover:
 ~48 tests across 8 test classes.
 
 IMPORTANT: This file imports CLI functions from the correct module path.
-Your pyproject.toml has: simtest = "src.cli:main"
-So the correct import is: from src.cli import main
+Your pyproject.toml has: simtest = "ai_simtest_engine.cli:main"
+So the correct import is: from ai_simtest_engine.cli import main
 """
 
 import json
@@ -33,8 +33,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 # Robust CLI import — matches your pyproject.toml entry point
 try:
-    from src.cli import main as _cli_main
-    from src.cli import (
+    from ai_simtest_engine.cli import main as _cli_main
+    from ai_simtest_engine.cli import (
         _load_multi_compare_config,
         _resolve_api_keys,
         _print_multi_compare_plan,
@@ -51,7 +51,7 @@ except ImportError:
     )
     CLI_MODULE = "cli"
 
-from src.multi_compare.models import (
+from ai_simtest_engine.multi_compare.models import (
     ComparisonMatrix,
     ComparisonMode,
     CostEfficiency,

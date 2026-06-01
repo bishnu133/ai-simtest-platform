@@ -17,7 +17,7 @@ from click.testing import CliRunner
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src.cli import main
+from ai_simtest_engine.cli import main
 
 
 @pytest.fixture
@@ -145,7 +145,7 @@ class TestRunScenariosFlag:
 class TestScenarioApplication:
     def test_apply_scenarios_round_robin(self):
         """Scenarios should be distributed round-robin across personas."""
-        from src.scenarios import ScenarioLibrary, ScenarioRunner
+        from ai_simtest_engine.scenarios import ScenarioLibrary, ScenarioRunner
 
         lib = ScenarioLibrary()
         lib.load_built_in()
@@ -176,7 +176,7 @@ class TestScenarioApplication:
         assert "Prompt Injection" in personas[3].system_prompt
 
     def test_apply_preserves_original_prompt(self):
-        from src.scenarios import ScenarioLibrary, ScenarioRunner
+        from ai_simtest_engine.scenarios import ScenarioLibrary, ScenarioRunner
 
         lib = ScenarioLibrary()
         lib.load_built_in()

@@ -113,7 +113,7 @@ videos/
 # ----------------------
 # Model / data files (optional)
 # ----------------------
-models/
+/models/
 *.gguf
 *.bin
 *.safetensors

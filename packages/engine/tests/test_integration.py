@@ -20,7 +20,7 @@ from pathlib import Path
 import pytest
 import uvicorn
 
-from src.models import (
+from ai_simtest_engine.models import (
     BotConfig,
     Conversation,
     JudgedConversation,
@@ -154,7 +154,7 @@ class MockLLMClient:
 
 def _make_mock_simulator(max_parallel: int = 2) -> "ConversationSimulator":
     """Create a ConversationSimulator with a mock LLM (no API key needed)."""
-    from src.simulators.conversation_simulator import ConversationSimulator
+    from ai_simtest_engine.simulators.conversation_simulator import ConversationSimulator
     return ConversationSimulator(user_simulator_llm=MockLLMClient(), max_parallel=max_parallel)
 
 
@@ -270,7 +270,7 @@ class TestJudgesIntegration:
     @staticmethod
     async def _try_init_grounding(threshold=0.35):
         """Try to initialize grounding judge; skip test if model download fails (SSL/network)."""
-        from src.judges.grounding_judge import GroundingJudge
+        from ai_simtest_engine.judges.grounding_judge import GroundingJudge
         judge = GroundingJudge(threshold=threshold)
         try:
             await judge.initialize()
@@ -317,7 +317,7 @@ class TestJudgesIntegration:
     @pytest.mark.asyncio
     async def test_safety_judge_clean_response(self):
         """Clean response should pass safety checks."""
-        from src.judges.safety_judge import SafetyJudge
+        from ai_simtest_engine.judges.safety_judge import SafetyJudge
 
         judge = SafetyJudge(pii_enabled=False, toxicity_enabled=False)
         await judge.initialize()
@@ -332,7 +332,7 @@ class TestJudgesIntegration:
     @pytest.mark.asyncio
     async def test_safety_judge_policy_violation(self):
         """Response leaking system prompt should fail policy check."""
-        from src.judges.safety_judge import SafetyJudge
+        from ai_simtest_engine.judges.safety_judge import SafetyJudge
 
         judge = SafetyJudge(pii_enabled=False, toxicity_enabled=False)
         await judge.initialize()
@@ -348,7 +348,7 @@ class TestJudgesIntegration:
     @pytest.mark.asyncio
     async def test_relevance_judge_on_topic(self):
         """On-topic response should pass relevance check."""
-        from src.judges.quality_judge import RelevanceJudge
+        from ai_simtest_engine.judges.quality_judge import RelevanceJudge
 
         judge = RelevanceJudge()
         result = await judge.evaluate(
@@ -364,7 +364,7 @@ class TestJudgesIntegration:
     @pytest.mark.asyncio
     async def test_relevance_judge_off_topic(self):
         """Off-topic response should have lower relevance score."""
-        from src.judges.quality_judge import RelevanceJudge
+        from ai_simtest_engine.judges.quality_judge import RelevanceJudge
 
         judge = RelevanceJudge()
         result = await judge.evaluate(
@@ -379,10 +379,10 @@ class TestJudgesIntegration:
     @pytest.mark.asyncio
     async def test_judge_engine_runs_all_judges(self):
         """JudgeEngine should run multiple judges and aggregate results."""
-        from src.judges import JudgeEngine
-        from src.judges.grounding_judge import GroundingJudge
-        from src.judges.safety_judge import SafetyJudge
-        from src.judges.quality_judge import RelevanceJudge
+        from ai_simtest_engine.judges import JudgeEngine
+        from ai_simtest_engine.judges.grounding_judge import GroundingJudge
+        from ai_simtest_engine.judges.safety_judge import SafetyJudge
+        from ai_simtest_engine.judges.quality_judge import RelevanceJudge
 
         engine = JudgeEngine()
 
@@ -427,9 +427,9 @@ class TestJudgesIntegration:
     @pytest.mark.asyncio
     async def test_critical_safety_failure_overrides_quality(self):
         """Safety CRITICAL fail should make overall FAIL regardless of quality."""
-        from src.judges import JudgeEngine
-        from src.judges.safety_judge import SafetyJudge
-        from src.judges.quality_judge import RelevanceJudge
+        from ai_simtest_engine.judges import JudgeEngine
+        from ai_simtest_engine.judges.safety_judge import SafetyJudge
+        from ai_simtest_engine.judges.quality_judge import RelevanceJudge
 
         engine = JudgeEngine()
         engine.add_judge(SafetyJudge(pii_enabled=False, toxicity_enabled=False))
@@ -512,7 +512,7 @@ class TestReportIntegration:
 
     def test_report_summary_accuracy(self):
         """Report summary should have correct aggregated metrics."""
-        from src.core.report_generator import ReportGenerator
+        from ai_simtest_engine.core.report_generator import ReportGenerator
 
         gen = ReportGenerator()
         personas = make_test_personas(2)
@@ -534,7 +534,7 @@ class TestReportIntegration:
 
     def test_report_has_recommendations(self):
         """Report should generate actionable recommendations."""
-        from src.core.report_generator import ReportGenerator
+        from ai_simtest_engine.core.report_generator import ReportGenerator
 
         gen = ReportGenerator()
         personas = make_test_personas(2)
@@ -545,7 +545,7 @@ class TestReportIntegration:
 
     def test_report_score_by_judge(self):
         """Report should break down scores per judge."""
-        from src.core.report_generator import ReportGenerator
+        from ai_simtest_engine.core.report_generator import ReportGenerator
 
         gen = ReportGenerator()
         personas = make_test_personas(2)
@@ -557,8 +557,8 @@ class TestReportIntegration:
 
     def test_export_jsonl(self, tmp_path):
         """JSONL export should produce valid file."""
-        from src.core.report_generator import ReportGenerator
-        from src.exporters.dataset_exporter import DatasetExporter
+        from ai_simtest_engine.core.report_generator import ReportGenerator
+        from ai_simtest_engine.exporters.dataset_exporter import DatasetExporter
 
         gen = ReportGenerator()
         exporter = DatasetExporter()
@@ -582,8 +582,8 @@ class TestReportIntegration:
 
     def test_export_csv(self, tmp_path):
         """CSV export should produce valid file with columns."""
-        from src.core.report_generator import ReportGenerator
-        from src.exporters.dataset_exporter import DatasetExporter
+        from ai_simtest_engine.core.report_generator import ReportGenerator
+        from ai_simtest_engine.exporters.dataset_exporter import DatasetExporter
         import csv
 
         gen = ReportGenerator()
@@ -605,8 +605,8 @@ class TestReportIntegration:
 
     def test_export_summary_json(self, tmp_path):
         """Summary JSON should be machine-readable."""
-        from src.core.report_generator import ReportGenerator
-        from src.exporters.dataset_exporter import DatasetExporter
+        from ai_simtest_engine.core.report_generator import ReportGenerator
+        from ai_simtest_engine.exporters.dataset_exporter import DatasetExporter
 
         gen = ReportGenerator()
         exporter = DatasetExporter()
@@ -640,8 +640,8 @@ class TestFullPipeline:
         Full pipeline: predefined personas → conversation → judging → report → export.
         This is THE integration test.
         """
-        from src.core.orchestrator import SimulationOrchestrator
-        from src.models import JudgeConfig
+        from ai_simtest_engine.core.orchestrator import SimulationOrchestrator
+        from ai_simtest_engine.models import JudgeConfig
 
         config = SimulationConfig(
             name="Integration Test Run",
@@ -699,8 +699,8 @@ class TestFullPipeline:
     @pytest.mark.asyncio
     async def test_orchestrator_status_transitions(self, mock_bot):
         """Status should transition correctly through the pipeline."""
-        from src.core.orchestrator import SimulationOrchestrator
-        from src.models import JudgeConfig
+        from ai_simtest_engine.core.orchestrator import SimulationOrchestrator
+        from ai_simtest_engine.models import JudgeConfig
 
         config = SimulationConfig(
             name="Status Test",

@@ -16,7 +16,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src.core.semantic_clustering import (
+from ai_simtest_engine.core.semantic_clustering import (
     FailureCluster,
     FailureMessage,
     SemanticFailureClusterer,

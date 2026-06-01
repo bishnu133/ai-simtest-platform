@@ -19,7 +19,7 @@ try:
 except ImportError:
     pass  # Running standalone without pytest
 
-from src.coverage import (
+from ai_simtest_engine.coverage import (
     CoverageAnalyzer,
     CoverageConfig,
     CoverageGrade,

@@ -23,7 +23,7 @@ from unittest.mock import patch, AsyncMock, MagicMock
 import pytest
 import httpx
 
-from src.multi_compare.models import (
+from ai_simtest_engine.multi_compare.models import (
     AdapterType,
     ModelSpec,
     CanonicalBotResponse,
@@ -34,7 +34,7 @@ from src.multi_compare.models import (
     MultiCompareConfig,
     ComparisonMode,
 )
-from src.multi_compare.adapters import (
+from ai_simtest_engine.multi_compare.adapters import (
     BaseProviderAdapter,
     OpenAIAdapter,
     AnthropicAdapter,
@@ -42,7 +42,7 @@ from src.multi_compare.adapters import (
     AdapterFactory,
     _extract_by_path,
 )
-from src.multi_compare.manifest import (
+from ai_simtest_engine.multi_compare.manifest import (
     build_manifest,
     detect_evaluator_versions,
     capture_quality_judge_prompt_hash,
@@ -878,7 +878,7 @@ class TestPreflightConnectivity:
     """Tests for preflight endpoint connectivity checks."""
 
     def test_preflight_result_all_reachable(self):
-        from src.multi_compare.config_loader import PreflightResult
+        from ai_simtest_engine.multi_compare.config_loader import PreflightResult
         result = PreflightResult()
         result.add("model-a", reachable=True, status_code=200, latency_ms=50.0)
         result.add("model-b", reachable=True, status_code=200, latency_ms=80.0)
@@ -887,7 +887,7 @@ class TestPreflightConnectivity:
         assert "2/2" in result.summary()
 
     def test_preflight_result_partial_failure(self):
-        from src.multi_compare.config_loader import PreflightResult
+        from ai_simtest_engine.multi_compare.config_loader import PreflightResult
         result = PreflightResult()
         result.add("model-a", reachable=True, status_code=200)
         result.add("model-b", reachable=False, error="Connection refused")
@@ -898,7 +898,7 @@ class TestPreflightConnectivity:
     @pytest.mark.asyncio
     async def test_preflight_check_with_timeout(self):
         """Preflight marks unreachable on timeout."""
-        from src.multi_compare.config_loader import preflight_check_endpoints
+        from ai_simtest_engine.multi_compare.config_loader import preflight_check_endpoints
         config = MultiCompareConfig(
             mode=ComparisonMode.HEAD_TO_HEAD,
             models=[

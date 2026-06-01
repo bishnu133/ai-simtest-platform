@@ -21,15 +21,15 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 from unittest.mock import AsyncMock
 
-from src.rag_eval.models import (
+from ai_simtest_engine.rag_eval.models import (
     EvalSpeed,
     EvidenceMode,
     RAGEvalConfig,
     RAGMetricType,
     ToolMetricType,
 )
-from src.rag_eval.engine import RAGEvalEngine, RAGEvalReport
-from src.rag_eval.tool_metrics import ToolDefinition
+from ai_simtest_engine.rag_eval.engine import RAGEvalEngine, RAGEvalReport
+from ai_simtest_engine.rag_eval.tool_metrics import ToolDefinition
 
 
 def run(coro):

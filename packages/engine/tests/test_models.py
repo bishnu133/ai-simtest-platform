@@ -7,7 +7,7 @@ aggregation models, and edge cases.
 """
 
 import pytest
-from src.rag_eval.models import (
+from ai_simtest_engine.rag_eval.models import (
     # Enums
     AggregationLevel,
     ConfidenceLevel,

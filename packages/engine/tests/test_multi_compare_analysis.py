@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.multi_compare.models import (
+from ai_simtest_engine.multi_compare.models import (
     ComparisonMode,
     CostEfficiency,
     Dimension,
@@ -32,7 +32,7 @@ from src.multi_compare.models import (
     StatisticalVerdictLabel,
     BUILT_IN_PROFILES,
 )
-from src.multi_compare.analysis import (
+from ai_simtest_engine.multi_compare.analysis import (
     AnalysisConfig,
     AnalysisMode,
     ConfidenceLevel,
@@ -452,7 +452,7 @@ class TestDiffExplainer:
 
 class TestRecommendationGenerator:
     def test_deployment_recommendation(self):
-        from src.multi_compare.models import ModelRanking
+        from ai_simtest_engine.multi_compare.models import ModelRanking
         rankings = [ModelRanking(
             model_id="a", model_name="Model A",
             overall_rank=1, overall_score=0.85, deployment_ready=True,
@@ -463,7 +463,7 @@ class TestRecommendationGenerator:
 
     def test_blocked_in_strict_invalid_parity(self):
         """Review #15: Strict mode blocks on invalid parity."""
-        from src.multi_compare.models import ModelRanking
+        from ai_simtest_engine.multi_compare.models import ModelRanking
         rankings = [ModelRanking(
             model_id="a", model_name="Model A",
             overall_rank=1, overall_score=0.85, deployment_ready=True,
@@ -473,7 +473,7 @@ class TestRecommendationGenerator:
         assert any("blocked" in r.lower() for r in recs)
 
     def test_close_models_tiebreaker_suggestion(self):
-        from src.multi_compare.models import ModelRanking
+        from ai_simtest_engine.multi_compare.models import ModelRanking
         rankings = [
             ModelRanking(model_id="a", model_name="A", overall_rank=1, overall_score=0.82),
             ModelRanking(model_id="b", model_name="B", overall_rank=2, overall_score=0.80),
@@ -483,7 +483,7 @@ class TestRecommendationGenerator:
         assert any("close" in r.lower() or "tiebreaker" in r.lower() for r in recs)
 
     def test_deployment_blockers(self):
-        from src.multi_compare.models import ModelRanking
+        from ai_simtest_engine.multi_compare.models import ModelRanking
         rankings = [ModelRanking(
             model_id="a", model_name="A",
             overall_rank=1, overall_score=0.85,

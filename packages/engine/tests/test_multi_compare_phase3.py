@@ -30,7 +30,7 @@ from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
 
 import pytest
 
-from src.multi_compare.plan import (
+from ai_simtest_engine.multi_compare.plan import (
     FairnessControls,
     ExperimentMetadata,
     RetryPolicy,
@@ -42,19 +42,19 @@ from src.multi_compare.plan import (
     save_plan,
     load_plan,
 )
-from src.multi_compare.checkpoint import (
+from ai_simtest_engine.multi_compare.checkpoint import (
     CheckpointEntry,
     CheckpointStateV2,
     CheckpointManager,
     ResumeValidation,
 )
-from src.multi_compare.orchestrator import (
+from ai_simtest_engine.multi_compare.orchestrator import (
     ProgressEvent,
     MultiModelResult,
     EndpointExecutor,
     MultiModelOrchestrator,
 )
-from src.multi_compare.models import (
+from ai_simtest_engine.multi_compare.models import (
     AdapterType,
     ComparisonMode,
     ModelSpec,
@@ -688,7 +688,7 @@ class TestEndpointExecutor:
     """Review #3: Retry with backoff, Review #6: Model-level timeout."""
 
     def test_backoff_exponential(self):
-        from src.multi_compare.plan import RetryPolicy
+        from ai_simtest_engine.multi_compare.plan import RetryPolicy
         policy = RetryPolicy(initial_delay=2.0, backoff="exponential")
         # Attempt 2: base = 2.0 * 2^0 = 2.0 (± jitter)
         delay = EndpointExecutor._compute_backoff(2, policy)
@@ -698,7 +698,7 @@ class TestEndpointExecutor:
         assert 2.5 <= delay3 <= 5.5
 
     def test_backoff_fixed(self):
-        from src.multi_compare.plan import RetryPolicy
+        from ai_simtest_engine.multi_compare.plan import RetryPolicy
         policy = RetryPolicy(initial_delay=5.0, backoff="fixed")
         delay = EndpointExecutor._compute_backoff(2, policy)
         assert 3.0 <= delay <= 7.0  # 5.0 ± jitter

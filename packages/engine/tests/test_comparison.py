@@ -20,7 +20,7 @@ import pytest
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src.core.comparison_models import (
+from ai_simtest_engine.core.comparison_models import (
     ComparisonConfig,
     ComparisonResult,
     ComparisonSummary,
@@ -30,8 +30,8 @@ from src.core.comparison_models import (
     MetricDelta,
     RegressionVerdict,
 )
-from src.core.comparison_engine import ComparisonEngine
-from src.exporters.comparison_report import ComparisonReportGenerator
+from ai_simtest_engine.core.comparison_engine import ComparisonEngine
+from ai_simtest_engine.exporters.comparison_report import ComparisonReportGenerator
 
 
 # ─── Fixtures ───────────────────────────────────────────────

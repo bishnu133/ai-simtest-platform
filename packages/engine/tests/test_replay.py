@@ -30,7 +30,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.replay.models import (
+from ai_simtest_engine.replay.models import (
     ConversationEvalResult,
     ConversationSource,
     ImportedConversation,
@@ -43,13 +43,13 @@ from src.replay.models import (
     ReplayMode,
     ReplayResult,
 )
-from src.replay.parsers import detect_format, get_parser, register_parser
-from src.replay.parsers.base import ConversationParser
-from src.replay.parsers.json_parser import JSONParser, JSONLParser
-from src.replay.parsers.csv_parser import CSVParser
-from src.replay.parsers.text_parser import TextParser
-from src.replay.parsers.simtest_parser import SimTestParser
-from src.replay.loader import ConversationLoader
+from ai_simtest_engine.replay.parsers import detect_format, get_parser, register_parser
+from ai_simtest_engine.replay.parsers.base import ConversationParser
+from ai_simtest_engine.replay.parsers.json_parser import JSONParser, JSONLParser
+from ai_simtest_engine.replay.parsers.csv_parser import CSVParser
+from ai_simtest_engine.replay.parsers.text_parser import TextParser
+from ai_simtest_engine.replay.parsers.simtest_parser import SimTestParser
+from ai_simtest_engine.replay.loader import ConversationLoader
 
 
 # ============================================================
@@ -630,7 +630,7 @@ class TestPIIMasking:
 class TestReplayEvaluator:
     @pytest.mark.asyncio
     async def test_evaluate_mode_produces_report(self, sample_json_file):
-        from src.replay.evaluator import ReplayEvaluator
+        from ai_simtest_engine.replay.evaluator import ReplayEvaluator
         config = ReplayConfig(input_paths=[str(sample_json_file)], input_format=InputFormat.JSON)
         convos, personas, sources, ls, pr = ConversationLoader().load(config)
 
@@ -647,8 +647,8 @@ class TestReplayEvaluator:
 
     @pytest.mark.asyncio
     async def test_gate_check_fails_when_below_threshold(self, sample_json_file):
-        from src.replay.evaluator import ReplayEvaluator
-        from src.models import JudgedConversation, JudgedTurn, JudgmentResult, JudgmentLabel, Severity
+        from ai_simtest_engine.replay.evaluator import ReplayEvaluator
+        from ai_simtest_engine.models import JudgedConversation, JudgedTurn, JudgmentResult, JudgmentLabel, Severity
         config = ReplayConfig(input_paths=[str(sample_json_file)], input_format=InputFormat.JSON, fail_thresholds={"safety": 0.95})
         convos, personas, sources, ls, pr = ConversationLoader().load(config)
 
@@ -676,7 +676,7 @@ class TestReplayEvaluator:
 
     @pytest.mark.asyncio
     async def test_retest_mode_requires_bot_endpoint(self, sample_json_file):
-        from src.replay.evaluator import ReplayEvaluator
+        from ai_simtest_engine.replay.evaluator import ReplayEvaluator
         config = ReplayConfig(input_paths=[str(sample_json_file)], input_format=InputFormat.JSON, mode=ReplayMode.RETEST)
         convos, personas, sources, _, _ = ConversationLoader().load(config)
         evaluator = ReplayEvaluator()
@@ -688,7 +688,7 @@ class TestReplayEvaluator:
     @pytest.mark.asyncio
     async def test_configurable_judges(self, sample_json_file):
         """Review #9: Only selected judges are initialized."""
-        from src.replay.evaluator import ReplayEvaluator
+        from ai_simtest_engine.replay.evaluator import ReplayEvaluator
         config = ReplayConfig(input_paths=[str(sample_json_file)], input_format=InputFormat.JSON, judges=["safety", "quality"])
         convos, personas, sources, ls, pr = ConversationLoader().load(config)
 
@@ -710,28 +710,28 @@ class TestJSONExtraction:
     """Review #5: Test hardened JSON parsing for hybrid variations."""
 
     def test_extract_clean_json(self):
-        from src.replay.evaluator import ReplayEvaluator
+        from ai_simtest_engine.replay.evaluator import ReplayEvaluator
         ev = ReplayEvaluator()
         result = ev._extract_json_array('[["hello", "world"], ["hi", "there"]]')
         assert len(result) == 2
         assert result[0] == ["hello", "world"]
 
     def test_extract_json_with_code_fences(self):
-        from src.replay.evaluator import ReplayEvaluator
+        from ai_simtest_engine.replay.evaluator import ReplayEvaluator
         ev = ReplayEvaluator()
         raw = '```json\n[["hello", "world"]]\n```'
         result = ev._extract_json_array(raw)
         assert len(result) == 1
 
     def test_extract_json_with_preamble(self):
-        from src.replay.evaluator import ReplayEvaluator
+        from ai_simtest_engine.replay.evaluator import ReplayEvaluator
         ev = ReplayEvaluator()
         raw = 'Here are the variations:\n[["hello"], ["hi"]]'
         result = ev._extract_json_array(raw)
         assert len(result) == 2
 
     def test_extract_json_invalid_raises(self):
-        from src.replay.evaluator import ReplayEvaluator
+        from ai_simtest_engine.replay.evaluator import ReplayEvaluator
         ev = ReplayEvaluator()
         with pytest.raises(ValueError, match="Could not extract"):
             ev._extract_json_array("This is not JSON at all")
@@ -863,8 +863,8 @@ class TestMinimumSampleGate:
     @pytest.mark.asyncio
     async def test_gate_skipped_when_below_minimum(self, sample_json_file):
         """Gate should not fail when dataset is smaller than threshold."""
-        from src.replay.evaluator import ReplayEvaluator
-        from src.models import JudgedConversation, JudgedTurn, JudgmentResult, JudgmentLabel, Severity
+        from ai_simtest_engine.replay.evaluator import ReplayEvaluator
+        from ai_simtest_engine.models import JudgedConversation, JudgedTurn, JudgmentResult, JudgmentLabel, Severity
 
         config = ReplayConfig(
             input_paths=[str(sample_json_file)],
@@ -903,8 +903,8 @@ class TestMinimumSampleGate:
     @pytest.mark.asyncio
     async def test_gate_enforced_when_above_minimum(self, sample_json_file):
         """Gate should fail normally when dataset meets minimum."""
-        from src.replay.evaluator import ReplayEvaluator
-        from src.models import JudgedConversation, JudgedTurn, JudgmentResult, JudgmentLabel, Severity
+        from ai_simtest_engine.replay.evaluator import ReplayEvaluator
+        from ai_simtest_engine.models import JudgedConversation, JudgedTurn, JudgmentResult, JudgmentLabel, Severity
 
         config = ReplayConfig(
             input_paths=[str(sample_json_file)],

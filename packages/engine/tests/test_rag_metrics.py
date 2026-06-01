@@ -14,7 +14,7 @@ import json
 import pytest
 from unittest.mock import AsyncMock
 
-from src.rag_eval.models import (
+from ai_simtest_engine.rag_eval.models import (
     EvalSpeed,
     RAGEvalConfig,
     RAGMetricType,
@@ -23,7 +23,7 @@ from src.rag_eval.models import (
     Citation,
     EvidenceMode,
 )
-from src.rag_eval.rag_metrics import RAGMetricEvaluator
+from ai_simtest_engine.rag_eval.rag_metrics import RAGMetricEvaluator
 
 
 # ============================================================================

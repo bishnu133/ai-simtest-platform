@@ -21,7 +21,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src.endurance import (
+from ai_simtest_engine.endurance import (
     BUILT_IN_CONTRADICTIONS,
     BUILT_IN_COMPLEXITY_LEVELS,
     BUILT_IN_FACTS,

@@ -15,17 +15,17 @@ import json
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from src.discovery.strategy import (
+from ai_simtest_engine.discovery.strategy import (
     DiscoveryStrategy,
     DiscoveryPhase,
     DiscoveryQuestion,
 )
-from src.discovery.synthesizer import (
+from ai_simtest_engine.discovery.synthesizer import (
     ContextSynthesizer,
     DiscoveredContext,
     ConfidenceScore,
 )
-from src.discovery.bot_discovery import BotDiscoveryEngine, DiscoveryResult
+from ai_simtest_engine.discovery.bot_discovery import BotDiscoveryEngine, DiscoveryResult
 
 
 # ============================================================

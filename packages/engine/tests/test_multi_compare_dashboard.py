@@ -19,7 +19,7 @@ from unittest.mock import patch
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src.multi_compare.models import (
+from ai_simtest_engine.multi_compare.models import (
     ComparisonMatrix,
     ComparisonMode,
     CostEfficiency,
@@ -42,7 +42,7 @@ from src.multi_compare.models import (
     StatisticalVerdict,
     StatisticalVerdictLabel,
 )
-from src.multi_compare.dashboard import (
+from ai_simtest_engine.multi_compare.dashboard import (
     MultiCompareDashboard,
     _compute_parity_status,
     _detect_mode,

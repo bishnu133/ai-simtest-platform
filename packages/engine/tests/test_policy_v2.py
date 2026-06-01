@@ -19,7 +19,7 @@ import pytest
 from typing import Any, Dict, List
 
 # ── Import v2 modules ──
-from src.policy.models import (
+from ai_simtest_engine.policy.models import (
     ComplianceGateMode,
     ComplianceResult,
     ComplianceScorecard,
@@ -34,9 +34,9 @@ from src.policy.models import (
     PolicySeverity,
     RuleScope,
 )
-from src.policy.loader import PolicyLoader, PolicyLoadError
-from src.policy.engine import PolicyEngine
-from src.policy.built_in import BUILT_IN_POLICIES
+from ai_simtest_engine.policy.loader import PolicyLoader, PolicyLoadError
+from ai_simtest_engine.policy.engine import PolicyEngine
+from ai_simtest_engine.policy.built_in import BUILT_IN_POLICIES
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1944,7 +1944,7 @@ class TestConfigurableEvidence:
 
 class TestHTMLProvenance:
     def test_html_contains_provenance_section(self):
-        from src.policy.policy_html import generate_compliance_html
+        from ai_simtest_engine.policy.policy_html import generate_compliance_html
         ps = _make_policy_set(rules=[_make_rule()])
         sc = PolicyEngine(ps).evaluate(_make_v1_report_data())
         html = generate_compliance_html(sc)
@@ -1953,7 +1953,7 @@ class TestHTMLProvenance:
         assert "evaluator_version" in html
 
     def test_html_contains_filter_buttons(self):
-        from src.policy.policy_html import generate_compliance_html
+        from ai_simtest_engine.policy.policy_html import generate_compliance_html
         ps = _make_policy_set(rules=[_make_rule()])
         sc = PolicyEngine(ps).evaluate(_make_v1_report_data())
         html = generate_compliance_html(sc)
@@ -1961,7 +1961,7 @@ class TestHTMLProvenance:
         assert "toggleFilter" in html
 
     def test_html_failed_rules_sorted_first(self):
-        from src.policy.policy_html import generate_compliance_html
+        from ai_simtest_engine.policy.policy_html import generate_compliance_html
         ps = _make_policy_set(rules=[
             _make_rule(id="pass_rule", name="Pass Rule", threshold=0.5, judge="safety"),
             _make_rule(id="fail_rule", name="Fail Rule", threshold=0.99, judge="safety", severity=PolicySeverity.CRITICAL),
@@ -1974,7 +1974,7 @@ class TestHTMLProvenance:
         assert fail_pos < pass_pos, "Failed rules should be sorted before passed rules"
 
     def test_html_evidence_is_collapsible(self):
-        from src.policy.policy_html import generate_compliance_html
+        from ai_simtest_engine.policy.policy_html import generate_compliance_html
         ps = _make_policy_set(rules=[_make_rule(
             condition=PolicyCondition.MAX_FAILED_TURNS, threshold=0, judge="safety",
         )])

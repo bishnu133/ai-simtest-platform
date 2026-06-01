@@ -19,7 +19,7 @@ import json
 import tempfile
 from pathlib import Path
 
-from src.calibration import (
+from ai_simtest_engine.calibration import (
     GoldenDatasetManager,
     CalibrationRunner,
     CalibrationAnalyzer,

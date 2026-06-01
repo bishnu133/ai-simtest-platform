@@ -14,7 +14,7 @@ try:
 except ImportError:
     pass
 
-from src.coverage import (
+from ai_simtest_engine.coverage import (
     CoverageAnalyzer,
     CoverageConfig,
     CoverageGrade,

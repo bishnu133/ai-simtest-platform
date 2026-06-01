@@ -12,14 +12,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.core.approval_gate import (
+from ai_simtest_engine.core.approval_gate import (
     GateDecision,
     GateManager,
     GateProposal,
     GateResult,
     ProgrammaticApprovalGate,
 )
-from src.core.autonomous_orchestrator import (
+from ai_simtest_engine.core.autonomous_orchestrator import (
     AnalysisPipelineResult,
     AutonomousOrchestrator,
 )
@@ -200,10 +200,10 @@ class TestAnalysisOnly:
     @pytest.mark.asyncio
     async def test_full_analysis_pipeline(self, tmp_docs, mock_llm):
         """Test the 4-stage analysis pipeline without simulation."""
-        from src.analyzers.criteria_generator import CriteriaGenerator
-        from src.analyzers.document_analyzer import DocumentAnalyzer
-        from src.analyzers.guardrail_generator import GuardrailGenerator
-        from src.analyzers.test_plan_generator import TestPlanGenerator
+        from ai_simtest_engine.analyzers.criteria_generator import CriteriaGenerator
+        from ai_simtest_engine.analyzers.document_analyzer import DocumentAnalyzer
+        from ai_simtest_engine.analyzers.guardrail_generator import GuardrailGenerator
+        from ai_simtest_engine.analyzers.test_plan_generator import TestPlanGenerator
 
         orch = AutonomousOrchestrator(
             bot_endpoint="http://test:9999",
@@ -253,7 +253,7 @@ class TestGateRejections:
 
     @pytest.mark.asyncio
     async def test_reject_at_context(self, tmp_docs, mock_llm):
-        from src.analyzers.document_analyzer import DocumentAnalyzer
+        from ai_simtest_engine.analyzers.document_analyzer import DocumentAnalyzer
 
         orch = AutonomousOrchestrator(
             bot_endpoint="http://test:9999",
@@ -270,8 +270,8 @@ class TestGateRejections:
 
     @pytest.mark.asyncio
     async def test_reject_at_criteria(self, tmp_docs, mock_llm):
-        from src.analyzers.criteria_generator import CriteriaGenerator
-        from src.analyzers.document_analyzer import DocumentAnalyzer
+        from ai_simtest_engine.analyzers.criteria_generator import CriteriaGenerator
+        from ai_simtest_engine.analyzers.document_analyzer import DocumentAnalyzer
 
         orch = AutonomousOrchestrator(
             bot_endpoint="http://test:9999",
@@ -289,9 +289,9 @@ class TestGateRejections:
 
     @pytest.mark.asyncio
     async def test_reject_at_guardrails(self, tmp_docs, mock_llm):
-        from src.analyzers.criteria_generator import CriteriaGenerator
-        from src.analyzers.document_analyzer import DocumentAnalyzer
-        from src.analyzers.guardrail_generator import GuardrailGenerator
+        from ai_simtest_engine.analyzers.criteria_generator import CriteriaGenerator
+        from ai_simtest_engine.analyzers.document_analyzer import DocumentAnalyzer
+        from ai_simtest_engine.analyzers.guardrail_generator import GuardrailGenerator
 
         orch = AutonomousOrchestrator(
             bot_endpoint="http://test:9999",
@@ -310,10 +310,10 @@ class TestGateRejections:
 
     @pytest.mark.asyncio
     async def test_reject_at_test_plan(self, tmp_docs, mock_llm):
-        from src.analyzers.criteria_generator import CriteriaGenerator
-        from src.analyzers.document_analyzer import DocumentAnalyzer
-        from src.analyzers.guardrail_generator import GuardrailGenerator
-        from src.analyzers.test_plan_generator import TestPlanGenerator
+        from ai_simtest_engine.analyzers.criteria_generator import CriteriaGenerator
+        from ai_simtest_engine.analyzers.document_analyzer import DocumentAnalyzer
+        from ai_simtest_engine.analyzers.guardrail_generator import GuardrailGenerator
+        from ai_simtest_engine.analyzers.test_plan_generator import TestPlanGenerator
 
         orch = AutonomousOrchestrator(
             bot_endpoint="http://test:9999",
@@ -340,10 +340,10 @@ class TestSimulationConfigBuilding:
 
     @pytest.mark.asyncio
     async def test_build_config_from_analysis(self, tmp_docs, mock_llm):
-        from src.analyzers.criteria_generator import CriteriaGenerator
-        from src.analyzers.document_analyzer import DocumentAnalyzer
-        from src.analyzers.guardrail_generator import GuardrailGenerator
-        from src.analyzers.test_plan_generator import TestPlanGenerator
+        from ai_simtest_engine.analyzers.criteria_generator import CriteriaGenerator
+        from ai_simtest_engine.analyzers.document_analyzer import DocumentAnalyzer
+        from ai_simtest_engine.analyzers.guardrail_generator import GuardrailGenerator
+        from ai_simtest_engine.analyzers.test_plan_generator import TestPlanGenerator
 
         orch = AutonomousOrchestrator(
             bot_endpoint="http://test:9999",
@@ -373,10 +373,10 @@ class TestSimulationConfigBuilding:
 
     @pytest.mark.asyncio
     async def test_config_includes_guardrails_as_criteria(self, tmp_docs, mock_llm):
-        from src.analyzers.criteria_generator import CriteriaGenerator
-        from src.analyzers.document_analyzer import DocumentAnalyzer
-        from src.analyzers.guardrail_generator import GuardrailGenerator
-        from src.analyzers.test_plan_generator import TestPlanGenerator
+        from ai_simtest_engine.analyzers.criteria_generator import CriteriaGenerator
+        from ai_simtest_engine.analyzers.document_analyzer import DocumentAnalyzer
+        from ai_simtest_engine.analyzers.guardrail_generator import GuardrailGenerator
+        from ai_simtest_engine.analyzers.test_plan_generator import TestPlanGenerator
 
         orch = AutonomousOrchestrator(
             bot_endpoint="http://test:9999", doc_dir=str(tmp_docs),
@@ -403,10 +403,10 @@ class TestAuditTrail:
 
     @pytest.mark.asyncio
     async def test_audit_trail_recorded(self, tmp_docs, mock_llm):
-        from src.analyzers.criteria_generator import CriteriaGenerator
-        from src.analyzers.document_analyzer import DocumentAnalyzer
-        from src.analyzers.guardrail_generator import GuardrailGenerator
-        from src.analyzers.test_plan_generator import TestPlanGenerator
+        from ai_simtest_engine.analyzers.criteria_generator import CriteriaGenerator
+        from ai_simtest_engine.analyzers.document_analyzer import DocumentAnalyzer
+        from ai_simtest_engine.analyzers.guardrail_generator import GuardrailGenerator
+        from ai_simtest_engine.analyzers.test_plan_generator import TestPlanGenerator
 
         orch = AutonomousOrchestrator(
             bot_endpoint="http://test:9999", doc_dir=str(tmp_docs),
@@ -430,10 +430,10 @@ class TestAuditTrail:
 
     @pytest.mark.asyncio
     async def test_audit_trail_saves(self, tmp_docs, mock_llm, tmp_path):
-        from src.analyzers.criteria_generator import CriteriaGenerator
-        from src.analyzers.document_analyzer import DocumentAnalyzer
-        from src.analyzers.guardrail_generator import GuardrailGenerator
-        from src.analyzers.test_plan_generator import TestPlanGenerator
+        from ai_simtest_engine.analyzers.criteria_generator import CriteriaGenerator
+        from ai_simtest_engine.analyzers.document_analyzer import DocumentAnalyzer
+        from ai_simtest_engine.analyzers.guardrail_generator import GuardrailGenerator
+        from ai_simtest_engine.analyzers.test_plan_generator import TestPlanGenerator
 
         orch = AutonomousOrchestrator(
             bot_endpoint="http://test:9999", doc_dir=str(tmp_docs),
@@ -461,25 +461,25 @@ class TestAuditTrail:
 class TestCLIWiring:
 
     def test_run_command_has_mode_option(self):
-        from src.cli import main
+        from ai_simtest_engine.cli import main
         run_cmd = main.commands.get("run")
         param_names = [p.name for p in run_cmd.params]
         assert "mode" in param_names
 
     def test_run_command_has_doc_dir_option(self):
-        from src.cli import main
+        from ai_simtest_engine.cli import main
         run_cmd = main.commands.get("run")
         param_names = [p.name for p in run_cmd.params]
         assert "doc_dir" in param_names
 
     def test_run_command_has_auto_approve_option(self):
-        from src.cli import main
+        from ai_simtest_engine.cli import main
         run_cmd = main.commands.get("run")
         param_names = [p.name for p in run_cmd.params]
         assert "auto_approve" in param_names
 
     def test_run_command_has_analysis_only_option(self):
-        from src.cli import main
+        from ai_simtest_engine.cli import main
         run_cmd = main.commands.get("run")
         param_names = [p.name for p in run_cmd.params]
         assert "analysis_only" in param_names
@@ -487,7 +487,7 @@ class TestCLIWiring:
     def test_partial_mode_requires_docs(self):
         """Partial mode without --doc-dir or --doc-file should fail."""
         from click.testing import CliRunner
-        from src.cli import main
+        from ai_simtest_engine.cli import main
 
         runner = CliRunner()
         result = runner.invoke(main, [
@@ -501,7 +501,7 @@ class TestCLIWiring:
     def test_partial_mode_analysis_only(self, tmp_docs, mock_llm):
         """Test analysis-only mode via CLI."""
         from click.testing import CliRunner
-        from src.cli import main
+        from ai_simtest_engine.cli import main
 
         with patch("src.core.autonomous_orchestrator.DocumentAnalyzer") as MockAnalyzer, \
              patch("src.core.autonomous_orchestrator.CriteriaGenerator") as MockCritGen, \
@@ -509,10 +509,10 @@ class TestCLIWiring:
              patch("src.core.autonomous_orchestrator.TestPlanGenerator") as MockPlanGen:
 
             # Setup mocks to return valid objects
-            from src.analyzers.criteria_generator import CriteriaSet, SuccessCriterion
-            from src.analyzers.document_analyzer import BotContext
-            from src.analyzers.guardrail_generator import GuardrailRule, GuardrailSet
-            from src.analyzers.test_plan_generator import PersonaStrategy, TestPlan, TestTopic
+            from ai_simtest_engine.analyzers.criteria_generator import CriteriaSet, SuccessCriterion
+            from ai_simtest_engine.analyzers.document_analyzer import BotContext
+            from ai_simtest_engine.analyzers.guardrail_generator import GuardrailRule, GuardrailSet
+            from ai_simtest_engine.analyzers.test_plan_generator import PersonaStrategy, TestPlan, TestTopic
 
             mock_analyzer = AsyncMock()
             mock_analyzer.analyze = AsyncMock(return_value=BotContext(
@@ -557,7 +557,7 @@ class TestCLIWiring:
         """Without --mode, should default to manual mode."""
         from click.testing import CliRunner
         from unittest.mock import MagicMock
-        from src.cli import main
+        from ai_simtest_engine.cli import main
 
         mock_report = MagicMock()
         mock_report.summary = MagicMock(

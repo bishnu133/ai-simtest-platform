@@ -20,7 +20,7 @@ class TestAutoModeCliAcceptance:
 
     def test_auto_mode_in_choices(self):
         """--mode auto should be a valid CLI choice."""
-        from src.cli import main
+        from ai_simtest_engine.cli import main
         runner = CliRunner()
 
         # --mode auto without --bot-endpoint should error about missing endpoint, NOT invalid choice
@@ -31,14 +31,14 @@ class TestAutoModeCliAcceptance:
 
     def test_auto_mode_rejects_invalid(self):
         """--mode invalid should be rejected."""
-        from src.cli import main
+        from ai_simtest_engine.cli import main
         runner = CliRunner()
         result = runner.invoke(main, ["run", "--mode", "invalid", "--bot-endpoint", "http://test"])
         assert "invalid choice" in result.output.lower() or result.exit_code != 0
 
     def test_manual_and_partial_still_work(self):
         """Existing modes should still be valid choices."""
-        from src.cli import main
+        from ai_simtest_engine.cli import main
         runner = CliRunner()
 
         # manual mode (should fail later due to missing LLM, not due to choice validation)
@@ -61,7 +61,7 @@ class TestAutoModeBanner:
     @patch("src.cli.asyncio.run")
     def test_auto_mode_shows_banner(self, mock_asyncio_run, mock_runner):
         """Auto mode should display the fully autonomous banner."""
-        from src.cli import main
+        from ai_simtest_engine.cli import main
         runner = CliRunner()
 
         result = runner.invoke(main, [
@@ -76,7 +76,7 @@ class TestAutoModeBanner:
     @patch("src.cli.asyncio.run")
     def test_auto_mode_shows_auto_approve(self, mock_asyncio_run, mock_runner):
         """Auto mode with --auto-approve should show CI/CD indicator."""
-        from src.cli import main
+        from ai_simtest_engine.cli import main
         runner = CliRunner()
 
         result = runner.invoke(main, [
@@ -98,7 +98,7 @@ class TestAutoModeParameterPassing:
     @patch("src.cli.asyncio.run")
     def test_passes_endpoint(self, mock_asyncio_run):
         """Bot endpoint should be passed to the auto runner."""
-        from src.cli import main
+        from ai_simtest_engine.cli import main
         runner = CliRunner()
 
         result = runner.invoke(main, [
@@ -115,7 +115,7 @@ class TestAutoModeParameterPassing:
     @patch("src.cli.asyncio.run")
     def test_custom_personas_passed_as_none_when_default(self, mock_asyncio_run):
         """Default personas (20) should be passed as None to let auto mode decide."""
-        from src.cli import main
+        from ai_simtest_engine.cli import main
         runner = CliRunner()
 
         result = runner.invoke(main, [
@@ -136,7 +136,7 @@ class TestAutoResultDisplay:
 
     def test_print_completed_result(self, capsys):
         """Completed result should show green success."""
-        from src.cli import _print_auto_result
+        from ai_simtest_engine.cli import _print_auto_result
 
         result = MagicMock()
         result.status = "completed"
@@ -162,7 +162,7 @@ class TestAutoResultDisplay:
 
     def test_print_failed_no_response(self, capsys):
         """Failed (no_response) result should suggest checking endpoint."""
-        from src.cli import _print_auto_result
+        from ai_simtest_engine.cli import _print_auto_result
 
         result = MagicMock()
         result.status = "failed"
@@ -183,7 +183,7 @@ class TestAutoResultDisplay:
 
     def test_print_failed_inconsistent(self, capsys):
         """Failed (inconsistent) result should suggest partial mode."""
-        from src.cli import _print_auto_result
+        from ai_simtest_engine.cli import _print_auto_result
 
         result = MagicMock()
         result.status = "failed"
@@ -218,7 +218,7 @@ class TestAutoResultDisplay:
 
     def test_print_stopped_result(self, capsys):
         """Stopped result should suggest partial mode."""
-        from src.cli import _print_auto_result
+        from ai_simtest_engine.cli import _print_auto_result
 
         result = MagicMock()
         result.status = "stopped"
@@ -237,7 +237,7 @@ class TestAutoResultDisplay:
 
     def test_print_fullautoresult_style(self, capsys):
         """FullAutoResult (success field) should also display correctly."""
-        from src.cli import _print_auto_result
+        from ai_simtest_engine.cli import _print_auto_result
 
         result = MagicMock()
         # FullAutoResult uses 'success' instead of 'status'
@@ -273,7 +273,7 @@ class TestVersionShowsAutoMode:
     """Verify the version command mentions auto mode."""
 
     def test_version_mentions_auto(self):
-        from src.cli import main
+        from ai_simtest_engine.cli import main
         runner = CliRunner()
         result = runner.invoke(main, ["version"])
         assert "auto" in result.output.lower()
@@ -289,7 +289,7 @@ class TestAutoModeNoDocsRequired:
     @patch("src.cli.asyncio.run")
     def test_auto_mode_without_docs(self, mock_asyncio_run):
         """Auto mode should work with just --bot-endpoint."""
-        from src.cli import main
+        from ai_simtest_engine.cli import main
         runner = CliRunner()
 
         result = runner.invoke(main, [

@@ -14,7 +14,7 @@ Tests cover:
 
 import pytest
 
-from src.endurance import (
+from ai_simtest_engine.endurance import (
     BUILT_IN_COMPLEXITY_LEVELS,
     BUILT_IN_CONTRADICTIONS,
     BUILT_IN_FACTS,

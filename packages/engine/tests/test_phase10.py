@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from src.models import (
+from ai_simtest_engine.models import (
     Conversation,
     FailurePattern,
     JudgedConversation,
@@ -177,7 +177,7 @@ class TestPersonaRefiner:
     """Tests for src/generators/persona_refiner.py"""
 
     def test_analyze_failures_finds_high_risk(self, sample_report):
-        from src.generators.persona_refiner import PersonaRefiner
+        from ai_simtest_engine.generators.persona_refiner import PersonaRefiner
         refiner = PersonaRefiner()
         analysis = refiner.analyze_failures(sample_report)
 
@@ -188,7 +188,7 @@ class TestPersonaRefiner:
         assert "Angry Attacker" in high_risk_names
 
     def test_analyze_failures_by_type(self, sample_report):
-        from src.generators.persona_refiner import PersonaRefiner
+        from ai_simtest_engine.generators.persona_refiner import PersonaRefiner
         refiner = PersonaRefiner()
         analysis = refiner.analyze_failures(sample_report)
 
@@ -199,7 +199,7 @@ class TestPersonaRefiner:
         assert by_type["adversarial"] > by_type["standard"]
 
     def test_analyze_failures_by_topic(self, sample_report):
-        from src.generators.persona_refiner import PersonaRefiner
+        from ai_simtest_engine.generators.persona_refiner import PersonaRefiner
         refiner = PersonaRefiner()
         analysis = refiner.analyze_failures(sample_report)
 
@@ -208,7 +208,7 @@ class TestPersonaRefiner:
         assert by_topic["security"] >= 1
 
     def test_analyze_failures_strategy(self, sample_report):
-        from src.generators.persona_refiner import PersonaRefiner
+        from ai_simtest_engine.generators.persona_refiner import PersonaRefiner
         refiner = PersonaRefiner()
         analysis = refiner.analyze_failures(sample_report)
 
@@ -219,7 +219,7 @@ class TestPersonaRefiner:
         assert "adversarial" in strategy_text or "failure" in strategy_text
 
     def test_analyze_empty_report(self):
-        from src.generators.persona_refiner import PersonaRefiner
+        from ai_simtest_engine.generators.persona_refiner import PersonaRefiner
         refiner = PersonaRefiner()
 
         empty_report = SimulationReport(
@@ -234,7 +234,7 @@ class TestPersonaRefiner:
         assert analysis["high_risk_personas"] == []
 
     def test_build_refinement_prompt(self, sample_report):
-        from src.generators.persona_refiner import PersonaRefiner
+        from ai_simtest_engine.generators.persona_refiner import PersonaRefiner
         refiner = PersonaRefiner()
         analysis = refiner.analyze_failures(sample_report)
 
@@ -258,7 +258,7 @@ class TestRegressionSuiteManager:
     """Tests for src/regression/suite_manager.py"""
 
     def test_create_suite_from_report(self, sample_report):
-        from src.regression.suite_manager import RegressionSuiteManager
+        from ai_simtest_engine.regression.suite_manager import RegressionSuiteManager
         mgr = RegressionSuiteManager()
         suite = mgr.create_from_report(sample_report, name="Test Suite")
 
@@ -268,7 +268,7 @@ class TestRegressionSuiteManager:
         assert suite.total_cases < len(sample_report.judged_conversations)
 
     def test_suite_includes_failures(self, sample_report):
-        from src.regression.suite_manager import RegressionSuiteManager
+        from ai_simtest_engine.regression.suite_manager import RegressionSuiteManager
         mgr = RegressionSuiteManager()
         suite = mgr.create_from_report(sample_report)
 
@@ -276,7 +276,7 @@ class TestRegressionSuiteManager:
         assert len(fail_cases) > 0
 
     def test_suite_includes_warnings(self, sample_report):
-        from src.regression.suite_manager import RegressionSuiteManager
+        from ai_simtest_engine.regression.suite_manager import RegressionSuiteManager
         mgr = RegressionSuiteManager()
         suite = mgr.create_from_report(sample_report, include_warnings=True)
 
@@ -285,7 +285,7 @@ class TestRegressionSuiteManager:
         assert suite.total_cases >= 2  # at least the FAIL cases
 
     def test_suite_excludes_warnings_when_disabled(self, sample_report):
-        from src.regression.suite_manager import RegressionSuiteManager
+        from ai_simtest_engine.regression.suite_manager import RegressionSuiteManager
         mgr = RegressionSuiteManager()
         suite_with = mgr.create_from_report(sample_report, include_warnings=True)
         suite_without = mgr.create_from_report(sample_report, include_warnings=False)
@@ -294,7 +294,7 @@ class TestRegressionSuiteManager:
         assert suite_without.total_cases <= suite_with.total_cases
 
     def test_suite_has_user_messages(self, sample_report):
-        from src.regression.suite_manager import RegressionSuiteManager
+        from ai_simtest_engine.regression.suite_manager import RegressionSuiteManager
         mgr = RegressionSuiteManager()
         suite = mgr.create_from_report(sample_report)
 
@@ -303,7 +303,7 @@ class TestRegressionSuiteManager:
             assert all(isinstance(m, str) for m in tc.user_messages)
 
     def test_suite_has_tags(self, sample_report):
-        from src.regression.suite_manager import RegressionSuiteManager
+        from ai_simtest_engine.regression.suite_manager import RegressionSuiteManager
         mgr = RegressionSuiteManager()
         suite = mgr.create_from_report(sample_report)
 
@@ -312,7 +312,7 @@ class TestRegressionSuiteManager:
         assert len(cases_with_tags) > 0
 
     def test_save_and_load_suite(self, sample_report):
-        from src.regression.suite_manager import RegressionSuiteManager
+        from ai_simtest_engine.regression.suite_manager import RegressionSuiteManager
         mgr = RegressionSuiteManager()
         suite = mgr.create_from_report(sample_report, name="Persist Test")
 
@@ -326,14 +326,14 @@ class TestRegressionSuiteManager:
             assert len(loaded.test_cases) == len(suite.test_cases)
 
     def test_suite_max_cases(self, sample_report):
-        from src.regression.suite_manager import RegressionSuiteManager
+        from ai_simtest_engine.regression.suite_manager import RegressionSuiteManager
         mgr = RegressionSuiteManager()
         suite = mgr.create_from_report(sample_report, max_cases=2)
 
         assert suite.total_cases <= 2
 
     def test_suite_serialization_roundtrip(self, sample_report):
-        from src.regression.suite_manager import RegressionSuiteManager
+        from ai_simtest_engine.regression.suite_manager import RegressionSuiteManager
         mgr = RegressionSuiteManager()
         suite = mgr.create_from_report(sample_report)
 
@@ -342,7 +342,7 @@ class TestRegressionSuiteManager:
         json_str = json.dumps(data, default=str)
         parsed = json.loads(json_str)
 
-        from src.regression.suite_manager import RegressionSuite
+        from ai_simtest_engine.regression.suite_manager import RegressionSuite
         restored = RegressionSuite(**parsed)
         assert restored.total_cases == suite.total_cases
 
@@ -356,12 +356,12 @@ class TestComparisonEngine:
 
     def _export_summary(self, report: SimulationReport, path: Path):
         """Helper to export a summary.json from a report."""
-        from src.exporters.dataset_exporter import DatasetExporter
+        from ai_simtest_engine.exporters.dataset_exporter import DatasetExporter
         exporter = DatasetExporter()
         exporter.export_summary_json(report, path)
 
     def test_compare_detects_improvement(self, sample_report, sample_report_improved):
-        from src.comparison.engine import ComparisonEngine
+        from ai_simtest_engine.comparison.engine import ComparisonEngine
 
         with tempfile.TemporaryDirectory() as tmpdir:
             before_path = Path(tmpdir) / "before.json"
@@ -377,7 +377,7 @@ class TestComparisonEngine:
             assert report.after_name == "Test Run v2"
 
     def test_compare_pass_rate_delta(self, sample_report, sample_report_improved):
-        from src.comparison.engine import ComparisonEngine
+        from ai_simtest_engine.comparison.engine import ComparisonEngine
 
         with tempfile.TemporaryDirectory() as tmpdir:
             before_path = Path(tmpdir) / "before.json"
@@ -393,7 +393,7 @@ class TestComparisonEngine:
             assert pass_rate_delta.status == "improved"
 
     def test_compare_judge_deltas(self, sample_report, sample_report_improved):
-        from src.comparison.engine import ComparisonEngine
+        from ai_simtest_engine.comparison.engine import ComparisonEngine
 
         with tempfile.TemporaryDirectory() as tmpdir:
             before_path = Path(tmpdir) / "before.json"
@@ -409,7 +409,7 @@ class TestComparisonEngine:
                 assert jd.delta >= 0, f"Judge {jd.judge_name} regressed"
 
     def test_compare_failure_patterns(self, sample_report, sample_report_improved):
-        from src.comparison.engine import ComparisonEngine
+        from ai_simtest_engine.comparison.engine import ComparisonEngine
 
         with tempfile.TemporaryDirectory() as tmpdir:
             before_path = Path(tmpdir) / "before.json"
@@ -424,7 +424,7 @@ class TestComparisonEngine:
             assert len(report.resolved_failures) >= 1
 
     def test_compare_persona_types(self, sample_report, sample_report_improved):
-        from src.comparison.engine import ComparisonEngine
+        from ai_simtest_engine.comparison.engine import ComparisonEngine
 
         with tempfile.TemporaryDirectory() as tmpdir:
             before_path = Path(tmpdir) / "before.json"
@@ -444,7 +444,7 @@ class TestComparisonEngine:
             assert adv_delta.delta > 0
 
     def test_compare_same_report(self, sample_report):
-        from src.comparison.engine import ComparisonEngine
+        from ai_simtest_engine.comparison.engine import ComparisonEngine
 
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "same.json"
@@ -456,7 +456,7 @@ class TestComparisonEngine:
             assert report.overall_verdict == "unchanged"
 
     def test_compare_critical_failures_delta(self, sample_report, sample_report_improved):
-        from src.comparison.engine import ComparisonEngine
+        from ai_simtest_engine.comparison.engine import ComparisonEngine
 
         with tempfile.TemporaryDirectory() as tmpdir:
             before_path = Path(tmpdir) / "before.json"
@@ -473,7 +473,7 @@ class TestComparisonEngine:
             assert crit_delta.delta < 0
 
     def test_format_console(self, sample_report, sample_report_improved):
-        from src.comparison.engine import ComparisonEngine
+        from ai_simtest_engine.comparison.engine import ComparisonEngine
 
         with tempfile.TemporaryDirectory() as tmpdir:
             before_path = Path(tmpdir) / "before.json"
@@ -490,7 +490,7 @@ class TestComparisonEngine:
             assert "Pass Rate" in output
 
     def test_save_comparison(self, sample_report, sample_report_improved):
-        from src.comparison.engine import ComparisonEngine
+        from ai_simtest_engine.comparison.engine import ComparisonEngine
 
         with tempfile.TemporaryDirectory() as tmpdir:
             before_path = Path(tmpdir) / "before.json"
@@ -518,7 +518,7 @@ class TestRegressionModels:
     """Tests for the regression suite Pydantic models."""
 
     def test_regression_test_case(self):
-        from src.regression.suite_manager import RegressionTestCase
+        from ai_simtest_engine.regression.suite_manager import RegressionTestCase
         tc = RegressionTestCase(
             id="tc_001",
             source_conversation_id="conv_001",
@@ -536,7 +536,7 @@ class TestRegressionModels:
         assert tc.original_label == "FAIL"
 
     def test_regression_suite(self):
-        from src.regression.suite_manager import RegressionSuite, RegressionTestCase
+        from ai_simtest_engine.regression.suite_manager import RegressionSuite, RegressionTestCase
         suite = RegressionSuite(
             id="suite_001",
             name="Test Suite",
@@ -557,7 +557,7 @@ class TestRegressionModels:
         assert suite.total_cases == 1
 
     def test_replay_result(self):
-        from src.regression.suite_manager import ReplayResult
+        from ai_simtest_engine.regression.suite_manager import ReplayResult
         result = ReplayResult(
             test_case_id="tc_001",
             persona_name="User",
@@ -574,7 +574,7 @@ class TestRegressionModels:
         assert result.new_score > result.original_score
 
     def test_replay_summary(self):
-        from src.regression.suite_manager import ReplaySummary
+        from ai_simtest_engine.regression.suite_manager import ReplaySummary
         summary = ReplaySummary(
             suite_name="Test",
             total_cases=4,
@@ -594,7 +594,7 @@ class TestComparisonModels:
     """Tests for the comparison Pydantic models."""
 
     def test_metric_delta(self):
-        from src.comparison.engine import MetricDelta
+        from ai_simtest_engine.comparison.engine import MetricDelta
         d = MetricDelta(
             metric="Pass Rate",
             before=0.57,
@@ -607,7 +607,7 @@ class TestComparisonModels:
         assert d.delta > 0
 
     def test_comparison_report(self):
-        from src.comparison.engine import ComparisonReport, MetricDelta
+        from ai_simtest_engine.comparison.engine import ComparisonReport, MetricDelta
         report = ComparisonReport(
             before_name="v1",
             after_name="v2",

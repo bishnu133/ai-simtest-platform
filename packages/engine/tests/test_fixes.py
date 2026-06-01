@@ -19,7 +19,7 @@ class TestAdaptiveRateLimiter:
     """Tests for AdaptiveRateLimiter."""
 
     def test_initial_state(self):
-        from src.simulators.conversation_simulator import AdaptiveRateLimiter
+        from ai_simtest_engine.simulators.conversation_simulator import AdaptiveRateLimiter
         limiter = AdaptiveRateLimiter(initial_delay=0.1, max_delay=30.0)
         assert limiter._current_delay == 0.1
         assert limiter._total_429s == 0
@@ -27,7 +27,7 @@ class TestAdaptiveRateLimiter:
 
     @pytest.mark.asyncio
     async def test_success_reduces_delay(self):
-        from src.simulators.conversation_simulator import AdaptiveRateLimiter
+        from ai_simtest_engine.simulators.conversation_simulator import AdaptiveRateLimiter
         limiter = AdaptiveRateLimiter(initial_delay=0.1)
         limiter._current_delay = 5.0  # Simulate elevated delay
         await limiter.report_success()
@@ -36,7 +36,7 @@ class TestAdaptiveRateLimiter:
 
     @pytest.mark.asyncio
     async def test_rate_limit_increases_delay(self):
-        from src.simulators.conversation_simulator import AdaptiveRateLimiter
+        from ai_simtest_engine.simulators.conversation_simulator import AdaptiveRateLimiter
         limiter = AdaptiveRateLimiter(initial_delay=0.1, backoff_factor=2.0)
         original_delay = limiter._current_delay
         await limiter.report_rate_limit()
@@ -46,7 +46,7 @@ class TestAdaptiveRateLimiter:
 
     @pytest.mark.asyncio
     async def test_retry_after_header_respected(self):
-        from src.simulators.conversation_simulator import AdaptiveRateLimiter
+        from ai_simtest_engine.simulators.conversation_simulator import AdaptiveRateLimiter
         limiter = AdaptiveRateLimiter()
         wait_time = await limiter.report_rate_limit(retry_after=10.0)
         # Should wait at least 10 seconds (plus jitter)
@@ -54,19 +54,19 @@ class TestAdaptiveRateLimiter:
 
     @pytest.mark.asyncio
     async def test_max_delay_cap(self):
-        from src.simulators.conversation_simulator import AdaptiveRateLimiter
+        from ai_simtest_engine.simulators.conversation_simulator import AdaptiveRateLimiter
         limiter = AdaptiveRateLimiter(initial_delay=0.1, max_delay=5.0, backoff_factor=100.0)
         await limiter.report_rate_limit()
         assert limiter._current_delay <= 5.0
 
     def test_should_give_up_after_many_429s(self):
-        from src.simulators.conversation_simulator import AdaptiveRateLimiter
+        from ai_simtest_engine.simulators.conversation_simulator import AdaptiveRateLimiter
         limiter = AdaptiveRateLimiter(max_retries=3)
         limiter._consecutive_429s = 10
         assert limiter.should_give_up is True
 
     def test_stats(self):
-        from src.simulators.conversation_simulator import AdaptiveRateLimiter
+        from ai_simtest_engine.simulators.conversation_simulator import AdaptiveRateLimiter
         limiter = AdaptiveRateLimiter()
         limiter._total_requests = 100
         limiter._total_429s = 15
@@ -81,8 +81,8 @@ class TestTargetBotClientRetry:
 
     @pytest.mark.asyncio
     async def test_parse_retry_after_header(self):
-        from src.simulators.conversation_simulator import TargetBotClient, AdaptiveRateLimiter
-        from src.models import BotConfig
+        from ai_simtest_engine.simulators.conversation_simulator import TargetBotClient, AdaptiveRateLimiter
+        from ai_simtest_engine.models import BotConfig
         import httpx
 
         bot = TargetBotClient(
@@ -103,8 +103,8 @@ class TestTargetBotClientRetry:
 
     @pytest.mark.asyncio
     async def test_parse_ratelimit_reset_header(self):
-        from src.simulators.conversation_simulator import TargetBotClient, AdaptiveRateLimiter
-        from src.models import BotConfig
+        from ai_simtest_engine.simulators.conversation_simulator import TargetBotClient, AdaptiveRateLimiter
+        from ai_simtest_engine.models import BotConfig
         import httpx
 
         bot = TargetBotClient(
@@ -124,12 +124,12 @@ class TestConversationSimulatorStagger:
     """Tests for staggered conversation starts."""
 
     def test_stagger_delay_default(self):
-        from src.simulators.conversation_simulator import ConversationSimulator
+        from ai_simtest_engine.simulators.conversation_simulator import ConversationSimulator
         sim = ConversationSimulator(max_parallel=5)
         assert sim.stagger_delay == 0.5
 
     def test_stagger_delay_custom(self):
-        from src.simulators.conversation_simulator import ConversationSimulator
+        from ai_simtest_engine.simulators.conversation_simulator import ConversationSimulator
         sim = ConversationSimulator(max_parallel=5, stagger_delay=1.0)
         assert sim.stagger_delay == 1.0
 
@@ -142,7 +142,7 @@ class TestSystemPromptLeakDetector:
     """Tests for context-aware system prompt leak detection."""
 
     def _get_detector(self):
-        from src.judges.safety_judge import SystemPromptLeakDetector
+        from ai_simtest_engine.judges.safety_judge import SystemPromptLeakDetector
         return SystemPromptLeakDetector()
 
     # --- TRUE POSITIVES: Should detect these as leaks ---
@@ -266,7 +266,7 @@ class TestSafetyJudgeIntegration:
     @pytest.mark.asyncio
     async def test_no_false_positive_on_real_responses(self):
         """Test with actual responses from the Lovable Bot test."""
-        from src.judges.safety_judge import SafetyJudge
+        from ai_simtest_engine.judges.safety_judge import SafetyJudge
 
         judge = SafetyJudge()
         # Skip model initialization — just test policy checks
@@ -287,7 +287,7 @@ class TestSafetyJudgeIntegration:
 
     @pytest.mark.asyncio
     async def test_catches_real_leak(self):
-        from src.judges.safety_judge import SafetyJudge
+        from ai_simtest_engine.judges.safety_judge import SafetyJudge
 
         judge = SafetyJudge()
         judge.pii_enabled = False
@@ -301,7 +301,7 @@ class TestSafetyJudgeIntegration:
 
     @pytest.mark.asyncio
     async def test_harmful_content_still_detected(self):
-        from src.judges.safety_judge import SafetyJudge
+        from ai_simtest_engine.judges.safety_judge import SafetyJudge
 
         judge = SafetyJudge()
         judge.pii_enabled = False
@@ -321,7 +321,7 @@ class TestApprovalGateModels:
     """Tests for approval gate data models."""
 
     def test_gate_proposal_creation(self):
-        from src.core.approval_gate import GateProposal, ProposalItem, ConfidenceLevel
+        from ai_simtest_engine.core.approval_gate import GateProposal, ProposalItem, ConfidenceLevel
         proposal = GateProposal(
             gate_name="test_gate",
             title="Test Gate",
@@ -333,7 +333,7 @@ class TestApprovalGateModels:
         assert proposal.item_count == 2
 
     def test_gate_result_creation(self):
-        from src.core.approval_gate import GateResult, GateDecision, GateProposal
+        from ai_simtest_engine.core.approval_gate import GateResult, GateDecision, GateProposal
         proposal = GateProposal(gate_name="test_gate", title="Test")
         result = GateResult(
             gate_name="test_gate",
@@ -344,7 +344,7 @@ class TestApprovalGateModels:
         assert result.modifications == []
 
     def test_audit_trail(self):
-        from src.core.approval_gate import AuditTrail, GateResult, GateDecision, GateProposal
+        from ai_simtest_engine.core.approval_gate import AuditTrail, GateResult, GateDecision, GateProposal
         trail = AuditTrail()
         proposal1 = GateProposal(gate_name="gate_1", title="Gate 1")
         proposal2 = GateProposal(gate_name="gate_2", title="Gate 2")
@@ -369,7 +369,7 @@ class TestCLIApprovalGateAutoApprove:
 
     @pytest.mark.asyncio
     async def test_auto_approve(self):
-        from src.core.approval_gate import CLIApprovalGate, GateProposal, ProposalItem, GateDecision
+        from ai_simtest_engine.core.approval_gate import CLIApprovalGate, GateProposal, ProposalItem, GateDecision
 
         gate = CLIApprovalGate(auto_approve=True)
         proposal = GateProposal(
@@ -386,25 +386,25 @@ class TestCLIApprovalGateHelpers:
     """Tests for CLI gate helper methods."""
 
     def test_item_summary_string(self):
-        from src.core.approval_gate import CLIApprovalGate
+        from ai_simtest_engine.core.approval_gate import CLIApprovalGate
         gate = CLIApprovalGate()
         assert gate._item_summary("hello world") == "hello world"
         assert gate._item_summary("x" * 100, max_len=10) == "x" * 10 + "..."
 
     def test_item_summary_dict(self):
-        from src.core.approval_gate import CLIApprovalGate
+        from ai_simtest_engine.core.approval_gate import CLIApprovalGate
         gate = CLIApprovalGate()
         summary = gate._item_summary({"type": "safety", "description": "No PII leakage"})
         assert "type" in summary
         assert "safety" in summary
 
     def test_item_display_string(self):
-        from src.core.approval_gate import CLIApprovalGate
+        from ai_simtest_engine.core.approval_gate import CLIApprovalGate
         gate = CLIApprovalGate()
         assert gate._item_display("test item") == "test item"
 
     def test_item_display_dict(self):
-        from src.core.approval_gate import CLIApprovalGate
+        from ai_simtest_engine.core.approval_gate import CLIApprovalGate
         gate = CLIApprovalGate()
         display = gate._item_display({"rule": "no PII", "severity": "critical"})
         assert "rule" in display
@@ -416,7 +416,7 @@ class TestAPIApprovalGate:
 
     @pytest.mark.asyncio
     async def test_auto_approve(self):
-        from src.core.approval_gate import APIApprovalGate, GateProposal, ProposalItem, GateDecision
+        from ai_simtest_engine.core.approval_gate import APIApprovalGate, GateProposal, ProposalItem, GateDecision
 
         gate = APIApprovalGate(auto_approve=True)
         proposal = GateProposal(
@@ -429,7 +429,7 @@ class TestAPIApprovalGate:
 
     @pytest.mark.asyncio
     async def test_timeout_reject(self):
-        from src.core.approval_gate import APIApprovalGate, GateProposal, ProposalItem, GateDecision
+        from ai_simtest_engine.core.approval_gate import APIApprovalGate, GateProposal, ProposalItem, GateDecision
 
         APIApprovalGate._pending_gates.clear()
         APIApprovalGate._gate_results.clear()
@@ -445,7 +445,7 @@ class TestAPIApprovalGate:
 
     @pytest.mark.asyncio
     async def test_timeout_auto_approve(self):
-        from src.core.approval_gate import APIApprovalGate, GateProposal, ProposalItem, GateDecision
+        from ai_simtest_engine.core.approval_gate import APIApprovalGate, GateProposal, ProposalItem, GateDecision
 
         APIApprovalGate._pending_gates.clear()
         APIApprovalGate._gate_results.clear()
@@ -460,7 +460,7 @@ class TestAPIApprovalGate:
         assert result.modified_data is not None  # Data still returned when action=approve
 
     def test_pending_gates_tracking(self):
-        from src.core.approval_gate import APIApprovalGate, GateProposal
+        from ai_simtest_engine.core.approval_gate import APIApprovalGate, GateProposal
         # Clear any previous state
         APIApprovalGate._pending_gates.clear()
         assert len(APIApprovalGate.get_pending_gates()) == 0

@@ -12,15 +12,15 @@ import pytest
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from src.core.full_auto_orchestrator import (
+from ai_simtest_engine.core.full_auto_orchestrator import (
     RetryStrategy,
     MismatchReport,
     detect_mismatches,
     FullAutoOrchestrator,
     FullAutoResult,
 )
-from src.discovery.synthesizer import DiscoveredContext, ConfidenceScore
-from src.discovery.bot_discovery import DiscoveryResult
+from ai_simtest_engine.discovery.synthesizer import DiscoveredContext, ConfidenceScore
+from ai_simtest_engine.discovery.bot_discovery import DiscoveryResult
 
 
 # ============================================================

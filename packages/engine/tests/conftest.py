@@ -15,7 +15,7 @@ def pytest_configure(config):
 @pytest.fixture(autouse=True)
 def reset_factory():
     """Reset LLM client factory cache between tests."""
-    from src.core.llm_client import LLMClientFactory
+    from ai_simtest_engine.core.llm_client import LLMClientFactory
     LLMClientFactory.clear_cache()
     yield
     LLMClientFactory.clear_cache()

@@ -9,8 +9,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from src.analyzers.document_analyzer import BotContext
-from src.analyzers.criteria_generator import CriteriaSet, SuccessCriterion
+from ai_simtest_engine.analyzers.document_analyzer import BotContext
+from ai_simtest_engine.analyzers.criteria_generator import CriteriaSet, SuccessCriterion
 
 
 # ============================================================
@@ -48,7 +48,7 @@ class TestGuardrailGenerator:
 
     @pytest.mark.asyncio
     async def test_generate_guardrails(self, sample_context, sample_criteria):
-        from src.analyzers.guardrail_generator import GuardrailGenerator
+        from ai_simtest_engine.analyzers.guardrail_generator import GuardrailGenerator
 
         mock_llm = AsyncMock()
         mock_llm.model = "test-model"
@@ -93,7 +93,7 @@ class TestGuardrailGenerator:
 
     @pytest.mark.asyncio
     async def test_generate_without_criteria(self, sample_context):
-        from src.analyzers.guardrail_generator import GuardrailGenerator
+        from ai_simtest_engine.analyzers.guardrail_generator import GuardrailGenerator
 
         mock_llm = AsyncMock()
         mock_llm.model = "test-model"
@@ -112,7 +112,7 @@ class TestGuardrailGenerator:
 
     @pytest.mark.asyncio
     async def test_fallback_on_failure(self, sample_context):
-        from src.analyzers.guardrail_generator import GuardrailGenerator
+        from ai_simtest_engine.analyzers.guardrail_generator import GuardrailGenerator
 
         mock_llm = AsyncMock()
         mock_llm.model = "test-model"
@@ -127,7 +127,7 @@ class TestGuardrailGenerator:
 
     @pytest.mark.asyncio
     async def test_default_includes_limitations(self, sample_context):
-        from src.analyzers.guardrail_generator import GuardrailGenerator
+        from ai_simtest_engine.analyzers.guardrail_generator import GuardrailGenerator
 
         mock_llm = AsyncMock()
         mock_llm.model = "test-model"
@@ -142,7 +142,7 @@ class TestGuardrailGenerator:
         assert "payment" in all_text.lower() or "inventory" in all_text.lower()
 
     def test_to_proposal_items(self):
-        from src.analyzers.guardrail_generator import GuardrailRule, GuardrailSet
+        from ai_simtest_engine.analyzers.guardrail_generator import GuardrailRule, GuardrailSet
 
         gs = GuardrailSet(rules=[
             GuardrailRule(rule="Rule 1", severity="critical", rationale="Important",
@@ -157,7 +157,7 @@ class TestGuardrailGenerator:
         assert "Bad example" in items[0].explanation
 
     def test_as_policy_strings(self):
-        from src.analyzers.guardrail_generator import GuardrailRule, GuardrailSet
+        from ai_simtest_engine.analyzers.guardrail_generator import GuardrailRule, GuardrailSet
 
         gs = GuardrailSet(rules=[
             GuardrailRule(rule="No PII exposure"),
@@ -168,7 +168,7 @@ class TestGuardrailGenerator:
         assert policies == ["No PII exposure", "No system prompt leakage"]
 
     def test_from_approval_data(self):
-        from src.analyzers.guardrail_generator import GuardrailGenerator
+        from ai_simtest_engine.analyzers.guardrail_generator import GuardrailGenerator
 
         approved = [
             {"rule": "Rule A", "category": "prompt_security", "severity": "critical"},
@@ -180,7 +180,7 @@ class TestGuardrailGenerator:
         assert gs.rules[0].category == "prompt_security"
 
     def test_from_approval_data_strings(self):
-        from src.analyzers.guardrail_generator import GuardrailGenerator
+        from ai_simtest_engine.analyzers.guardrail_generator import GuardrailGenerator
 
         approved = ["No PII", "No toxic content"]
         gs = GuardrailGenerator.from_approval_data(approved)
@@ -190,7 +190,7 @@ class TestGuardrailGenerator:
 
     @pytest.mark.asyncio
     async def test_parse_list_response(self, sample_context):
-        from src.analyzers.guardrail_generator import GuardrailGenerator
+        from ai_simtest_engine.analyzers.guardrail_generator import GuardrailGenerator
 
         mock_llm = AsyncMock()
         mock_llm.model = "test-model"
@@ -213,8 +213,8 @@ class TestTestPlanGenerator:
 
     @pytest.mark.asyncio
     async def test_generate_plan(self, sample_context, sample_criteria):
-        from src.analyzers.guardrail_generator import GuardrailRule, GuardrailSet
-        from src.analyzers.test_plan_generator import TestPlanGenerator
+        from ai_simtest_engine.analyzers.guardrail_generator import GuardrailRule, GuardrailSet
+        from ai_simtest_engine.analyzers.test_plan_generator import TestPlanGenerator
 
         guardrails = GuardrailSet(rules=[
             GuardrailRule(rule="No system prompt leakage", severity="critical"),
@@ -271,7 +271,7 @@ class TestTestPlanGenerator:
 
     @pytest.mark.asyncio
     async def test_generate_without_criteria_or_guardrails(self, sample_context):
-        from src.analyzers.test_plan_generator import TestPlanGenerator
+        from ai_simtest_engine.analyzers.test_plan_generator import TestPlanGenerator
 
         mock_llm = AsyncMock()
         mock_llm.model = "test-model"
@@ -291,7 +291,7 @@ class TestTestPlanGenerator:
 
     @pytest.mark.asyncio
     async def test_fallback_on_failure(self, sample_context):
-        from src.analyzers.test_plan_generator import TestPlanGenerator
+        from ai_simtest_engine.analyzers.test_plan_generator import TestPlanGenerator
 
         mock_llm = AsyncMock()
         mock_llm.model = "test-model"
@@ -307,7 +307,7 @@ class TestTestPlanGenerator:
 
     @pytest.mark.asyncio
     async def test_default_plan_includes_capabilities(self, sample_context):
-        from src.analyzers.test_plan_generator import TestPlanGenerator
+        from ai_simtest_engine.analyzers.test_plan_generator import TestPlanGenerator
 
         mock_llm = AsyncMock()
         mock_llm.model = "test-model"
@@ -323,7 +323,7 @@ class TestTestPlanGenerator:
         assert any(cap in topic_names for cap in sample_context.capabilities[:3])
 
     def test_to_proposal_items(self):
-        from src.analyzers.test_plan_generator import (
+        from ai_simtest_engine.analyzers.test_plan_generator import (
             ConversationConfig,
             PersonaStrategy,
             TestPlan,
@@ -348,7 +348,7 @@ class TestTestPlanGenerator:
         assert items[1].confidence.value == "low"
 
     def test_to_simulation_params(self):
-        from src.analyzers.test_plan_generator import (
+        from ai_simtest_engine.analyzers.test_plan_generator import (
             JudgeRecommendation,
             PersonaStrategy,
             TestPlan,
@@ -370,7 +370,7 @@ class TestTestPlanGenerator:
         assert len(params["judges"]) == 1
 
     def test_from_approval_data(self):
-        from src.analyzers.test_plan_generator import TestPlanGenerator
+        from ai_simtest_engine.analyzers.test_plan_generator import TestPlanGenerator
 
         approved = [
             {"type": "topic", "name": "Refunds", "priority": "high", "risk_level": "high"},
@@ -387,7 +387,7 @@ class TestTestPlanGenerator:
         assert plan.conversation_config.max_turns == 20
 
     def test_high_risk_topics(self):
-        from src.analyzers.test_plan_generator import TestPlan, TestTopic
+        from ai_simtest_engine.analyzers.test_plan_generator import TestPlan, TestTopic
 
         plan = TestPlan(topics=[
             TestTopic(name="Safe", risk_level="low"),
@@ -401,7 +401,7 @@ class TestTestPlanGenerator:
     @pytest.mark.asyncio
     async def test_parse_string_topics(self, sample_context):
         """Handle LLM returning topic names as strings instead of objects."""
-        from src.analyzers.test_plan_generator import TestPlanGenerator
+        from ai_simtest_engine.analyzers.test_plan_generator import TestPlanGenerator
 
         mock_llm = AsyncMock()
         mock_llm.model = "test-model"
@@ -427,9 +427,9 @@ class TestFullAnalysisPipeline:
     @pytest.mark.asyncio
     async def test_full_pipeline_mock(self, sample_context):
         """Test the complete analysis pipeline: context → criteria → guardrails → plan."""
-        from src.analyzers.criteria_generator import CriteriaGenerator
-        from src.analyzers.guardrail_generator import GuardrailGenerator
-        from src.analyzers.test_plan_generator import TestPlanGenerator
+        from ai_simtest_engine.analyzers.criteria_generator import CriteriaGenerator
+        from ai_simtest_engine.analyzers.guardrail_generator import GuardrailGenerator
+        from ai_simtest_engine.analyzers.test_plan_generator import TestPlanGenerator
 
         # Mock LLM that returns appropriate responses based on prompt content
         mock_llm = AsyncMock()
@@ -495,9 +495,9 @@ class TestFullAnalysisPipeline:
     @pytest.mark.asyncio
     async def test_pipeline_with_approval_gate_items(self, sample_context):
         """Test that all stages produce valid ProposalItems."""
-        from src.analyzers.criteria_generator import CriteriaSet, SuccessCriterion
-        from src.analyzers.guardrail_generator import GuardrailRule, GuardrailSet
-        from src.analyzers.test_plan_generator import PersonaStrategy, TestPlan, TestTopic
+        from ai_simtest_engine.analyzers.criteria_generator import CriteriaSet, SuccessCriterion
+        from ai_simtest_engine.analyzers.guardrail_generator import GuardrailRule, GuardrailSet
+        from ai_simtest_engine.analyzers.test_plan_generator import PersonaStrategy, TestPlan, TestTopic
 
         criteria = CriteriaSet(criteria=[
             SuccessCriterion(criterion="Rule 1", importance="high"),

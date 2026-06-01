@@ -6,7 +6,7 @@ Run: pytest tests/test_providers.py -v
 """
 
 import pytest
-from src.core.llm_client import LLMProviderManager, ProviderType, LLMClient, LLMClientFactory
+from ai_simtest_engine.core.llm_client import LLMProviderManager, ProviderType, LLMClient, LLMClientFactory
 
 
 # ============================================================

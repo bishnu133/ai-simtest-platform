@@ -24,7 +24,7 @@ from unittest.mock import patch
 
 import pytest
 
-from src.multi_compare.models import (
+from ai_simtest_engine.multi_compare.models import (
     # Enums
     AdapterType, ComparisonMode, Dimension, INVERTED_DIMENSIONS,
     StatisticalVerdictLabel, EvaluatorType, ModelRunStatus,
@@ -61,7 +61,7 @@ from src.multi_compare.models import (
     MultiCompareReport,
 )
 
-from src.multi_compare.config_loader import (
+from ai_simtest_engine.multi_compare.config_loader import (
     load_multi_compare_config,
     ConfigLoadResult,
     ConfigLoadError,
@@ -73,7 +73,7 @@ from src.multi_compare.config_loader import (
     compute_config_hash,
 )
 
-from src.multi_compare.security import (
+from ai_simtest_engine.multi_compare.security import (
     RedactingFormatter,
     SafeSerializer,
     SecurityError,

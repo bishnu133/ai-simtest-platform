@@ -13,9 +13,9 @@ Test classes:
 import asyncio
 import pytest
 
-from src.rag_eval.demo_packs import list_demo_packs, load_demo_pack, DemoJudgedConversation
-from src.rag_eval.engine import RAGEvalEngine
-from src.rag_eval.models import RAGEvalConfig, EvalSpeed
+from ai_simtest_engine.rag_eval.demo_packs import list_demo_packs, load_demo_pack, DemoJudgedConversation
+from ai_simtest_engine.rag_eval.engine import RAGEvalEngine
+from ai_simtest_engine.rag_eval.models import RAGEvalConfig, EvalSpeed
 
 
 def run(coro):
@@ -162,7 +162,7 @@ class TestDemoPackIntegration:
         assert report.overall_score > 0.0
 
     def test_finance_pack_through_engine(self):
-        from src.rag_eval.tool_metrics import ToolDefinition
+        from ai_simtest_engine.rag_eval.tool_metrics import ToolDefinition
         config = RAGEvalConfig(eval_speed=EvalSpeed.FAST)
         convs, ctx, raw_defs = load_demo_pack("finance_tools")
         tool_defs = [ToolDefinition.from_dict(d) for d in raw_defs]

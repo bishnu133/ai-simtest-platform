@@ -15,7 +15,7 @@ import json
 import pytest
 from unittest.mock import AsyncMock
 
-from src.rag_eval.models import (
+from ai_simtest_engine.rag_eval.models import (
     EvalSpeed,
     EvidenceMode,
     RAGEvalConfig,
@@ -23,7 +23,7 @@ from src.rag_eval.models import (
     ToolCall,
     ToolMetricType,
 )
-from src.rag_eval.tool_metrics import ToolMetricEvaluator, ToolDefinition
+from ai_simtest_engine.rag_eval.tool_metrics import ToolMetricEvaluator, ToolDefinition
 
 
 def run(coro):

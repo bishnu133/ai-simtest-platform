@@ -7,7 +7,7 @@ import asyncio
 import json
 import pytest
 
-from src.models import (
+from ai_simtest_engine.models import (
     BotConfig,
     Conversation,
     JudgedConversation,
@@ -147,7 +147,7 @@ class TestSimulationConfig:
 class TestRelevanceJudge:
     @pytest.mark.asyncio
     async def test_relevant_response(self):
-        from src.judges.quality_judge import RelevanceJudge
+        from ai_simtest_engine.judges.quality_judge import RelevanceJudge
 
         judge = RelevanceJudge()
         result = await judge.evaluate(
@@ -161,7 +161,7 @@ class TestRelevanceJudge:
 
     @pytest.mark.asyncio
     async def test_irrelevant_response(self):
-        from src.judges.quality_judge import RelevanceJudge
+        from ai_simtest_engine.judges.quality_judge import RelevanceJudge
 
         judge = RelevanceJudge()
         result = await judge.evaluate(
@@ -180,7 +180,7 @@ class TestRelevanceJudge:
 
 class TestReportGenerator:
     def test_generate_empty_report(self):
-        from src.core.report_generator import ReportGenerator
+        from ai_simtest_engine.core.report_generator import ReportGenerator
 
         gen = ReportGenerator()
         report = gen.generate(
@@ -194,7 +194,7 @@ class TestReportGenerator:
         assert report.summary.pass_rate == 0.0
 
     def test_generate_report_with_data(self):
-        from src.core.report_generator import ReportGenerator
+        from ai_simtest_engine.core.report_generator import ReportGenerator
 
         gen = ReportGenerator()
 
@@ -239,8 +239,8 @@ class TestReportGenerator:
 
 class TestDatasetExporter:
     def test_export_jsonl(self, tmp_path):
-        from src.exporters.dataset_exporter import DatasetExporter
-        from src.models import SimulationReport, ReportSummary
+        from ai_simtest_engine.exporters.dataset_exporter import DatasetExporter
+        from ai_simtest_engine.models import SimulationReport, ReportSummary
 
         exporter = DatasetExporter()
 

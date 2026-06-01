@@ -17,7 +17,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src.scenarios import (
+from ai_simtest_engine.scenarios import (
     ScenarioCategory,
     ScenarioDifficulty,
     ScenarioLibrary,
@@ -25,7 +25,7 @@ from src.scenarios import (
     ScenarioTemplate,
     ScenarioTurnInstruction,
 )
-from src.scenarios.built_in import get_built_in_scenarios
+from ai_simtest_engine.scenarios.built_in import get_built_in_scenarios
 
 
 # ─── Fixtures ───────────────────────────────────────────────

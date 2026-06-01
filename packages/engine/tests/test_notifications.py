@@ -24,7 +24,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.notifications.models import (
+from ai_simtest_engine.notifications.models import (
     ChannelConfig, ChannelType, CircuitBreakerState,
     CRITICAL_BYPASS_EVENTS, DEFAULT_SEVERITY, DedupeTracker,
     DeliveryMode, DeliveryResult, DeliveryStatus, EventType,
@@ -34,19 +34,19 @@ from src.notifications.models import (
     MAX_SUMMARY_LENGTH, MAX_DETAIL_FIELDS, MAX_LINKS,
     MAX_BUFFERED_EVENTS_PER_CHANNEL,
 )
-from src.notifications.formatters import (
+from ai_simtest_engine.notifications.formatters import (
     EmailFormatter, GenericWebhookFormatter, SlackFormatter,
     TeamsFormatter, get_formatter,
 )
-from src.notifications.delivery import (
+from ai_simtest_engine.notifications.delivery import (
     classify_failure, compute_backoff, compute_payload_checksum,
 )
-from src.notifications.loader import (
+from ai_simtest_engine.notifications.loader import (
     lint_notification_config, load_notification_config,
     redact_url, redact_token,
 )
-from src.notifications.engine import NotificationEngine
-from src.notifications.notification_html import (
+from ai_simtest_engine.notifications.engine import NotificationEngine
+from ai_simtest_engine.notifications.notification_html import (
     generate_notification_html, inject_notification_into_report,
 )
 

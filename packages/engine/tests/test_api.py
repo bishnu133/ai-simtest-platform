@@ -18,8 +18,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from src.api.app import app
-from src.models import (
+from ai_simtest_engine.api.app import app
+from ai_simtest_engine.models import (
     BotConfig,
     Conversation,
     FailurePattern,
@@ -52,7 +52,7 @@ def api_client():
 @pytest.fixture()
 def _clear_simulations():
     """Clear the in-memory simulation store before each test."""
-    from src.api import app as app_module
+    from ai_simtest_engine.api import app as app_module
     app_module._simulations.clear()
     yield
     app_module._simulations.clear()
@@ -189,7 +189,7 @@ class TestSimulationStatus:
 
     def test_get_status_completed(self, api_client):
         """Inject a completed orchestrator and check status."""
-        from src.api import app as app_module
+        from ai_simtest_engine.api import app as app_module
         orch = _make_completed_orchestrator()
         app_module._simulations["sim_test1234"] = orch
 
@@ -209,7 +209,7 @@ class TestSimulationReport:
 
     def test_get_report_completed(self, api_client):
         """Completed simulation should return full report."""
-        from src.api import app as app_module
+        from ai_simtest_engine.api import app as app_module
         orch = _make_completed_orchestrator()
         app_module._simulations["sim_test1234"] = orch
 
@@ -225,7 +225,7 @@ class TestSimulationReport:
 
     def test_get_report_not_yet_completed(self, api_client):
         """Running simulation should return status without report."""
-        from src.api import app as app_module
+        from ai_simtest_engine.api import app as app_module
         config = SimulationConfig(
             id="sim_running",
             bot=BotConfig(api_endpoint="http://localhost:9999/v1/chat/completions"),
@@ -249,7 +249,7 @@ class TestSimulationPersonas:
         assert resp.status_code == 404
 
     def test_get_personas_completed(self, api_client):
-        from src.api import app as app_module
+        from ai_simtest_engine.api import app as app_module
         orch = _make_completed_orchestrator()
         app_module._simulations["sim_test1234"] = orch
 
@@ -269,7 +269,7 @@ class TestListSimulations:
         assert data["simulations"] == []
 
     def test_list_with_simulations(self, api_client):
-        from src.api import app as app_module
+        from ai_simtest_engine.api import app as app_module
         orch = _make_completed_orchestrator()
         app_module._simulations["sim_test1234"] = orch
 
@@ -288,7 +288,7 @@ class TestExportEndpoint:
         assert resp.status_code == 404
 
     def test_export_not_completed(self, api_client):
-        from src.api import app as app_module
+        from ai_simtest_engine.api import app as app_module
         config = SimulationConfig(
             id="sim_running",
             bot=BotConfig(api_endpoint="http://localhost:9999/v1/chat/completions"),
@@ -302,7 +302,7 @@ class TestExportEndpoint:
         assert resp.status_code == 400
 
     def test_export_completed(self, api_client, tmp_path):
-        from src.api import app as app_module
+        from ai_simtest_engine.api import app as app_module
         orch = _make_completed_orchestrator()
         orch.export_results = MagicMock(return_value={
             "jsonl": str(tmp_path / "conversations.jsonl"),
@@ -324,26 +324,26 @@ class TestExportEndpoint:
 class TestCLIEntryPoint:
     def test_cli_main_group_exists(self):
         """Verify the CLI main group is importable."""
-        from src.cli import main
+        from ai_simtest_engine.cli import main
         assert main is not None
         assert hasattr(main, "commands")
 
     def test_cli_has_run_command(self):
-        from src.cli import main
+        from ai_simtest_engine.cli import main
         assert "run" in main.commands
 
     def test_cli_has_serve_command(self):
-        from src.cli import main
+        from ai_simtest_engine.cli import main
         assert "serve" in main.commands
 
     def test_cli_has_version_command(self):
-        from src.cli import main
+        from ai_simtest_engine.cli import main
         assert "version" in main.commands
 
     def test_cli_version_output(self):
         """Invoke the version command and check output."""
         from click.testing import CliRunner
-        from src.cli import main
+        from ai_simtest_engine.cli import main
 
         runner = CliRunner()
         result = runner.invoke(main, ["version"])
@@ -353,7 +353,7 @@ class TestCLIEntryPoint:
     def test_cli_run_requires_bot_endpoint(self):
         """Run without --bot-endpoint should fail."""
         from click.testing import CliRunner
-        from src.cli import main
+        from ai_simtest_engine.cli import main
 
         runner = CliRunner()
         result = runner.invoke(main, ["run"])
@@ -363,7 +363,7 @@ class TestCLIEntryPoint:
     def test_cli_run_invokes_simulation(self):
         """Run with mock orchestrator — verify pipeline is called."""
         from click.testing import CliRunner
-        from src.cli import main
+        from ai_simtest_engine.cli import main
 
         mock_report = MagicMock()
         mock_report.summary = MagicMock(

@@ -21,7 +21,7 @@ import json
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-from src.rag_eval.models import (
+from ai_simtest_engine.rag_eval.models import (
     EvidenceMode,
     JudgeReliability,
     EvalSpeed,
@@ -39,7 +39,7 @@ from src.rag_eval.models import (
     ConversationRAGResult,
     RAGEvalConfig,
 )
-from src.rag_eval.annotator import ResponseAnnotator
+from ai_simtest_engine.rag_eval.annotator import ResponseAnnotator
 
 
 # ============================================================================

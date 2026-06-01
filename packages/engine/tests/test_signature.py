@@ -22,7 +22,7 @@ from pathlib import Path
 
 # ── Models ───────────────────────────────────────────────────
 
-from src.signature.models import (
+from ai_simtest_engine.signature.models import (
     TurnSignals, BotSignature, AnomalyFlag, AnomalyType,
     ToneProfile, ToneRawMetrics, ToneDerivedScores,
     VerbosityProfile, VerbosityRawMetrics, VerbosityDerivedScores,
@@ -102,7 +102,7 @@ class TestModels:
 
 # ── Thresholds ───────────────────────────────────────────────
 
-from src.signature.thresholds import (
+from ai_simtest_engine.signature.thresholds import (
     SignatureThresholds, DEFAULT_THRESHOLDS, compute_reliability,
 )
 
@@ -135,7 +135,7 @@ class TestThresholds:
 
 # ── Utils ────────────────────────────────────────────────────
 
-from src.signature.utils import safe_mean, safe_median, safe_stdev, safe_percentile, truncate_text
+from ai_simtest_engine.signature.utils import safe_mean, safe_median, safe_stdev, safe_percentile, truncate_text
 
 
 class TestUtils:
@@ -167,7 +167,7 @@ class TestUtils:
 
 # ── Text Feature Extractor ───────────────────────────────────
 
-from src.signature.extractors.text_features import TextFeatureExtractor
+from ai_simtest_engine.signature.extractors.text_features import TextFeatureExtractor
 
 
 class TestTextFeatureExtractor:
@@ -232,7 +232,7 @@ class TestTextFeatureExtractor:
 
 # ── Phrase Feature Extractor ─────────────────────────────────
 
-from src.signature.extractors.phrase_features import PhraseFeatureExtractor
+from ai_simtest_engine.signature.extractors.phrase_features import PhraseFeatureExtractor
 
 
 class TestPhraseFeatureExtractor:
@@ -284,7 +284,7 @@ class TestPhraseFeatureExtractor:
 
 # ── Turn Metrics Extractor ───────────────────────────────────
 
-from src.signature.extractors.turn_metrics import TurnMetricsExtractor
+from ai_simtest_engine.signature.extractors.turn_metrics import TurnMetricsExtractor
 
 
 class TestTurnMetricsExtractor:
@@ -327,7 +327,7 @@ class TestTurnMetricsExtractor:
 
 # ── Verbosity Analyzer ───────────────────────────────────────
 
-from src.signature.analyzers.verbosity_analyzer import VerbosityAnalyzer
+from ai_simtest_engine.signature.analyzers.verbosity_analyzer import VerbosityAnalyzer
 
 
 class TestVerbosityAnalyzer:
@@ -398,7 +398,7 @@ class TestVerbosityAnalyzer:
 
 # ── Pattern Analyzer ─────────────────────────────────────────
 
-from src.signature.analyzers.pattern_analyzer import PatternAnalyzer
+from ai_simtest_engine.signature.analyzers.pattern_analyzer import PatternAnalyzer
 
 
 class TestPatternAnalyzer:
@@ -451,7 +451,7 @@ class TestPatternAnalyzer:
 
 # ── Tone Analyzer ────────────────────────────────────────────
 
-from src.signature.analyzers.tone_analyzer import ToneAnalyzer
+from ai_simtest_engine.signature.analyzers.tone_analyzer import ToneAnalyzer
 
 
 class TestToneAnalyzer:
@@ -513,7 +513,7 @@ class TestToneAnalyzer:
 
 # ── Consistency Analyzer ─────────────────────────────────────
 
-from src.signature.analyzers.consistency_analyzer import ConsistencyAnalyzer
+from ai_simtest_engine.signature.analyzers.consistency_analyzer import ConsistencyAnalyzer
 
 
 class TestConsistencyAnalyzer:
@@ -570,7 +570,7 @@ class TestConsistencyAnalyzer:
 
 # ── Engine ───────────────────────────────────────────────────
 
-from src.signature.engine import SignatureEngine
+from ai_simtest_engine.signature.engine import SignatureEngine
 
 
 class TestSignatureEngine:
@@ -666,7 +666,7 @@ class TestSignatureEngine:
 
 # ── Summary ──────────────────────────────────────────────────
 
-from src.signature.summary import generate_summary
+from ai_simtest_engine.signature.summary import generate_summary
 
 
 class TestSummary:
@@ -714,7 +714,7 @@ class TestSummary:
 
 # ── Comparison ───────────────────────────────────────────────
 
-from src.signature.compare import compare_signatures
+from ai_simtest_engine.signature.compare import compare_signatures
 
 
 class TestComparison:
@@ -759,7 +759,7 @@ class TestComparison:
 
 # ── HTML Injection ───────────────────────────────────────────
 
-from src.signature.signature_html import inject_signature_into_report
+from ai_simtest_engine.signature.signature_html import inject_signature_into_report
 
 
 class TestHTMLInjection:

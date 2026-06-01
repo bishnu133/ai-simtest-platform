@@ -7,7 +7,7 @@ Run: pytest tests/test_enhancements.py -v
 import json
 import pytest
 
-from src.models import (
+from ai_simtest_engine.models import (
     BotConfig,
     Conversation,
     FailurePattern,
@@ -136,7 +136,7 @@ def _make_test_report(
 
 class TestHTMLReportExporter:
     def test_export_creates_file(self, tmp_path):
-        from src.exporters.html_report import HTMLReportExporter
+        from ai_simtest_engine.exporters.html_report import HTMLReportExporter
 
         report, personas = _make_test_report()
         exporter = HTMLReportExporter()
@@ -147,7 +147,7 @@ class TestHTMLReportExporter:
         assert result == output
 
     def test_html_contains_key_sections(self, tmp_path):
-        from src.exporters.html_report import HTMLReportExporter
+        from ai_simtest_engine.exporters.html_report import HTMLReportExporter
 
         report, personas = _make_test_report()
         exporter = HTMLReportExporter()
@@ -181,7 +181,7 @@ class TestHTMLReportExporter:
         assert "CRITICAL" in html
 
     def test_html_escapes_special_chars(self, tmp_path):
-        from src.exporters.html_report import HTMLReportExporter
+        from ai_simtest_engine.exporters.html_report import HTMLReportExporter
 
         report, personas = _make_test_report(num_personas=1)
         # Inject HTML in persona name
@@ -197,7 +197,7 @@ class TestHTMLReportExporter:
         assert "&lt;script&gt;" in html
 
     def test_html_with_empty_report(self, tmp_path):
-        from src.exporters.html_report import HTMLReportExporter
+        from ai_simtest_engine.exporters.html_report import HTMLReportExporter
 
         report = SimulationReport(
             summary=ReportSummary(
@@ -225,7 +225,7 @@ class TestHTMLReportExporter:
 
     def test_html_file_is_self_contained(self, tmp_path):
         """HTML report should work in a browser with only Chart.js CDN dependency."""
-        from src.exporters.html_report import HTMLReportExporter
+        from ai_simtest_engine.exporters.html_report import HTMLReportExporter
 
         report, personas = _make_test_report()
         exporter = HTMLReportExporter()
@@ -244,7 +244,7 @@ class TestHTMLReportExporter:
 
 class TestFailurePatternDedup:
     def test_similar_patterns_grouped(self):
-        from src.core.report_generator import ReportGenerator
+        from ai_simtest_engine.core.report_generator import ReportGenerator
 
         gen = ReportGenerator()
         persona = Persona(name="Tester", role="user", goals=["test"])
@@ -281,7 +281,7 @@ class TestFailurePatternDedup:
         assert patterns[0].frequency >= 2
 
     def test_no_patterns_when_no_failures(self):
-        from src.core.report_generator import ReportGenerator
+        from ai_simtest_engine.core.report_generator import ReportGenerator
 
         gen = ReportGenerator()
         persona = Persona(name="Tester", role="user", goals=["test"])
@@ -294,7 +294,7 @@ class TestFailurePatternDedup:
         assert len(patterns) == 0
 
     def test_unique_patterns_not_grouped(self):
-        from src.core.report_generator import ReportGenerator
+        from ai_simtest_engine.core.report_generator import ReportGenerator
 
         gen = ReportGenerator()
         persona = Persona(name="Tester", role="user", goals=["test"])
@@ -341,8 +341,8 @@ class TestConfigurableThresholds:
         assert config.warn_threshold == 0.6
 
     def test_judge_engine_uses_thresholds(self):
-        from src.judges import JudgeEngine, JudgmentLabel
-        from src.models import JudgmentResult, Severity
+        from ai_simtest_engine.judges import JudgeEngine, JudgmentLabel
+        from ai_simtest_engine.models import JudgmentResult, Severity
 
         # Strict thresholds
         engine = JudgeEngine(pass_threshold=0.9, warn_threshold=0.7)
@@ -356,8 +356,8 @@ class TestConfigurableThresholds:
         assert label == JudgmentLabel.WARNING
 
     def test_lenient_thresholds(self):
-        from src.judges import JudgeEngine, JudgmentLabel
-        from src.models import JudgmentResult, Severity
+        from ai_simtest_engine.judges import JudgeEngine, JudgmentLabel
+        from ai_simtest_engine.models import JudgmentResult, Severity
 
         # Lenient thresholds
         engine = JudgeEngine(pass_threshold=0.5, warn_threshold=0.3)
@@ -371,8 +371,8 @@ class TestConfigurableThresholds:
         assert label == JudgmentLabel.PASS
 
     def test_critical_override_ignores_thresholds(self):
-        from src.judges import JudgeEngine, JudgmentLabel
-        from src.models import JudgmentResult, Severity
+        from ai_simtest_engine.judges import JudgeEngine, JudgmentLabel
+        from ai_simtest_engine.models import JudgmentResult, Severity
 
         engine = JudgeEngine(pass_threshold=0.1, warn_threshold=0.05)  # very lenient
 
@@ -426,7 +426,7 @@ class TestModelEnhancements:
 
 class TestHTMLHelpers:
     def test_score_class(self):
-        from src.exporters.html_report import _score_class
+        from ai_simtest_engine.exporters.html_report import _score_class
 
         assert _score_class(0.9) == "pass"
         assert _score_class(0.8) == "pass"
@@ -436,14 +436,14 @@ class TestHTMLHelpers:
         assert _score_class(0.0) == "fail"
 
     def test_score_color(self):
-        from src.exporters.html_report import _score_color
+        from ai_simtest_engine.exporters.html_report import _score_color
 
         assert _score_color(0.9) == "#6ee7b7"  # green
         assert _score_color(0.6) == "#fbbf24"  # yellow
         assert _score_color(0.3) == "#f87171"  # red
 
     def test_esc_html(self):
-        from src.exporters.html_report import _esc
+        from ai_simtest_engine.exporters.html_report import _esc
 
         assert _esc('<script>') == '&lt;script&gt;'
         assert _esc('normal text') == 'normal text'

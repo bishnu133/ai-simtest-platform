@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.analyzers.document_loader import (
+from ai_simtest_engine.analyzers.document_loader import (
     DocumentChunk,
     DocumentLoader,
     LoadedDocument,
@@ -351,7 +351,7 @@ class TestDocumentAnalyzer:
     @pytest.mark.asyncio
     async def test_analyze_extracts_context(self):
         """Test that analyzer calls LLM and parses response."""
-        from src.analyzers.document_analyzer import BotContext, DocumentAnalyzer
+        from ai_simtest_engine.analyzers.document_analyzer import BotContext, DocumentAnalyzer
 
         mock_llm = AsyncMock()
         mock_llm.model = "test-model"
@@ -383,7 +383,7 @@ class TestDocumentAnalyzer:
 
     @pytest.mark.asyncio
     async def test_analyze_empty_result(self):
-        from src.analyzers.document_analyzer import DocumentAnalyzer
+        from ai_simtest_engine.analyzers.document_analyzer import DocumentAnalyzer
 
         mock_llm = AsyncMock()
         analyzer = DocumentAnalyzer(llm_client=mock_llm)
@@ -395,7 +395,7 @@ class TestDocumentAnalyzer:
 
     @pytest.mark.asyncio
     async def test_analyze_llm_failure_returns_low_confidence(self):
-        from src.analyzers.document_analyzer import DocumentAnalyzer
+        from ai_simtest_engine.analyzers.document_analyzer import DocumentAnalyzer
 
         mock_llm = AsyncMock()
         mock_llm.model = "test-model"
@@ -412,7 +412,7 @@ class TestDocumentAnalyzer:
     @pytest.mark.asyncio
     async def test_analyze_chunked_for_large_docs(self):
         """For large docs, analyzer should chunk and merge."""
-        from src.analyzers.document_analyzer import DocumentAnalyzer
+        from ai_simtest_engine.analyzers.document_analyzer import DocumentAnalyzer
 
         mock_llm = AsyncMock()
         mock_llm.model = "test-model"
@@ -451,7 +451,7 @@ class TestDocumentAnalyzer:
 
     @pytest.mark.asyncio
     async def test_bot_context_description(self):
-        from src.analyzers.document_analyzer import BotContext
+        from ai_simtest_engine.analyzers.document_analyzer import BotContext
 
         ctx = BotContext(
             bot_name="TestBot",
@@ -475,7 +475,7 @@ class TestCriteriaGenerator:
 
     @pytest.fixture
     def sample_context(self):
-        from src.analyzers.document_analyzer import BotContext
+        from ai_simtest_engine.analyzers.document_analyzer import BotContext
         return BotContext(
             bot_name="ShopHelper",
             domain="E-commerce customer support",
@@ -489,7 +489,7 @@ class TestCriteriaGenerator:
 
     @pytest.mark.asyncio
     async def test_generate_criteria(self, sample_context):
-        from src.analyzers.criteria_generator import CriteriaGenerator
+        from ai_simtest_engine.analyzers.criteria_generator import CriteriaGenerator
 
         mock_llm = AsyncMock()
         mock_llm.model = "test-model"
@@ -532,7 +532,7 @@ class TestCriteriaGenerator:
 
     @pytest.mark.asyncio
     async def test_generate_with_extra_docs(self, sample_context):
-        from src.analyzers.criteria_generator import CriteriaGenerator
+        from ai_simtest_engine.analyzers.criteria_generator import CriteriaGenerator
 
         mock_llm = AsyncMock()
         mock_llm.model = "test-model"
@@ -550,7 +550,7 @@ class TestCriteriaGenerator:
 
     @pytest.mark.asyncio
     async def test_generate_fallback_on_failure(self, sample_context):
-        from src.analyzers.criteria_generator import CriteriaGenerator
+        from ai_simtest_engine.analyzers.criteria_generator import CriteriaGenerator
 
         mock_llm = AsyncMock()
         mock_llm.model = "test-model"
@@ -567,7 +567,7 @@ class TestCriteriaGenerator:
 
     @pytest.mark.asyncio
     async def test_default_criteria_include_limitations(self, sample_context):
-        from src.analyzers.criteria_generator import CriteriaGenerator
+        from ai_simtest_engine.analyzers.criteria_generator import CriteriaGenerator
 
         mock_llm = AsyncMock()
         mock_llm.model = "test-model"
@@ -583,7 +583,7 @@ class TestCriteriaGenerator:
         assert "payment" in all_text.lower() or "inventory" in all_text.lower()
 
     def test_criteria_to_proposal_items(self):
-        from src.analyzers.criteria_generator import CriteriaSet, SuccessCriterion
+        from ai_simtest_engine.analyzers.criteria_generator import CriteriaSet, SuccessCriterion
 
         cs = CriteriaSet(criteria=[
             SuccessCriterion(criterion="Rule 1", category="grounding", importance="high", rationale="Important"),
@@ -598,7 +598,7 @@ class TestCriteriaGenerator:
         assert items[0].explanation == "Important"
 
     def test_from_approval_data_strings(self):
-        from src.analyzers.criteria_generator import CriteriaGenerator
+        from ai_simtest_engine.analyzers.criteria_generator import CriteriaGenerator
 
         approved = ["Must be accurate", "Must be safe", "Must be helpful"]
         cs = CriteriaGenerator.from_approval_data(approved)
@@ -607,7 +607,7 @@ class TestCriteriaGenerator:
         assert cs.criteria[0].criterion == "Must be accurate"
 
     def test_from_approval_data_dicts(self):
-        from src.analyzers.criteria_generator import CriteriaGenerator
+        from ai_simtest_engine.analyzers.criteria_generator import CriteriaGenerator
 
         approved = [
             {"criterion": "Rule A", "category": "safety", "importance": "high"},
@@ -620,7 +620,7 @@ class TestCriteriaGenerator:
         assert cs.criteria[1].importance == "medium"
 
     def test_criteria_as_string_list(self):
-        from src.analyzers.criteria_generator import CriteriaSet, SuccessCriterion
+        from ai_simtest_engine.analyzers.criteria_generator import CriteriaSet, SuccessCriterion
 
         cs = CriteriaSet(criteria=[
             SuccessCriterion(criterion="Rule 1"),
@@ -633,7 +633,7 @@ class TestCriteriaGenerator:
     @pytest.mark.asyncio
     async def test_parse_list_response(self, sample_context):
         """Handle LLM returning a list instead of dict."""
-        from src.analyzers.criteria_generator import CriteriaGenerator
+        from ai_simtest_engine.analyzers.criteria_generator import CriteriaGenerator
 
         mock_llm = AsyncMock()
         mock_llm.model = "test-model"
@@ -657,7 +657,7 @@ class TestLoaderAnalyzerIntegration:
     @pytest.mark.asyncio
     async def test_load_then_analyze(self, doc_dir):
         """Full pipeline: load docs from directory, then analyze."""
-        from src.analyzers.document_analyzer import DocumentAnalyzer
+        from ai_simtest_engine.analyzers.document_analyzer import DocumentAnalyzer
 
         loader = DocumentLoader()
         load_result = loader.load_directory(doc_dir)
@@ -689,8 +689,8 @@ class TestLoaderAnalyzerIntegration:
     @pytest.mark.asyncio
     async def test_load_analyze_generate_criteria(self, doc_dir):
         """Full pipeline: load → analyze → generate criteria."""
-        from src.analyzers.criteria_generator import CriteriaGenerator
-        from src.analyzers.document_analyzer import BotContext, DocumentAnalyzer
+        from ai_simtest_engine.analyzers.criteria_generator import CriteriaGenerator
+        from ai_simtest_engine.analyzers.document_analyzer import BotContext, DocumentAnalyzer
 
         loader = DocumentLoader()
         load_result = loader.load_directory(doc_dir)

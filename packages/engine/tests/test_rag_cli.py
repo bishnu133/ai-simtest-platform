@@ -19,10 +19,10 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from unittest.mock import patch, MagicMock
 
-from src.rag_eval.engine import RAGEvalEngine, RAGEvalReport
-from src.rag_eval.rag_eval_html import inject_rag_eval_into_report, _build_rag_eval_section, _score_color
-from src.rag_eval.demo_packs import load_demo_pack, list_demo_packs
-from src.rag_eval.models import RAGEvalConfig, EvalSpeed
+from ai_simtest_engine.rag_eval.engine import RAGEvalEngine, RAGEvalReport
+from ai_simtest_engine.rag_eval.rag_eval_html import inject_rag_eval_into_report, _build_rag_eval_section, _score_color
+from ai_simtest_engine.rag_eval.demo_packs import load_demo_pack, list_demo_packs
+from ai_simtest_engine.rag_eval.models import RAGEvalConfig, EvalSpeed
 
 
 def run(coro):
@@ -191,7 +191,7 @@ class TestRAGDemoMode:
         assert report.total_turns_evaluated > 0
 
     def test_finance_demo_runs(self):
-        from src.rag_eval.tool_metrics import ToolDefinition
+        from ai_simtest_engine.rag_eval.tool_metrics import ToolDefinition
         convs, ctx, raw_defs = load_demo_pack("finance_tools")
         tdefs = [ToolDefinition.from_dict(d) for d in raw_defs]
         config = RAGEvalConfig(eval_speed=EvalSpeed.FAST)

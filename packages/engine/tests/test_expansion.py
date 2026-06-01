@@ -21,7 +21,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.expansion.models import (
+from ai_simtest_engine.expansion.models import (
     AdaptiveExpansionConfig,
     ExpansionReport,
     ExpansionVariant,
@@ -32,10 +32,10 @@ from src.expansion.models import (
     VariantResult,
     VariantStrategy,
 )
-from src.expansion.signal_extractor import SignalExtractor
-from src.expansion.variant_generator import VariantGenerator
-from src.expansion.analyzer import ExpansionAnalyzer
-from src.expansion.engine import AdaptiveExpansionEngine
+from ai_simtest_engine.expansion.signal_extractor import SignalExtractor
+from ai_simtest_engine.expansion.variant_generator import VariantGenerator
+from ai_simtest_engine.expansion.analyzer import ExpansionAnalyzer
+from ai_simtest_engine.expansion.engine import AdaptiveExpansionEngine
 
 
 # ============================================================
@@ -720,7 +720,7 @@ class TestAdaptiveExpansionEngine:
     @pytest.mark.asyncio
     async def test_engine_no_failures_returns_empty_report(self):
         """Engine should return empty report when no failures found."""
-        from src.models import BotConfig
+        from ai_simtest_engine.models import BotConfig
         bot_config = BotConfig(api_endpoint="http://localhost:9999/v1/chat/completions")
 
         engine = AdaptiveExpansionEngine(bot_config=bot_config)
@@ -734,7 +734,7 @@ class TestAdaptiveExpansionEngine:
     @pytest.mark.asyncio
     async def test_engine_extracts_and_generates(self):
         """Engine should extract signals and attempt variant generation."""
-        from src.models import BotConfig
+        from ai_simtest_engine.models import BotConfig
         bot_config = BotConfig(api_endpoint="http://localhost:9999/v1/chat/completions")
 
         # Mock the variant generator to return fallback variants
@@ -755,7 +755,7 @@ class TestAdaptiveExpansionEngine:
             mock_gen.generate = AsyncMock(return_value=[variant])
 
             # Also patch executor
-            from src.expansion.executor import VariantExecutor
+            from ai_simtest_engine.expansion.executor import VariantExecutor
             with patch.object(VariantExecutor, 'execute_variants', new_callable=AsyncMock) as mock_exec:
                 mock_exec.return_value = [
                     VariantResult(
@@ -774,7 +774,7 @@ class TestAdaptiveExpansionEngine:
     @pytest.mark.asyncio
     async def test_engine_handles_generator_error_gracefully(self):
         """Engine should continue if variant generation fails for one signal."""
-        from src.models import BotConfig
+        from ai_simtest_engine.models import BotConfig
         bot_config = BotConfig(api_endpoint="http://localhost:9999/v1/chat/completions")
 
         config = AdaptiveExpansionConfig(max_signals=2, variants_per_signal=2)
@@ -795,7 +795,7 @@ class TestAdaptiveExpansionEngine:
     @pytest.mark.asyncio
     async def test_engine_progress_callback(self):
         """Engine should call progress_callback at each phase."""
-        from src.models import BotConfig
+        from ai_simtest_engine.models import BotConfig
         bot_config = BotConfig(api_endpoint="http://localhost:9999/v1/chat/completions")
 
         engine = AdaptiveExpansionEngine(bot_config=bot_config)
@@ -811,7 +811,7 @@ class TestAdaptiveExpansionEngine:
     @pytest.mark.asyncio
     async def test_engine_report_serialization(self):
         """Report should serialize to dict and summary dict."""
-        from src.models import BotConfig
+        from ai_simtest_engine.models import BotConfig
         bot_config = BotConfig(api_endpoint="http://localhost:9999/v1/chat/completions")
 
         engine = AdaptiveExpansionEngine(bot_config=bot_config)
@@ -836,8 +836,8 @@ class TestVariantExecutor:
 
     def test_check_reproduction_same_judge(self):
         """Should detect reproduction when same judge fails."""
-        from src.expansion.executor import VariantExecutor
-        from src.models import BotConfig
+        from ai_simtest_engine.expansion.executor import VariantExecutor
+        from ai_simtest_engine.models import BotConfig
 
         executor = VariantExecutor(
             bot_config=BotConfig(api_endpoint="http://localhost:9999"),
@@ -868,8 +868,8 @@ class TestVariantExecutor:
 
     def test_check_reproduction_different_judge_no_match(self):
         """Should NOT detect reproduction when a different judge fails."""
-        from src.expansion.executor import VariantExecutor
-        from src.models import BotConfig
+        from ai_simtest_engine.expansion.executor import VariantExecutor
+        from ai_simtest_engine.models import BotConfig
 
         executor = VariantExecutor(
             bot_config=BotConfig(api_endpoint="http://localhost:9999"),
@@ -897,8 +897,8 @@ class TestVariantExecutor:
 
     def test_check_reproduction_empty_judgments(self):
         """Should handle empty judgments gracefully."""
-        from src.expansion.executor import VariantExecutor
-        from src.models import BotConfig
+        from ai_simtest_engine.expansion.executor import VariantExecutor
+        from ai_simtest_engine.models import BotConfig
 
         executor = VariantExecutor(
             bot_config=BotConfig(api_endpoint="http://localhost:9999"),

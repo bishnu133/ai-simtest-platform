@@ -18,7 +18,7 @@ import json
 import tempfile
 from pathlib import Path
 
-from src.versioning import (
+from ai_simtest_engine.versioning import (
     RunFingerprint,
     ConfigChange,
     VersionComparison,

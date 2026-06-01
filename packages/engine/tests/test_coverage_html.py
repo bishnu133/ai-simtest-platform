@@ -11,8 +11,8 @@ import json
 import tempfile
 from pathlib import Path
 
-from src.coverage.models import CoverageReport
-from src.coverage.coverage_html import generate_coverage_html, inject_coverage_into_report
+from ai_simtest_engine.coverage.models import CoverageReport
+from ai_simtest_engine.coverage.coverage_html import generate_coverage_html, inject_coverage_into_report
 
 
 def _make_report(grade="B", score=0.78) -> CoverageReport:

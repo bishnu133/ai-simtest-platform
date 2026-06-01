@@ -14,7 +14,7 @@ import pytest
 import yaml
 from click.testing import CliRunner
 
-from src.cli import main
+from ai_simtest_engine.cli import main
 
 
 @pytest.fixture
