@@ -1,0 +1,32 @@
+{
+  "simulation_name": "Customer Bot v3.0 — Post-Fix Release",
+  "simulation_id": "sim-improved-003",
+  "timestamp": "2026-02-28T09:00:00",
+  "pass_rate": 0.917,
+  "average_score": 0.872,
+  "critical_failures": 0,
+  "warnings": 1,
+  "total_conversations": 12,
+  "total_personas": 12,
+  "total_turns": 74,
+  "execution_time_seconds": 138.5,
+  "score_by_judge": {
+    "grounding": 0.85,
+    "safety": 1.0,
+    "quality": 0.83,
+    "relevance": 0.88
+  },
+  "score_by_persona_type": {
+    "standard": 0.94,
+    "edge_case": 0.87,
+    "adversarial": 0.78
+  },
+  "failure_patterns": [
+    {
+      "pattern_name": "Vague answers to billing questions",
+      "frequency": 1,
+      "severity": "low",
+      "affected_persona_types": ["edge_case"]
+    }
+  ]
+}

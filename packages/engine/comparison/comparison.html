@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI SimTest — Comparison Report</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<style>
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0f172a; color: #e2e8f0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+.container { max-width: 960px; margin: 0 auto; padding: 2rem; }
+header { text-align: center; margin-bottom: 2rem; }
+header h1 { font-size: 1.8rem; color: #f8fafc; }
+.subtitle { color: #94a3b8; margin-top: 0.5rem; font-size: 1.1rem; }
+.date { color: #64748b; font-size: 0.85rem; margin-top: 0.25rem; }
+h2 { color: #f1f5f9; margin-bottom: 1rem; font-size: 1.3rem; }
+section { margin-bottom: 2rem; }
+
+/* Verdict */
+.verdict { border-radius: 12px; padding: 1.5rem; text-align: center; }
+.verdict-pass { background: linear-gradient(135deg, #065f46, #064e3b); border: 1px solid #10b981; }
+.verdict-improved { background: linear-gradient(135deg, #1e3a5f, #172554); border: 1px solid #3b82f6; }
+.verdict-warning { background: linear-gradient(135deg, #713f12, #78350f); border: 1px solid #f59e0b; }
+.verdict-fail { background: linear-gradient(135deg, #7f1d1d, #991b1b); border: 1px solid #ef4444; }
+.verdict-header { display: flex; align-items: center; justify-content: center; gap: 0.75rem; }
+.verdict-icon { font-size: 2rem; }
+.verdict-label { font-size: 1.5rem; font-weight: 700; }
+.verdict-stats { margin-top: 0.75rem; display: flex; gap: 1.5rem; justify-content: center; }
+.stat-reg { color: #fca5a5; }
+.stat-imp { color: #86efac; }
+.reasons { list-style: none; margin-top: 1rem; text-align: left; max-width: 600px; margin-left: auto; margin-right: auto; }
+.reasons li { padding: 0.25rem 0; color: #fde68a; font-size: 0.9rem; }
+.reasons li::before { content: "• "; color: #f59e0b; }
+
+/* Metric Cards */
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 1rem; }
+.card { background: #1e293b; border-radius: 10px; padding: 1rem; text-align: center; border: 1px solid #334155; }
+.card-label { color: #94a3b8; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.card-values { margin: 0.5rem 0; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem; }
+.baseline { color: #9ca3af; }
+.arrow { color: #64748b; }
+.current { color: #f8fafc; font-weight: 600; }
+.card-delta { font-size: 0.85rem; font-weight: 600; }
+.delta-improved { color: #34d399; }
+.delta-regressed { color: #f87171; }
+.delta-unchanged { color: #94a3b8; }
+
+/* Judge Chart */
+.chart-container { max-width: 600px; margin: 0 auto 1.5rem; }
+
+/* Tables */
+table { width: 100%; border-collapse: collapse; background: #1e293b; border-radius: 8px; overflow: hidden; }
+th { background: #334155; color: #e2e8f0; padding: 0.75rem; text-align: left; font-size: 0.85rem; text-transform: uppercase; }
+td { padding: 0.75rem; border-top: 1px solid #334155; font-size: 0.9rem; }
+
+/* Badges */
+.badge { padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
+.badge-new { background: #dc2626; color: #fff; }
+.badge-resolved { background: #16a34a; color: #fff; }
+.badge-persistent { background: #64748b; color: #fff; }
+.badge-worsened { background: #ea580c; color: #fff; }
+.badge-improved { background: #2563eb; color: #fff; }
+
+.severity { padding: 0.15rem 0.4rem; border-radius: 3px; font-size: 0.75rem; }
+.severity-critical { background: #7f1d1d; color: #fca5a5; }
+.severity-high { background: #78350f; color: #fde68a; }
+.severity-medium { background: #1e3a5f; color: #93c5fd; }
+.severity-low { background: #064e3b; color: #86efac; }
+
+.pattern-summary { display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
+.pattern-summary span { font-size: 0.85rem; font-weight: 600; }
+.ps-new { color: #f87171; }
+.ps-resolved { color: #34d399; }
+.ps-worsened { color: #fb923c; }
+.ps-improved { color: #60a5fa; }
+.ps-persistent { color: #94a3b8; }
+
+.empty { color: #64748b; font-style: italic; }
+
+/* CI/CD Gate */
+.gate-box { display: flex; align-items: center; gap: 1rem; padding: 1.25rem; border-radius: 10px; }
+.gate-pass, .gate-improved { background: #064e3b; border: 1px solid #10b981; }
+.gate-warning { background: #78350f; border: 1px solid #f59e0b; }
+.gate-fail { background: #7f1d1d; border: 1px solid #ef4444; }
+.gate-icon { font-size: 1.5rem; }
+.gate-text { flex: 1; font-weight: 600; font-size: 1.05rem; }
+.gate-box code { background: #0f172a; padding: 0.3rem 0.6rem; border-radius: 4px; font-size: 0.85rem; color: #94a3b8; }
+
+footer { text-align: center; color: #475569; padding-top: 2rem; border-top: 1px solid #1e293b; font-size: 0.85rem; }
+
+</style>
+</head>
+<body>
+<div class="container">
+    <header>
+        <h1>🧪 AI SimTest — Comparison Report</h1>
+        <p class="subtitle">Fully Autonomous Simulation → Fully Autonomous Simulation</p>
+        <p class="date">Generated: 2026-03-15T23:33:06</p>
+    </header>
+
+    
+    <section class="verdict verdict-fail">
+        <div class="verdict-header">
+            <span class="verdict-icon">🚨</span>
+            <span class="verdict-label">REGRESSIONS DETECTED</span>
+        </div>
+        <div class="verdict-stats">
+            <span class="stat-reg">3 regressions</span>
+            <span class="stat-imp">1 improvement</span>
+        </div>
+        <ul class="reasons"><li>Pass rate dropped 12.5% (100.0% → 87.5%)</li><li>quality judge regressed 8.5%</li><li>1 new critical/high failure pattern(s)</li></ul>
+    </section>
+
+    <section class="metrics-grid">
+        <h2>📊 Core Metrics</h2>
+        <div class="cards">
+            
+        <div class="card">
+            <div class="card-label">Pass Rate</div>
+            <div class="card-values">
+                <span class="baseline">100.0%</span>
+                <span class="arrow">→</span>
+                <span class="current">87.5%</span>
+            </div>
+            <div class="card-delta delta-regressed">
+                ↓ -12.5% (-12.5%)
+            </div>
+        </div>
+            
+        <div class="card">
+            <div class="card-label">Avg Score</div>
+            <div class="card-values">
+                <span class="baseline">0.884</span>
+                <span class="arrow">→</span>
+                <span class="current">0.843</span>
+            </div>
+            <div class="card-delta delta-regressed">
+                ↓ -0.041 (-4.7%)
+            </div>
+        </div>
+            
+        <div class="card">
+            <div class="card-label">Critical Failures</div>
+            <div class="card-values">
+                <span class="baseline">0</span>
+                <span class="arrow">→</span>
+                <span class="current">0</span>
+            </div>
+            <div class="card-delta delta-unchanged">
+                → +0 (+0.0%)
+            </div>
+        </div>
+            
+        <div class="card">
+            <div class="card-label">Conversations</div>
+            <div class="card-values">
+                <span class="baseline">3</span>
+                <span class="arrow">→</span>
+                <span class="current">5</span>
+            </div>
+            <div class="card-delta delta-improved">
+                ↑ +2 (+66.7%)
+            </div>
+        </div>
+            
+        <div class="card">
+            <div class="card-label">Total Turns</div>
+            <div class="card-values">
+                <span class="baseline">4</span>
+                <span class="arrow">→</span>
+                <span class="current">8</span>
+            </div>
+            <div class="card-delta delta-improved">
+                ↑ +4 (+100.0%)
+            </div>
+        </div>
+        </div>
+    </section>
+
+    
+    <section class="judges">
+        <h2>⚖️ Judge Scores</h2>
+        <div class="chart-container">
+            <canvas id="judgeChart"></canvas>
+        </div>
+        <table>
+            <thead><tr><th>Judge</th><th>Baseline</th><th>Current</th><th>Delta</th></tr></thead>
+            <tbody>
+            <tr>
+                <td>grounding</td>
+                <td>1.000</td>
+                <td>0.960</td>
+                <td class="delta-unchanged">↓ -0.040 (-4.0%)</td>
+            </tr>
+            <tr>
+                <td>quality</td>
+                <td>0.880</td>
+                <td>0.805</td>
+                <td class="delta-regressed">↓ -0.075 (-8.5%)</td>
+            </tr>
+            <tr>
+                <td>relevance</td>
+                <td>0.550</td>
+                <td>0.645</td>
+                <td class="delta-improved">↑ +0.095 (+17.2%)</td>
+            </tr>
+            <tr>
+                <td>safety</td>
+                <td>1.000</td>
+                <td>1.000</td>
+                <td class="delta-unchanged">→ +0.000 (+0.0%)</td>
+            </tr></tbody>
+        </table>
+    </section>
+    
+    <section class="failures">
+        <h2>🔍 Failure Patterns</h2>
+        <div class="pattern-summary">
+            <span class="ps-new">2 new</span>
+            <span class="ps-resolved">0 resolved</span>
+            <span class="ps-worsened">0 worsened</span>
+            <span class="ps-improved">0 improved</span>
+            <span class="ps-persistent">1 persistent</span>
+        </div>
+        <table>
+            <thead><tr><th>Pattern</th><th>Status</th><th>Baseline</th><th>Current</th><th>Δ</th><th>Severity</th></tr></thead>
+            <tbody>
+            <tr>
+                <td>Response may not be grounded in documentation. Best match: 0.305 &lt; 0.35</td>
+                <td><span class="badge badge-new">NEW</span></td>
+                <td>0</td>
+                <td>2</td>
+                <td>+2</td>
+                <td><span class="severity severity-high">high</span></td>
+            </tr>
+            <tr>
+                <td>The response lacks relevance and helpfulness in addressing the user&#x27;s specific q</td>
+                <td><span class="badge badge-new">NEW</span></td>
+                <td>0</td>
+                <td>1</td>
+                <td>+1</td>
+                <td><span class="severity severity-medium">medium</span></td>
+            </tr>
+            <tr>
+                <td>Response may not be relevant to user&#x27;s query.</td>
+                <td><span class="badge badge-persistent">PERSISTENT</span></td>
+                <td>1</td>
+                <td>1</td>
+                <td>+0</td>
+                <td><span class="severity severity-medium">medium</span></td>
+            </tr></tbody>
+        </table>
+    </section>
+    
+    <section class="workflows">
+        <h2>&#x1f527; Workflow Judge Comparison</h2>
+        <table>
+            <thead><tr><th>Workflow</th><th>Baseline</th><th>Current</th><th>Delta</th><th>Base Pass</th><th>Curr Pass</th><th>Critical</th></tr></thead>
+            <tbody>
+            <tr>
+                <td>Banking Account Opening</td>
+                <td>0.644</td>
+                <td>0.644</td>
+                <td><span class="delta-unchanged">→ +0.000</span></td>
+                <td>0/3</td>
+                <td>0/3</td>
+                <td>0</td>
+            </tr></tbody>
+        </table>
+    </section>
+
+    <section class="cicd-gate">
+        <h2>🚦 CI/CD Gate</h2>
+        <div class="gate-box gate-fail">
+            <span class="gate-icon">❌</span>
+            <span class="gate-text">
+                BLOCK DEPLOY — Regressions detected
+            </span>
+            <code>Exit code: 0</code>
+        </div>
+    </section>
+
+    <footer>
+        <p>Generated by <strong>AI SimTest</strong> v0.2.0 — Open-source AI simulation testing</p>
+    </footer>
+</div>
+
+<script>
+
+const ctx = document.getElementById('judgeChart').getContext('2d');
+new Chart(ctx, {
+    type: 'bar',
+    data: {
+        labels: ["grounding", "quality", "relevance", "safety"],
+        datasets: [
+            {
+                label: 'Baseline',
+                data: [1.0, 0.88, 0.55, 1.0],
+                backgroundColor: 'rgba(107, 114, 128, 0.7)',
+                borderColor: 'rgba(107, 114, 128, 1)',
+                borderWidth: 1
+            },
+            {
+                label: 'Current',
+                data: [0.9597, 0.805, 0.6448, 1.0],
+                backgroundColor: 'rgba(59, 130, 246, 0.7)',
+                borderColor: 'rgba(59, 130, 246, 1)',
+                borderWidth: 1
+            }
+        ]
+    },
+    options: {
+        responsive: true,
+        scales: {
+            y: {
+                beginAtZero: true,
+                max: 1,
+                grid: { color: 'rgba(255,255,255,0.1)' },
+                ticks: { color: '#9ca3af' }
+            },
+            x: {
+                grid: { display: false },
+                ticks: { color: '#9ca3af' }
+            }
+        },
+        plugins: {
+            legend: { labels: { color: '#e5e7eb' } }
+        }
+    }
+});
+</script>
+</body>
+</html>

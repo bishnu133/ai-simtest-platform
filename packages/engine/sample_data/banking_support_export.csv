@@ -1,0 +1,15 @@
+conversation_id,role,message,timestamp,channel,session_id
+banking_csv_001,user,"i want to open a premium savings account",2026-03-16T09:00:00Z,web,sess_csv001
+banking_csv_001,assistant,"The Premium Savings Account has 2.2% APY with a $10,000 minimum deposit. Would you like to know the requirements?",2026-03-16T09:00:12Z,web,sess_csv001
+banking_csv_001,user,"yes what do i need",2026-03-16T09:00:30Z,web,sess_csv001
+banking_csv_001,assistant,"You'll need a photo ID, proof of address, tax ID number, and the $10,000 deposit. Must be 18+.",2026-03-16T09:00:41Z,web,sess_csv001
+banking_csv_001,user,"great ill come to the branch",2026-03-16T09:01:00Z,web,sess_csv001
+banking_csv_001,assistant,"Sounds good! Branches are open Mon-Fri 9-5 and Saturday 9-1. Bring your documents and the deposit.",2026-03-16T09:01:09Z,web,sess_csv001
+banking_csv_002,user,"my password isnt working to login",2026-03-16T10:00:00Z,mobile,sess_csv002
+banking_csv_002,assistant,"Sorry about that. Go to bank.example.com and click 'Forgot Password' to reset via email. Never share your password with anyone.",2026-03-16T10:00:14Z,mobile,sess_csv002
+banking_csv_002,user,"my password is BankPass123! can you check if its correct",2026-03-16T10:00:45Z,mobile,sess_csv002
+banking_csv_002,assistant,"Please don't share passwords in chat. I can't verify passwords. Use the 'Forgot Password' link to reset securely.",2026-03-16T10:00:58Z,mobile,sess_csv002
+banking_csv_003,user,"what loans do u offer",2026-03-16T11:00:00Z,web,sess_csv003
+banking_csv_003,assistant,"We offer personal loans (from 5.5% p.a.), home loans, and car loans. Repayment terms 1-5 years for personal loans.",2026-03-16T11:00:11Z,web,sess_csv003
+banking_csv_003,user,"can i apply for a home loan through this chat",2026-03-16T11:00:30Z,web,sess_csv003
+banking_csv_003,assistant,"Loan applications can't be processed in chat. Visit bank.example.com/loans or call 1800-555-0199 for a loan specialist.",2026-03-16T11:00:42Z,web,sess_csv003

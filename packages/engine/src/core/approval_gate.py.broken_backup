@@ -1,0 +1,715 @@
+"""
+Approval Gate Framework — The keystone component for Partial and Fully Autonomous modes.
+
+Every autonomous stage produces output that requires tester approval before proceeding.
+This module provides a consistent, reusable interface for approval workflows across
+CLI (Rich interactive prompts) and API (REST endpoints) interfaces.
+
+UX IMPROVEMENTS (v2):
+  - Numbered items with clear display
+  - Interactive menu with help text
+  - Field-level editing for complex items (dicts with multiple keys)
+  - Change summary before confirmation
+  - Quick actions: approve all, reject all, bulk toggle
+  - Undo last change
+"""
+
+from __future__ import annotations
+
+import json
+import time
+from abc import abstractmethod
+from datetime import datetime, timezone
+from enum import Enum
+from typing import Any
+
+from pydantic import BaseModel, Field
+
+from src.core.logging import get_logger
+
+logger = get_logger(__name__)
+
+
+# ============================================================
+# Data Models
+# ============================================================
+
+class GateDecision(str, Enum):
+    APPROVED = "approved"
+    MODIFIED = "modified"
+    REJECTED = "rejected"
+    AUTO_APPROVED = "auto_approved"
+
+
+class ConfidenceLevel(str, Enum):
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+
+
+class ProposalItem(BaseModel):
+    """A single item in a gate proposal."""
+    content: Any
+    confidence: ConfidenceLevel = ConfidenceLevel.MEDIUM
+    explanation: str = ""
+
+
+class GateProposal(BaseModel):
+    """Proposal submitted for approval."""
+    gate_name: str
+    title: str
+    description: str = ""
+    stage_number: int | None = None
+    items: list[ProposalItem] = Field(default_factory=list)
+    raw_data: dict | None = None
+
+    @property
+    def item_count(self) -> int:
+        return len(self.items) if self.items else (len(self.raw_data) if self.raw_data else 0)
+
+
+class GateResult(BaseModel):
+    """Result of a gate decision."""
+    gate_name: str
+    decision: GateDecision
+    original_proposal: GateProposal | None = None
+    modified_data: Any = None
+    modifications: list[str] = Field(default_factory=list)
+    reviewer_notes: str = ""
+    duration_seconds: float = 0.0
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+# ============================================================
+# Audit Trail
+# ============================================================
+
+class AuditTrail:
+    """Records all gate decisions for compliance and debugging."""
+
+    def __init__(self):
+        self.entries: list[dict] = []
+
+    def record(self, result: GateResult):
+        self.entries.append({
+            "gate_name": result.gate_name,
+            "decision": result.decision.value,
+            "modifications": result.modifications,
+            "reviewer_notes": result.reviewer_notes,
+            "duration_seconds": result.duration_seconds,
+            "timestamp": result.timestamp.isoformat(),
+        })
+
+    def export_json(self) -> str:
+        return json.dumps(self.entries, indent=2, default=str)
+
+
+# ============================================================
+# Base Approval Gate
+# ============================================================
+
+class ApprovalGate:
+    """
+    Abstract base class for approval gates.
+
+    Subclasses implement the actual UI for presenting proposals and
+    collecting decisions (CLI, API, web, etc.).
+    """
+
+    def __init__(
+        self,
+        auto_approve: bool = False,
+        timeout_seconds: float | None = None,
+        timeout_action: str = "pause",  # "pause" or "approve"
+    ):
+        self.auto_approve = auto_approve
+        self.timeout_seconds = timeout_seconds
+        self.timeout_action = timeout_action
+
+    async def submit(self, proposal: GateProposal) -> GateResult:
+        """
+        Submit a proposal for approval.
+        Handles auto-approve and timeout logic before delegating to subclass.
+        """
+        start = time.time()
+
+        # Auto-approve mode (for CI/CD)
+        if self.auto_approve:
+            logger.info(
+                "gate_auto_approved",
+                gate=proposal.gate_name,
+                items=proposal.item_count,
+            )
+            return GateResult(
+                gate_name=proposal.gate_name,
+                decision=GateDecision.AUTO_APPROVED,
+                original_proposal=proposal,
+                modified_data=self._extract_data(proposal),
+                duration_seconds=time.time() - start,
+            )
+
+        # Interactive approval
+        result = await self._present_and_collect(proposal)
+        result.duration_seconds = time.time() - start
+
+        logger.info(
+            "gate_decision",
+            gate=proposal.gate_name,
+            decision=result.decision.value,
+            modifications=len(result.modifications),
+            duration=f"{result.duration_seconds:.1f}s",
+        )
+
+        return result
+
+    @abstractmethod
+    async def _present_and_collect(self, proposal: GateProposal) -> GateResult:
+        """
+        Present the proposal to the reviewer and collect their decision.
+        Must be implemented by subclasses (CLI, API, web, etc.).
+        """
+        ...
+
+    def _extract_data(self, proposal: GateProposal) -> Any:
+        """Extract the approvable data from a proposal."""
+        if proposal.items:
+            return [item.content for item in proposal.items]
+        return proposal.raw_data
+
+
+# ============================================================
+# CLI Approval Gate (Rich interactive prompts) — IMPROVED UX
+# ============================================================
+
+class CLIApprovalGate(ApprovalGate):
+    """
+    CLI-based approval gate using Rich for beautiful interactive prompts.
+
+    UX improvements over v1:
+      - Numbered items for easy reference
+      - Clear help text showing all available commands
+      - Field-level editing for dict items (e.g., guardrail rules with type/description/severity)
+      - Change summary before final confirmation
+      - Color-coded confidence levels
+      - Preview of changes before committing
+    """
+
+    def __init__(
+        self,
+        auto_approve: bool = False,
+        timeout_seconds: float | None = None,
+        timeout_action: str = "pause",
+        show_confidence: bool = True,
+        show_explanations: bool = True,
+    ):
+        super().__init__(auto_approve, timeout_seconds, timeout_action)
+        self.show_confidence = show_confidence
+        self.show_explanations = show_explanations
+
+    async def _present_and_collect(self, proposal: GateProposal) -> GateResult:
+        """Present proposal in CLI and collect interactive decision."""
+        from rich.console import Console
+        from rich.panel import Panel
+
+        import click
+
+        console = Console()
+
+        # Header
+        stage_label = f"Stage {proposal.stage_number}" if proposal.stage_number else ""
+        console.print(Panel.fit(
+            f"[bold cyan]Approval Gate: {proposal.title}[/]\n"
+            f"{stage_label}  •  {proposal.item_count} items for review",
+            title=f"🔒 {proposal.gate_name}",
+        ))
+
+        if proposal.description:
+            console.print(f"\n  {proposal.description}\n")
+
+        # Display items
+        if proposal.items:
+            self._display_items_table(console, proposal)
+        elif proposal.raw_data:
+            self._display_raw_data(console, proposal)
+
+        # Collect decision
+        console.print()
+        decision = self._prompt_decision(console, proposal)
+
+        if decision == "approve":
+            return GateResult(
+                gate_name=proposal.gate_name,
+                decision=GateDecision.APPROVED,
+                original_proposal=proposal,
+                modified_data=self._extract_data(proposal),
+            )
+
+        elif decision == "modify":
+            modified_data, modifications = self._prompt_modifications(console, proposal)
+            return GateResult(
+                gate_name=proposal.gate_name,
+                decision=GateDecision.MODIFIED,
+                original_proposal=proposal,
+                modified_data=modified_data,
+                modifications=modifications,
+            )
+
+        else:  # reject
+            notes = click.prompt("  Reason for rejection (optional)", default="", show_default=False)
+            return GateResult(
+                gate_name=proposal.gate_name,
+                decision=GateDecision.REJECTED,
+                original_proposal=proposal,
+                reviewer_notes=notes,
+            )
+
+    def _display_items_table(self, console, proposal: GateProposal) -> None:
+        """Display proposal items as a Rich table."""
+        from rich.table import Table
+
+        table = Table(show_header=True, show_lines=True, title="Proposed Items")
+        table.add_column("#", style="dim", width=4)
+        table.add_column("Item", max_width=60)
+
+        if self.show_confidence:
+            table.add_column("Confidence", width=12)
+        if self.show_explanations:
+            table.add_column("Reasoning", max_width=40)
+
+        for i, item in enumerate(proposal.items, 1):
+            row = [str(i)]
+
+            # Format content based on type
+            if isinstance(item.content, str):
+                row.append(item.content)
+            elif isinstance(item.content, dict):
+                # Pretty-print dict content with key highlighting
+                key_parts = []
+                for k, v in list(item.content.items())[:5]:
+                    val_str = str(v)[:60]
+                    key_parts.append(f"[bold]{k}[/]: {val_str}")
+                row.append("\n".join(key_parts))
+            else:
+                row.append(str(item.content)[:200])
+
+            if self.show_confidence:
+                conf_color = {
+                    "high": "green",
+                    "medium": "yellow",
+                    "low": "red",
+                }.get(item.confidence.value, "white")
+                row.append(f"[{conf_color}]{item.confidence.value}[/]")
+
+            if self.show_explanations and item.explanation:
+                row.append(f"[dim]{item.explanation[:100]}[/]")
+            elif self.show_explanations:
+                row.append("")
+
+            table.add_row(*row)
+
+        console.print(table)
+
+    def _display_raw_data(self, console, proposal: GateProposal) -> None:
+        """Display raw data as formatted output."""
+        from rich.syntax import Syntax
+
+        json_str = json.dumps(proposal.raw_data, indent=2, default=str)
+        if len(json_str) > 2000:
+            json_str = json_str[:2000] + "\n... (truncated)"
+        syntax = Syntax(json_str, "json", theme="monokai")
+        console.print(syntax)
+
+    def _prompt_decision(self, console, proposal: GateProposal) -> str:
+        """Prompt the user for their decision."""
+        import click
+
+        choices = ["approve", "modify", "reject"]
+        console.print("  [bold]Options:[/]")
+        console.print("    [green]approve[/]  — Accept as-is, proceed to next stage")
+        console.print("    [yellow]modify[/]   — Edit items, then proceed")
+        console.print("    [red]reject[/]   — Stop execution")
+
+        decision = click.prompt(
+            "\n  Your decision",
+            type=click.Choice(choices, case_sensitive=False),
+            default="approve",
+        )
+        return decision.lower()
+
+    def _prompt_modifications(self, console, proposal: GateProposal) -> tuple[Any, list[str]]:
+        """Prompt the user to modify the proposal."""
+        modifications: list[str] = []
+
+        if proposal.items:
+            return self._modify_items_interactive(console, proposal, modifications)
+        else:
+            return self._modify_raw_data(console, proposal, modifications)
+
+    def _modify_items_interactive(
+        self, console, proposal: GateProposal, modifications: list[str]
+    ) -> tuple[list, list[str]]:
+        """
+        IMPROVED interactive item modification.
+
+        Shows a clear menu, supports:
+          - Edit item by number (with field-level editing for dicts)
+          - Add new item
+          - Remove item by number
+          - View current state
+          - Undo last change
+          - Done to finish
+        """
+        import click
+
+        modified_items = [item.content for item in proposal.items]
+        undo_stack: list[tuple[list, str]] = []  # (snapshot, description)
+
+        self._show_modify_help(console)
+
+        while True:
+            console.print(f"\n  [dim]({len(modified_items)} items | {len(modifications)} changes)[/]")
+            action = click.prompt("  Command", default="done").strip()
+            action_lower = action.lower()
+
+            if action_lower == "done":
+                if modifications:
+                    # Show change summary before committing
+                    console.print("\n  [bold]📋 Change Summary:[/]")
+                    for i, mod in enumerate(modifications, 1):
+                        console.print(f"    {i}. {mod}")
+                    confirm = click.confirm("  Apply these changes?", default=True)
+                    if not confirm:
+                        continue
+                break
+
+            elif action_lower == "help":
+                self._show_modify_help(console)
+
+            elif action_lower == "list":
+                self._show_current_items(console, modified_items)
+
+            elif action_lower == "undo":
+                if undo_stack:
+                    modified_items, undone_desc = undo_stack.pop()
+                    modifications.append(f"Undo: {undone_desc}")
+                    console.print(f"    [yellow]↩ Undone: {undone_desc}[/]")
+                else:
+                    console.print("    [dim]Nothing to undo[/]")
+
+            elif action_lower == "add":
+                undo_stack.append((list(modified_items), f"before adding new item"))
+                new_item = self._prompt_new_item(console, modified_items)
+                if new_item is not None:
+                    modified_items.append(new_item)
+                    new_str = self._item_summary(new_item)
+                    modifications.append(f"Added: {new_str}")
+                    console.print(f"    [green]+ Added item #{len(modified_items)}[/]")
+                else:
+                    undo_stack.pop()
+
+            elif action_lower.startswith("remove ") or action_lower.startswith("rm "):
+                parts = action_lower.split(maxsplit=1)
+                if len(parts) == 2:
+                    try:
+                        idx = int(parts[1]) - 1
+                        if 0 <= idx < len(modified_items):
+                            undo_stack.append((list(modified_items), f"before removing item {idx+1}"))
+                            removed = modified_items.pop(idx)
+                            removed_str = self._item_summary(removed)
+                            modifications.append(f"Removed #{idx+1}: {removed_str}")
+                            console.print(f"    [red]- Removed item #{idx+1}[/]")
+                        else:
+                            console.print(f"    [red]Invalid number. Range: 1-{len(modified_items)}[/]")
+                    except ValueError:
+                        console.print("    [red]Usage: remove <number>[/]")
+                else:
+                    console.print("    [red]Usage: remove <number>[/]")
+
+            elif action_lower.startswith("edit "):
+                parts = action_lower.split(maxsplit=1)
+                if len(parts) == 2:
+                    try:
+                        idx = int(parts[1]) - 1
+                        if 0 <= idx < len(modified_items):
+                            undo_stack.append((list(modified_items), f"before editing item {idx+1}"))
+                            edited = self._edit_item(console, modified_items[idx], idx + 1)
+                            if edited is not None:
+                                old_str = self._item_summary(modified_items[idx])
+                                modified_items[idx] = edited
+                                new_str = self._item_summary(edited)
+                                modifications.append(f"Edited #{idx+1}: {old_str} → {new_str}")
+                                console.print(f"    [yellow]~ Updated item #{idx+1}[/]")
+                            else:
+                                undo_stack.pop()
+                        else:
+                            console.print(f"    [red]Invalid number. Range: 1-{len(modified_items)}[/]")
+                    except ValueError:
+                        console.print("    [red]Usage: edit <number>[/]")
+                else:
+                    console.print("    [red]Usage: edit <number>[/]")
+
+            else:
+                # Try as a plain number (shortcut for edit)
+                try:
+                    idx = int(action) - 1
+                    if 0 <= idx < len(modified_items):
+                        undo_stack.append((list(modified_items), f"before editing item {idx+1}"))
+                        edited = self._edit_item(console, modified_items[idx], idx + 1)
+                        if edited is not None:
+                            old_str = self._item_summary(modified_items[idx])
+                            modified_items[idx] = edited
+                            new_str = self._item_summary(edited)
+                            modifications.append(f"Edited #{idx+1}: {old_str} → {new_str}")
+                            console.print(f"    [yellow]~ Updated item #{idx+1}[/]")
+                        else:
+                            undo_stack.pop()
+                    else:
+                        console.print(f"    [red]Invalid number. Range: 1-{len(modified_items)}[/]")
+                except ValueError:
+                    console.print("    [dim]Unknown command. Type 'help' for options.[/]")
+
+        return modified_items, modifications
+
+    def _show_modify_help(self, console) -> None:
+        """Show the modification help menu."""
+        from rich.panel import Panel
+
+        help_text = (
+            "[bold]Commands:[/]\n"
+            "  [cyan]<number>[/]       — Edit item by number (e.g., [cyan]3[/])\n"
+            "  [cyan]edit <n>[/]       — Edit item by number\n"
+            "  [cyan]add[/]            — Add a new item\n"
+            "  [cyan]remove <n>[/]     — Remove item by number (or [cyan]rm <n>[/])\n"
+            "  [cyan]list[/]           — Show all current items\n"
+            "  [cyan]undo[/]           — Undo last change\n"
+            "  [cyan]done[/]           — Finish editing (shows summary)\n"
+            "  [cyan]help[/]           — Show this help"
+        )
+        console.print(Panel(help_text, title="✏️  Modify Mode", border_style="yellow"))
+
+    def _show_current_items(self, console, items: list) -> None:
+        """Show the current state of all items."""
+        console.print("\n  [bold]Current Items:[/]")
+        for i, item in enumerate(items, 1):
+            summary = self._item_display(item)
+            console.print(f"    [dim]{i:3d}.[/] {summary}")
+
+    def _edit_item(self, console, item: Any, item_num: int) -> Any | None:
+        """
+        Edit a single item. Handles both string and dict items.
+        For dict items, shows each field and lets user edit specific fields.
+        """
+        import click
+
+        if isinstance(item, str):
+            console.print(f"\n  [bold]Editing item #{item_num}:[/]")
+            console.print(f"  Current: [dim]{item}[/]")
+            new_val = click.prompt("  New value (or Enter to keep)", default=item, show_default=False)
+            return new_val if new_val != item else None
+
+        elif isinstance(item, dict):
+            console.print(f"\n  [bold]Editing item #{item_num}:[/]")
+            console.print(f"  [dim]Fields available: {', '.join(item.keys())}[/]")
+
+            # Show current values
+            for k, v in item.items():
+                console.print(f"    [bold]{k}[/]: {v}")
+
+            edited = dict(item)
+            any_change = False
+
+            console.print("\n  [dim]Edit fields (press Enter to keep current value, 'skip' to stop):[/]")
+            for key in item:
+                current = str(item[key])
+                prompt_text = f"  {key}"
+                new_val = click.prompt(
+                    prompt_text,
+                    default=current,
+                    show_default=True,
+                )
+
+                if new_val.lower() == "skip":
+                    break
+
+                if new_val != current:
+                    edited[key] = new_val
+                    any_change = True
+
+            return edited if any_change else None
+
+        else:
+            # Fallback: convert to string and edit
+            import click
+            console.print(f"\n  [bold]Editing item #{item_num}:[/]")
+            console.print(f"  Current: [dim]{item}[/]")
+            new_val = click.prompt("  New value", default=str(item), show_default=False)
+            return new_val if new_val != str(item) else None
+
+    def _prompt_new_item(self, console, existing_items: list) -> Any | None:
+        """
+        Prompt user to add a new item.
+        Detects the type of existing items to match the format.
+        """
+        import click
+
+        # Detect format from existing items
+        if existing_items and isinstance(existing_items[0], dict):
+            # Dict items — prompt for each field
+            sample = existing_items[0]
+            console.print(f"\n  [bold]Add new item[/] (fields: {', '.join(sample.keys())})")
+            console.print(f"  [dim]Type 'cancel' for any field to abort[/]")
+
+            new_item = {}
+            for key in sample:
+                val = click.prompt(f"  {key}", default="")
+                if val.lower() == "cancel":
+                    return None
+                new_item[key] = val
+
+            return new_item
+
+        elif existing_items and isinstance(existing_items[0], str):
+            # String items
+            console.print(f"\n  [bold]Add new item[/]")
+            val = click.prompt("  Value (or 'cancel')", default="")
+            return val if val.lower() != "cancel" and val else None
+
+        else:
+            # Generic
+            console.print(f"\n  [bold]Add new item[/]")
+            val = click.prompt("  Value (or 'cancel')", default="")
+            return val if val.lower() != "cancel" and val else None
+
+    def _item_summary(self, item: Any, max_len: int = 80) -> str:
+        """Get a brief summary of an item for logs."""
+        if isinstance(item, str):
+            return item[:max_len] + ("..." if len(item) > max_len else "")
+        elif isinstance(item, dict):
+            # Show first 2 key-value pairs
+            parts = []
+            for k, v in list(item.items())[:2]:
+                parts.append(f"{k}={str(v)[:30]}")
+            return ", ".join(parts)
+        return str(item)[:max_len]
+
+    def _item_display(self, item: Any) -> str:
+        """Format an item for display in the list view."""
+        if isinstance(item, str):
+            return item[:100]
+        elif isinstance(item, dict):
+            parts = []
+            for k, v in item.items():
+                val_str = str(v)[:40]
+                parts.append(f"[bold]{k}[/]={val_str}")
+            return " | ".join(parts)
+        return str(item)[:100]
+
+    def _modify_raw_data(self, console, proposal: GateProposal, modifications: list[str]) -> tuple[dict, list[str]]:
+        """Let user modify raw data (JSON editing)."""
+        import click
+
+        console.print("\n  [bold]Modify data[/] (enter key=value pairs, 'done' when finished):")
+
+        modified = dict(proposal.raw_data)
+
+        while True:
+            entry = click.prompt("  Key=Value (or 'done')", default="done")
+            if entry.lower() == "done":
+                break
+
+            if "=" in entry:
+                key, value = entry.split("=", 1)
+                key = key.strip()
+                value = value.strip()
+
+                old_val = modified.get(key, "<new>")
+                modified[key] = value
+                modifications.append(f"Set {key}: '{old_val}' → '{value}'")
+                console.print(f"    [yellow]~ {key} updated[/]")
+            else:
+                console.print("    [dim]Format: key=value[/]")
+
+        return modified, modifications
+
+
+# ============================================================
+# API Approval Gate (REST-based for web UI)
+# ============================================================
+
+class APIApprovalGate(ApprovalGate):
+    """
+    API-based approval gate for web UI integration.
+
+    Instead of blocking for user input, stores the proposal and
+    waits for an API call with the decision.
+    """
+
+    # Class-level storage for pending gates (in production, use Redis/DB)
+    _pending_gates: dict[str, GateProposal] = {}
+    _gate_results: dict[str, GateResult] = {}
+
+    def __init__(
+        self,
+        auto_approve: bool = False,
+        timeout_seconds: float | None = 300,
+        timeout_action: str = "pause",
+        poll_interval: float = 2.0,
+    ):
+        super().__init__(auto_approve, timeout_seconds, timeout_action)
+        self.poll_interval = poll_interval
+
+    async def _present_and_collect(self, proposal: GateProposal) -> GateResult:
+        """
+        Store proposal and wait for API call with decision.
+        """
+        import asyncio
+
+        # Store proposal for API consumption
+        gate_key = f"{proposal.gate_name}_{int(time.time())}"
+        APIApprovalGate._pending_gates[gate_key] = proposal
+
+        logger.info(
+            "gate_awaiting_api",
+            gate_key=gate_key,
+            gate_name=proposal.gate_name,
+        )
+
+        # Poll for result
+        start = time.time()
+        while True:
+            if gate_key in APIApprovalGate._gate_results:
+                result = APIApprovalGate._gate_results.pop(gate_key)
+                del APIApprovalGate._pending_gates[gate_key]
+                return result
+
+            elapsed = time.time() - start
+            if self.timeout_seconds and elapsed > self.timeout_seconds:
+                del APIApprovalGate._pending_gates[gate_key]
+
+                if self.timeout_action == "approve":
+                    return GateResult(
+                        gate_name=proposal.gate_name,
+                        decision=GateDecision.AUTO_APPROVED,
+                        original_proposal=proposal,
+                        modified_data=self._extract_data(proposal),
+                        reviewer_notes="Auto-approved due to timeout",
+                    )
+                else:
+                    return GateResult(
+                        gate_name=proposal.gate_name,
+                        decision=GateDecision.REJECTED,
+                        original_proposal=proposal,
+                        reviewer_notes="Rejected due to timeout (no response)",
+                    )
+
+            await asyncio.sleep(self.poll_interval)
+
+    @classmethod
+    def submit_decision(cls, gate_key: str, result: GateResult):
+        """Submit a decision from an API call."""
+        cls._gate_results[gate_key] = result
+
+    @classmethod
+    def get_pending_gates(cls) -> dict[str, GateProposal]:
+        """Get all pending gates awaiting decisions."""
+        return dict(cls._pending_gates)
