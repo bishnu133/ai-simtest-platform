@@ -2,7 +2,7 @@
 
 # 🧪 AI SimTest
 
-**The open-source AI bot simulation testing platform**
+**The AI bot simulation testing platform**
 
 Discover your bot. Test it with realistic personas. Guard your releases.
 

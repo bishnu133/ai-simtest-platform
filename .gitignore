@@ -118,3 +118,4 @@ models/
 *.bin
 *.safetensors
 data/
+repo_structure.txt

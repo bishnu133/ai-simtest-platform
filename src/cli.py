@@ -567,6 +567,9 @@ def run(
             budget_limit=budget_limit,
             budget_mode=budget_mode,
             notification_engine=_notification_engine,
+            policy=policy,
+            policy_mode=policy_mode,
+            policy_strict=policy_strict,
         ))
         return
 
@@ -777,6 +780,9 @@ async def _run_partial_autonomous(
     budget_limit: float | None = None,
     budget_mode: str = "soft",
     notification_engine=None,
+    policy: str | None = None,
+    policy_mode: str | None = None,
+    policy_strict: bool = False,
 ):
     """Run the partial autonomous pipeline."""
     from src.core.autonomous_orchestrator import AutonomousOrchestrator
@@ -912,6 +918,9 @@ async def _run_full_autonomous(
     budget_limit: float | None = None,
     budget_mode: str = "soft",
     notification_engine=None,
+    policy: str | None = None,
+    policy_mode: str | None = None,
+    policy_strict: bool = False,
 ):
     """Run the fully autonomous pipeline: discovery → approval → partial pipeline."""
     from src.core.llm_client import LLMClientFactory
@@ -1103,13 +1112,15 @@ async def _run_full_autonomous(
         _print_auto_result(result, output_dir, run_fingerprint=_auto_fp, workflow=workflow, no_workflow=no_workflow,
                            signature=signature, rag_eval=rag_eval, rag_eval_speed=rag_eval_speed,
                            rag_threshold=rag_threshold, rag_gate=rag_gate, tool_defs=tool_defs,
-                           show_cost=show_cost, budget_limit=budget_limit, budget_mode=budget_mode)
+                           show_cost=show_cost, budget_limit=budget_limit, budget_mode=budget_mode,
+                           policy=policy, policy_mode=policy_mode, policy_strict=policy_strict)
 
 
 def _print_auto_result(result, output_dir: str, run_fingerprint=None, workflow: str | None = None, no_workflow: bool = False,
                         signature: bool = True, rag_eval: bool = False, rag_eval_speed: str = "standard",
                         rag_threshold: float = 0.7, rag_gate: float | None = None, tool_defs: str | None = None,
-                        show_cost: bool = False, budget_limit: float | None = None, budget_mode: str = "soft"):
+                        show_cost: bool = False, budget_limit: float | None = None, budget_mode: str = "soft",
+                       policy: str | None = None, policy_mode: str | None = None, policy_strict: bool = False):
     """Display the fully autonomous mode results."""
     console.print("\n" + "=" * 60)
     console.print("[bold magenta]🤖 Fully Autonomous Mode Results[/]")
