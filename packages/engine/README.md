@@ -37,7 +37,8 @@ Unlike manual QA or basic unit tests, AI SimTest discovers what your bot actuall
 
 ```bash
 # Install
-pip install -e ".[dev]"
+pip install -e ".[dev]"          # lean (platform integration default)
+pip install -e ".[all,dev]"      # full standalone engine: ML + safety + LLM
 
 # Verify setup
 python scripts/verify_setup.py
