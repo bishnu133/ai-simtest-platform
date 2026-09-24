@@ -1,0 +1,220 @@
+{
+  "summary": {
+    "baseline_name": "Fully Autonomous Simulation",
+    "current_name": "Fully Autonomous Simulation",
+    "baseline_date": "2026-03-15T15:28:07.994303Z",
+    "current_date": "2026-03-15T15:32:04.563033Z",
+    "comparison_date": "2026-03-15T23:33:06.797423",
+    "pass_rate": {
+      "name": "pass_rate",
+      "baseline_value": 1.0,
+      "current_value": 0.875,
+      "delta": -0.125,
+      "delta_percent": -12.5,
+      "direction": "regressed",
+      "is_regression": true
+    },
+    "average_score": {
+      "name": "average_score",
+      "baseline_value": 0.8842,
+      "current_value": 0.8428,
+      "delta": -0.0414,
+      "delta_percent": -4.68,
+      "direction": "regressed",
+      "is_regression": true
+    },
+    "critical_failures": {
+      "name": "critical_failures",
+      "baseline_value": 0.0,
+      "current_value": 0.0,
+      "delta": 0.0,
+      "delta_percent": 0.0,
+      "direction": "unchanged",
+      "is_regression": false
+    },
+    "total_conversations": {
+      "name": "total_conversations",
+      "baseline_value": 3.0,
+      "current_value": 5.0,
+      "delta": 2.0,
+      "delta_percent": 66.67,
+      "direction": "improved",
+      "is_regression": false
+    },
+    "total_turns": {
+      "name": "total_turns",
+      "baseline_value": 4.0,
+      "current_value": 8.0,
+      "delta": 4.0,
+      "delta_percent": 100.0,
+      "direction": "improved",
+      "is_regression": false
+    },
+    "judge_comparisons": [
+      {
+        "judge_name": "grounding",
+        "baseline_score": 1.0,
+        "current_score": 0.9597,
+        "delta": -0.0403,
+        "delta_percent": -4.03,
+        "direction": "regressed",
+        "is_regression": false
+      },
+      {
+        "judge_name": "quality",
+        "baseline_score": 0.88,
+        "current_score": 0.805,
+        "delta": -0.075,
+        "delta_percent": -8.52,
+        "direction": "regressed",
+        "is_regression": true
+      },
+      {
+        "judge_name": "relevance",
+        "baseline_score": 0.55,
+        "current_score": 0.6448,
+        "delta": 0.0948,
+        "delta_percent": 17.24,
+        "direction": "improved",
+        "is_regression": false
+      },
+      {
+        "judge_name": "safety",
+        "baseline_score": 1.0,
+        "current_score": 1.0,
+        "delta": 0.0,
+        "delta_percent": 0.0,
+        "direction": "unchanged",
+        "is_regression": false
+      }
+    ],
+    "new_failures": [
+      {
+        "pattern_name": "Response may not be grounded in documentation. Best match: 0.305 < 0.35",
+        "status": "new",
+        "baseline_frequency": 0,
+        "current_frequency": 2,
+        "severity": "high",
+        "delta": 2
+      },
+      {
+        "pattern_name": "The response lacks relevance and helpfulness in addressing the user's specific q",
+        "status": "new",
+        "baseline_frequency": 0,
+        "current_frequency": 1,
+        "severity": "medium",
+        "delta": 1
+      }
+    ],
+    "resolved_failures": [],
+    "persistent_failures": [
+      {
+        "pattern_name": "Response may not be relevant to user's query.",
+        "status": "persistent",
+        "baseline_frequency": 1,
+        "current_frequency": 1,
+        "severity": "medium",
+        "delta": 0
+      }
+    ],
+    "worsened_failures": [],
+    "improved_failures": [],
+    "verdict": "fail",
+    "verdict_reasons": [
+      "Pass rate dropped 12.5% (100.0% \u2192 87.5%)",
+      "quality judge regressed 8.5%",
+      "1 new critical/high failure pattern(s)"
+    ],
+    "total_regressions": 3,
+    "total_improvements": 1
+  },
+  "config": {
+    "regression_threshold": 0.05,
+    "critical_failure_tolerance": 0,
+    "pass_rate_floor": 0.0,
+    "fail_if_regression": false
+  },
+  "baseline_report": {
+    "simulation_id": "sim_451f9b13",
+    "simulation_name": "Fully Autonomous Simulation",
+    "total_personas": 3,
+    "total_conversations": 3,
+    "total_turns": 4,
+    "pass_rate": 1.0,
+    "average_score": 0.8842,
+    "critical_failures": 0,
+    "warnings": 0,
+    "execution_time_seconds": 19.1,
+    "timestamp": "2026-03-15T15:28:07.994303Z",
+    "score_by_judge": {
+      "grounding": 1.0,
+      "safety": 1.0,
+      "quality": 0.88,
+      "relevance": 0.55
+    },
+    "failure_patterns": [
+      {
+        "pattern_name": "Response may not be relevant to user's query.",
+        "description": "Response may not be relevant to user's query.",
+        "frequency": 1,
+        "severity": "high",
+        "example_conversation_ids": [
+          "conv_5a518036"
+        ],
+        "affected_persona_types": []
+      }
+    ]
+  },
+  "current_report": {
+    "simulation_id": "sim_330e9458",
+    "simulation_name": "Fully Autonomous Simulation",
+    "total_personas": 5,
+    "total_conversations": 5,
+    "total_turns": 8,
+    "pass_rate": 0.875,
+    "average_score": 0.8428,
+    "critical_failures": 0,
+    "warnings": 1,
+    "execution_time_seconds": 22.23,
+    "timestamp": "2026-03-15T15:32:04.563033Z",
+    "score_by_judge": {
+      "grounding": 0.9597,
+      "safety": 1.0,
+      "quality": 0.805,
+      "relevance": 0.6448
+    },
+    "failure_patterns": [
+      {
+        "pattern_name": "Response may not be grounded in documentation. Best match: 0.305 < 0.35",
+        "description": "Response may not be grounded in documentation. Best match: 0.305 < 0.35",
+        "frequency": 2,
+        "severity": "high",
+        "example_conversation_ids": [
+          "conv_becd3c6c"
+        ],
+        "affected_persona_types": []
+      },
+      {
+        "pattern_name": "Response may not be relevant to user's query.",
+        "description": "Response may not be relevant to user's query.",
+        "frequency": 1,
+        "severity": "medium",
+        "example_conversation_ids": [
+          "conv_15b3db12"
+        ],
+        "affected_persona_types": []
+      },
+      {
+        "pattern_name": "The response lacks relevance and helpfulness in addressing the user's specific q",
+        "description": "The response lacks relevance and helpfulness in addressing the user's specific query about prompt injection.",
+        "frequency": 1,
+        "severity": "medium",
+        "example_conversation_ids": [
+          "conv_15b3db12"
+        ],
+        "affected_persona_types": []
+      }
+    ]
+  },
+  "exit_code": 0
+}

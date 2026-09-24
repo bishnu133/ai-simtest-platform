@@ -202,6 +202,16 @@ class AppSettings(BaseSettings):
     # InMemoryAuditEventRepository default from Slice 5.
     # Requires database_url to be set — enforced by the cross-field
     # guardrail in app_factory._enforce_production_guardrails.
+    use_engine_comparison_provider: bool = Field(
+        default=False,
+        description=(
+            "When True, ComparisonService uses the engine-backed "
+            "EngineComparisonProvider instead of the fail-closed default. "
+            "Requires the ai_simtest_engine package (R-4); forbidden in "
+            "staging/production until a persistent run-result store exists "
+            "(R-6, Engine-Integration Slice 2). Default False."
+        ),
+    )
     use_postgres_audit_events: bool = Field(
         default=False,
         description=(

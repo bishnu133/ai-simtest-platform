@@ -55,3 +55,5 @@ clean:
 run:
 	@echo "FastAPI dev server will be added in Week 6 when the full app is wired."
 	@echo "For now, the router is mounted via tests; production main.py is S2 Week 8 work."
+	@echo "=== Dev API (local Postgres only) — http://127.0.0.1:8000 ==="
+	PYTHONPATH=. uvicorn dev_asgi:app --reload --host 127.0.0.1 --port 8000

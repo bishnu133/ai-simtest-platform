@@ -18,6 +18,17 @@ class ProviderUnavailable(APIError):
     http_status = 503
 
 
+class ComparisonDataNotReady(APIError):
+    """Raised when one or both run-result snapshots are missing or failed.
+
+    Maps to HTTP 409 — the comparison cannot yet be performed. Distinct from a
+    completed-but-failed comparison (which is recorded, not raised).
+    """
+
+    code = "comparison_data_not_ready"
+    http_status = 409
+
+
 class ComparisonProvider(Protocol):
     async def compute(
         self, record: ComparisonRecord

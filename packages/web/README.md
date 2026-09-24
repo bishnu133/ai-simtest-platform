@@ -34,6 +34,14 @@ the engine supports.
 
 Mapping between engine proposals and table rows lives in `src/lib/engine/gates.ts`.
 
+## Platform shell pages
+
+`/overview`, `/dashboard`, `/conversations` and `/comparisons` (the `(shell)` route group, with
+sidebar + topbar) read from the platform API (`packages/api`) through a second server-side proxy:
+`/api/*` → `${API_INTERNAL_URL}/v1/*`, which injects the dev-auth headers
+(`src/app/api/[...path]/route.ts`, `src/lib/api/`). The `/api/engine/*` route is more specific, so
+engine calls never hit that proxy. Both proxies are server-only; see `.env.example`.
+
 ## Run locally
 
 **Terminal A — engine** (in the `ai-simtest` repo, with an LLM key in `.env`):
@@ -49,6 +57,9 @@ cp .env.example .env.local      # ENGINE_API_URL=http://127.0.0.1:8100
 pnpm install
 pnpm dev                        # http://localhost:3000
 ```
+
+Uses pnpm 11 (pinned in `package.json`). pnpm 11 refuses packages published in the last 24 h and
+only runs build scripts listed under `allowBuilds` in `pnpm-workspace.yaml`.
 
 Corporate `~/.npmrc` breaking installs? Run with `NPM_CONFIG_USERCONFIG=/dev/null pnpm install`
 (the committed `.npmrc` pins the public registry).

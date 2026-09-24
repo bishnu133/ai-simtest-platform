@@ -15,6 +15,16 @@ from pydantic import BaseModel, ConfigDict, Field
 from src.common.models import utcnow
 
 
+__all__ = [
+    "RunStatus",
+    "RunRecord",
+    "RunSummary",
+    "RUN_RESULT_SCHEMA_VERSION",
+    "ResultStatus",
+    "RunResult",
+]
+
+
 class RunStatus(str, Enum):
     """Run lifecycle states. Maps 1:1 to AuditActions.RUN_* codes."""
 
@@ -52,3 +62,44 @@ class RunSummary(BaseModel):
     status: RunStatus
     created_at: datetime
     completed_at: datetime | None = None
+
+
+RUN_RESULT_SCHEMA_VERSION = "1"
+
+
+class ResultStatus(str, Enum):
+    """Status of a run's ENGINE OUTPUT — distinct from RunStatus (run lifecycle).
+
+    A run may be RunStatus.COMPLETED yet carry ResultStatus.PARTIAL or FAILED
+    output; conversely a run may be RunStatus.FAILED with no RunResult at all.
+    """
+
+    PRODUCED = "produced"  # full, usable engine output
+    PARTIAL = "partial"    # usable but incomplete (some judges/metrics missing)
+    FAILED = "failed"      # RunResult exists but no usable output (NOT RunStatus.FAILED)
+
+
+class RunResult(BaseModel):
+    """Durable snapshot of a run's engine output. Separate from RunRecord
+    (run lifecycle). Persistence lands in Engine-Integration Slice 2; an
+    in-memory store backs dev/test now.
+
+    Identity/version strings are constrained non-empty (min_length=1) to
+    prevent silent key pollution in the in-memory and future DB stores.
+    """
+
+    model_config = ConfigDict(frozen=False)
+
+    run_id: str = Field(min_length=1)
+    tenant_id: str = Field(min_length=1)
+    workspace_id: str = Field(min_length=1)
+    result_status: ResultStatus
+    engine_version: str = Field(min_length=1)
+    adapter_version: str = Field(min_length=1)
+    schema_version: str = Field(default=RUN_RESULT_SCHEMA_VERSION, min_length=1)
+    summary: dict[str, Any] = Field(default_factory=dict)
+    metrics: dict[str, Any] = Field(default_factory=dict)
+    judge_scores: dict[str, Any] = Field(default_factory=dict)
+    failures: list[dict[str, Any]] = Field(default_factory=list)
+    raw_engine_payload: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime = Field(default_factory=utcnow)

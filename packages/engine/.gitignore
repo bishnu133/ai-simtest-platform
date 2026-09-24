@@ -1,0 +1,121 @@
+.env
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.db
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+dist/
+build/
+*.log
+.DS_Store
+.vscode/
+.idea/
+
+
+
+# ----------------------
+# Secrets / env files
+# ----------------------
+.env
+.env.*
+*.key
+*.pem
+*.p12
+*.pfx
+secrets.*
+**/secrets/*
+**/keys/*
+config.local.*
+settings.local.*
+
+# ----------------------
+# Python
+# ----------------------
+__pycache__/
+*.py[cod]
+*.pyd
+*.pyo
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+*.so
+.venv/
+venv/
+ENV/
+pip-wheel-metadata/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# Jupyter
+.ipynb_checkpoints/
+
+# ----------------------
+# Node / JS / TS
+# ----------------------
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+dist/
+build/
+.next/
+out/
+.vite/
+
+# ----------------------
+# Logs / temp
+# ----------------------
+*.log
+tmp/
+temp/
+.cache/
+.DS_Store
+simtest.db
+Thumbs.db
+*.log
+
+# ----------------------
+# IDEs / editors
+# ----------------------
+.vscode/
+.idea/
+*.iml
+
+# ----------------------
+# OS / tooling
+# ----------------------
+.DS_Store
+*.swp
+*.swo
+
+# ----------------------
+# Local test artifacts
+# ----------------------
+reports/
+test-results/
+playwright-report/
+allure-results/
+screenshots/
+videos/
+
+# ----------------------
+# Model / data files (optional)
+# ----------------------
+/models/
+*.gguf
+*.bin
+*.safetensors
+data/
+repo_structure.txt

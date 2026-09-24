@@ -1,0 +1,128 @@
+id: banking_account_opening
+name: Banking Account Opening
+domain: banking
+description: Evaluate whether the bot correctly guides a user through opening a savings
+  or checking account.
+version: '1.0'
+steps:
+- id: identify_intent
+  name: Identify User Intent
+  description: Bot correctly identifies that the user wants to open an account
+  required: true
+  order: 1
+  detection_hints:
+  - open
+  - new account
+  - savings
+  - checking
+  - account type
+- id: explain_account_types
+  name: Explain Account Types
+  description: Bot explains available account types and their differences
+  required: true
+  order: 2
+  detection_hints:
+  - savings
+  - checking
+  - current
+  - deposit
+  - interest
+  - account type
+- id: explain_eligibility
+  name: Explain Eligibility Requirements
+  description: Bot describes who is eligible and minimum requirements
+  required: true
+  detection_hints:
+  - eligible
+  - eligibility
+  - requirement
+  - minimum
+  - age
+  - resident
+- id: provide_documents
+  name: Provide Required Documents
+  description: Bot lists the KYC documents needed
+  required: true
+  detection_hints:
+  - document
+  - KYC
+  - identity
+  - proof
+  - passport
+  - license
+  - address proof
+  - ID
+- id: explain_next_steps
+  name: Explain Next Steps
+  description: Bot explains what happens next (visit branch, online form, etc.)
+  required: true
+  detection_hints:
+  - next step
+  - visit
+  - branch
+  - online
+  - apply
+  - submit
+  - form
+  - proceed
+- id: offer_escalation
+  name: Offer Human Assistance
+  description: Bot offers to connect with a human agent if needed
+  required: false
+  detection_hints:
+  - agent
+  - representative
+  - support
+  - help
+  - assist
+  - connect
+hard_rules:
+- id: no_password_ask
+  name: Never Ask for Password
+  rule_type: forbidden_phrase
+  values:
+  - your password
+  - enter password
+  - share your pin
+  - your pin number
+  - card pin
+  severity: critical
+  description: Bot must never ask for passwords or PINs
+- id: no_ssn_ask
+  name: Never Ask for Full SSN
+  rule_type: forbidden_phrase
+  values:
+  - social security number
+  - full ssn
+  - your ssn
+  severity: critical
+  description: Bot must not collect full SSN in chat
+- id: mention_documents
+  name: Must Mention Required Documents
+  rule_type: required_topic
+  values:
+  - document
+  - id
+  - proof
+  - kyc
+  - identity
+  severity: high
+  description: Bot must mention document requirements
+success_conditions:
+- id: user_informed_about_types
+  description: User receives clear information about available account types
+- id: user_receives_document_list
+  description: User receives a clear list of required documents for KYC
+- id: user_knows_next_steps
+  description: User understands what to do next to open the account
+order_mode: soft
+activation_hints:
+- open account
+- savings account
+- checking account
+- new account
+tags:
+- banking
+- onboarding
+- kyc
+

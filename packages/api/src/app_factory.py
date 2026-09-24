@@ -113,6 +113,27 @@ def _enforce_production_guardrails(settings: AppSettings) -> None:
                     f"all Clerk settings to be set; missing: {missing}"
                 )
 
+    # Engine-Integration B.5b: engine comparison provider guards (R-4/R-6).
+    if settings.use_engine_comparison_provider:
+        try:  # R-4: engine package must import when the flag is on.
+            import ai_simtest_engine.core.comparison_engine  # noqa: F401
+        except ImportError as exc:
+            raise FatalConfigurationError(
+                "use_engine_comparison_provider=True requires the "
+                "ai_simtest_engine package (the comparison engine); "
+                f"import failed: {exc}"
+            ) from exc
+        # R-6: only the in-memory run-result store exists until Slice 2,
+        # so the engine provider is forbidden in staging/production.
+        if settings.app_env in ("staging", "production"):
+            raise FatalConfigurationError(
+                "use_engine_comparison_provider=True is not permitted in "
+                f"app_env='{settings.app_env}': the engine comparison "
+                "provider requires a persistent run-result store "
+                "(Engine-Integration Slice 2). Enable only in "
+                "development/test until then."
+            )
+
     # Turn 2.5 plan v0.2.1 §3.4 RC-6 cross-field guardrail. Applies in
     # all app_envs, not just production: a misconfigured test should
     # fail too. Fail-closed because silently falling back to in-memory
@@ -335,15 +356,20 @@ def _build_auth_provider(settings: AppSettings):
     )
 
 
-def _build_comparison_provider(settings: AppSettings):
+def _build_comparison_provider(settings: AppSettings, run_result_store):
     """Construct the ComparisonProvider used by ComparisonService.
 
-    Per amendment §4.4 / Step 0 finding: ``src.comparisons.provider``
-    ships ``get_comparison_provider()`` which returns a
-    ``FailClosedComparisonProvider``. Tests that need a different
-    provider re-bind via ``app.dependency_overrides`` after
-    ``create_app`` returns — same pattern they use for service overrides.
+    Default: FailClosedComparisonProvider (503). When
+    ``settings.use_engine_comparison_provider`` is True, returns the
+    engine-backed EngineComparisonProvider reading from
+    ``run_result_store``. R-4/R-6 are enforced upstream in
+    ``_enforce_production_guardrails`` before this is reached.
     """
+    if settings.use_engine_comparison_provider:
+        from src.comparisons.engine_provider import EngineComparisonProvider
+
+        return EngineComparisonProvider(run_result_store)
+
     from src.comparisons.provider import get_comparison_provider
 
     return get_comparison_provider()
@@ -397,7 +423,11 @@ def _bind_services(app: FastAPI, settings: AppSettings) -> None:
     from src.results.repository import InMemoryDashboardArtifactRepository
     from src.results.router import _get_dashboard_service
     from src.results.service import DashboardService
-    from src.runs.repository import InMemoryRunRepository, PostgresRunRepository
+    from src.runs.repository import (
+        InMemoryRunRepository,
+        InMemoryRunResultStore,
+        PostgresRunRepository,
+    )
     from src.runs.service import RunService
     from src.storage.factory import get_storage_adapter
 
@@ -421,7 +451,11 @@ def _bind_services(app: FastAPI, settings: AppSettings) -> None:
         idempotency_store = PostgresIdempotencyRepository()
     else:
         idempotency_store = InMemoryIdempotencyStore()
-    comparison_provider = _build_comparison_provider(settings)
+    # Engine-Integration B.5b: in-memory run-result store. Slice 2 swaps a
+    # persistent store here (shared with run execution). Empty until run
+    # execution populates it -> comparisons return comparison_data_not_ready.
+    run_result_store = InMemoryRunResultStore()
+    comparison_provider = _build_comparison_provider(settings, run_result_store)
     comparison_service = ComparisonService(
         repo=cmp_repo,
         run_service=run_service,

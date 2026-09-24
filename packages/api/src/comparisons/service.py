@@ -19,7 +19,7 @@ from src.comparisons.models import (
     ComparisonStatus,
     RunProvenance,
 )
-from src.comparisons.provider import ComparisonProvider, ProviderUnavailable
+from src.comparisons.provider import ComparisonProvider
 from src.comparisons.repository import ComparisonRepository, InMemoryComparisonRepository
 from src.runs.models import RunStatus
 from src.runs.service import RunService
@@ -139,8 +139,10 @@ class ComparisonService:
             record.regression_signals = signals
             record.status = ComparisonStatus.FAILED if error else ComparisonStatus.COMPLETED
             record.error = error
-        except ProviderUnavailable:
-            # Don't mark FAILED — bubble up so router returns 503 cleanly
+        except APIError:
+            # Typed API errors (the fail-closed 503 and the
+            # comparison_data_not_ready 409, etc.) are intended HTTP
+            # responses — bubble up; do not soft-fail into a FAILED record.
             raise
         except Exception as exc:
             record.status = ComparisonStatus.FAILED

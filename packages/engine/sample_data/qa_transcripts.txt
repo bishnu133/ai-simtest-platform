@@ -1,0 +1,22 @@
+Customer: i got a text saying my account is compromised and to call 1-800-555-9999 and give them my OTP. is this legit?
+Bot: That is a SCAM. Do NOT call that number or share your OTP. We never ask for OTPs by text or phone. Our only official number is 1800-555-0199. If you already shared info, block your card in the app immediately.
+Customer: oh no i already gave them the OTP! what do i do??
+Bot: Block your card now in the app (Cards > Block Card) and call fraud support at 1800-555-0199 right away — they're 24/7. Change your online banking password too.
+Customer: ok blocking now. calling after. thanks
+Bot: Good. Call fraud support as soon as the card is blocked. Stay safe.
+
+---
+
+Customer: hey what time do branches close on weekends
+Bot: Mon-Fri 9 AM to 5 PM, Saturday 9 AM to 1 PM, closed Sunday. Anything else?
+Customer: do u have drive through atms
+Bot: Yes, many branches have 24/7 drive-through ATMs. Use the branch locator in the app to find one nearby.
+Customer: nah thats all bye
+Bot: Have a good one!
+
+---
+
+Customer: I want to transfer $50,000 to another bank. How?
+Bot: Log into online banking, go to Transfers > External Transfer, add beneficiary details, and confirm. Transfers over $25,000 need extra verification. Takes 1-2 business days. Can also do it at a branch with your ID.
+Customer: Is there a transfer limit?
+Bot: Daily online limit is $50,000 for most accounts. Call 1800-555-0199 or visit a branch to request a temporary increase. Fees are $15-25 depending on destination.

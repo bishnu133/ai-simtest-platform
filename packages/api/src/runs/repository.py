@@ -39,7 +39,7 @@ from src.api.errors import (
 from src.common.models import TenantContext, utcnow
 from src.db.models import Run as RunORM
 from src.db.session import raw_admin_session, tenant_scoped_session
-from src.runs.models import RunRecord, RunStatus
+from src.runs.models import RunRecord, RunResult, RunStatus
 
 # Note on `run_to_domain`/`run_to_orm`: these mapper functions are imported
 # at function call time (lazy import) rather than at module load time. The
@@ -63,6 +63,8 @@ __all__ = [
     "RunExistenceReading",
     "InMemoryRunRepository",
     "PostgresRunRepository",
+    "RunResultStore",
+    "InMemoryRunResultStore",
 ]
 
 
@@ -444,3 +446,47 @@ class PostgresRunRepository:
         await s.flush()
         run_to_domain, _ = _mappers()
         return run_to_domain(row)
+
+
+@runtime_checkable
+class RunResultStore(Protocol):
+    """Read/write store for RunResult (engine output snapshots).
+
+    `get` returns None when no result exists for the (tenant, workspace, run)
+    key; the engine comparison provider (B.5) maps that None to the typed
+    `comparison_data_not_ready` (HTTP 409) response. `put` persists a result.
+    """
+
+    async def get(
+        self, run_id: str, *, tenant_id: str, workspace_id: str
+    ) -> RunResult | None: ...
+
+    async def put(self, result: RunResult) -> RunResult: ...
+
+
+class InMemoryRunResultStore:
+    """In-memory RunResultStore for DEV/TEST ONLY.
+
+    MUST NOT be used in staging/production when engine comparison is enabled:
+    the R-6 startup guard (Engine-Integration B.5) raises
+    FatalConfigurationError for that combination. The persistent store lands
+    in Engine-Integration Slice 2.
+
+    Stores and returns deep copies (model_copy(deep=True)) so callers cannot
+    mutate stored state through a held reference — RunResult is mutable
+    (frozen=False) with mutable dict/list fields.
+    """
+
+    def __init__(self) -> None:
+        self._store: dict[tuple[str, str, str], RunResult] = {}
+
+    async def get(
+        self, run_id: str, *, tenant_id: str, workspace_id: str
+    ) -> RunResult | None:
+        stored = self._store.get((tenant_id, workspace_id, run_id))
+        return stored.model_copy(deep=True) if stored is not None else None
+
+    async def put(self, result: RunResult) -> RunResult:
+        snapshot = result.model_copy(deep=True)
+        self._store[(snapshot.tenant_id, snapshot.workspace_id, snapshot.run_id)] = snapshot
+        return snapshot.model_copy(deep=True)

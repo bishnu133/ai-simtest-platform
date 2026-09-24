@@ -23,6 +23,9 @@ export function WizardLayout({ children, stepIndex }: WizardLayoutProps) {
           <Link href="/" className="px-2 py-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted">
             New Test
           </Link>
+          <Link href="/overview" className="px-2 py-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted">
+            Workspace
+          </Link>
           <Link
             href="/simulations"
             className="px-2 py-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted"

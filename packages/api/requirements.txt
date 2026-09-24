@@ -4,6 +4,7 @@
 # Runtime
 fastapi>=0.110
 pydantic>=2.6
+pydantic-settings>=2.1
 httpx>=0.27
 boto3>=1.34
 botocore>=1.34,<1.40
@@ -24,3 +25,8 @@ PyJWT[crypto]>=2.8
 pytest>=8.0
 pytest-asyncio>=0.23
 moto[s3]>=5.0
+aiosqlite>=0.20
+
+# Internal proprietary engine (headless core) — lean [core] extra only.
+# NOTE: relative path assumes pip runs from packages/api (as `make install` does).
+-e ../engine[core]

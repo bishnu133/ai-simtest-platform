@@ -1,0 +1,53 @@
+version: "3.8"
+
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - PERSONA_GENERATOR_MODEL=${PERSONA_GENERATOR_MODEL:-gpt-3.5-turbo}
+      - USER_SIMULATOR_MODEL=${USER_SIMULATOR_MODEL:-gpt-3.5-turbo}
+      - QUALITY_JUDGE_MODEL=${QUALITY_JUDGE_MODEL:-gpt-3.5-turbo}
+      - DATABASE_URL=postgresql://simtest:simtest@postgres:5432/simtest
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - ./output:/app/output
+      - ./configs:/app/configs:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: simtest
+      POSTGRES_PASSWORD: simtest
+      POSTGRES_DB: simtest
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U simtest"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
