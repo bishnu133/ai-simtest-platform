@@ -40,6 +40,8 @@ export interface CreateSimulationRequest {
   track_cost?: boolean;
   guardrail_llm?: boolean | null;
   relevance_llm?: boolean | null;
+  quality_threshold?: number | null;
+  turn_pass_threshold?: number | null;
   bot_version_header?: string | null;
   bot_info_url?: string | null;
   judge_weights?: Record<string, number> | null;
@@ -78,6 +80,8 @@ export interface SimulationStatus {
     track_cost?: boolean;
     guardrail_llm?: boolean | null;
   relevance_llm?: boolean | null;
+  quality_threshold?: number | null;
+  turn_pass_threshold?: number | null;
     bot_version_header?: string | null;
     bot_info_url?: string | null;
     judge_weights?: Record<string, number> | null;
@@ -251,6 +255,10 @@ export interface JudgeStat {
   pass_rate_by_persona_type: Record<string, number>;
   /** Pass rate by position in the conversation, e.g. { "1-5": 0.3, "6-10": 0.2 } */
   pass_rate_by_turn?: Record<string, number>;
+  /** Upper bound on the run's pass rate if this judge's failures were forgiven. */
+  pass_rate_without?: number | null;
+  /** Mean of each rubric criterion (0–1), weakest first. */
+  criteria_means?: Record<string, number>;
   notes: string[];
 }
 
@@ -259,6 +267,8 @@ export interface JudgeBreakdown {
   non_passing_turns: number;
   multi_judge_failures: number;
   pass_rate_by_turn?: Record<string, number>;
+  quality_threshold?: number;
+  turn_pass_threshold?: number;
   judges: JudgeStat[];
 }
 

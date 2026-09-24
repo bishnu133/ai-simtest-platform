@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type DragEvent, type FormEvent } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type DragEvent, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, ChevronDown, FileText, Loader2, UploadCloud, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { readSuggestedQualityThreshold, subscribeCalibration } from "@/lib/calibration";
 import { engine, EngineError } from "@/lib/engine/client";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { EngineOptions, RequestFormat } from "@/lib/engine/types";
@@ -86,6 +87,9 @@ export function SetupForm() {
   const [versionHeader, setVersionHeader] = useState("");
   const [infoUrl, setInfoUrl] = useState("");
   const [weights, setWeights] = useState<Record<string, string>>({});
+  const [qualityThreshold, setQualityThreshold] = useState("");
+  const [turnThreshold, setTurnThreshold] = useState("");
+  const suggested = useSyncExternalStore(subscribeCalibration, readSuggestedQualityThreshold, () => null);
 
   useEffect(() => {
     // Built-in workflows/policies for the evaluation options; the form works without them
@@ -172,6 +176,8 @@ export function SetupForm() {
         track_cost: trackCost,
         guardrail_llm: guardrailLlm,
         relevance_llm: relevanceLlm,
+        quality_threshold: qualityThreshold.trim() === "" ? null : Number(qualityThreshold),
+        turn_pass_threshold: turnThreshold.trim() === "" ? null : Number(turnThreshold),
         bot_version_header: versionHeader.trim() || null,
         bot_info_url: infoUrl.trim() || null,
         judge_weights: Object.fromEntries(
@@ -475,7 +481,7 @@ export function SetupForm() {
                   <fieldset className="space-y-3 md:col-span-2 border-t pt-6">
                     <legend className="sr-only">Judge weights</legend>
                     <div>
-                      <h3 className="text-sm font-semibold text-foreground">Judge Weights</h3>
+                      <h3 className="text-sm font-semibold text-foreground">Judge Weights and Pass Marks</h3>
                       <p className="text-sm text-muted-foreground">
                         How much each judge counts towards a reply&apos;s score. Leave blank to keep the default.
                       </p>
@@ -501,6 +507,63 @@ export function SetupForm() {
                         </div>
                       ))}
                     </div>
+                    <div className="grid grid-cols-1 gap-4 pt-2 sm:grid-cols-2">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="quality-threshold" className="text-xs font-medium">
+                          Quality pass mark
+                        </Label>
+                        <Input
+                          id="quality-threshold"
+                          type="number"
+                          inputMode="decimal"
+                          min={0}
+                          max={1}
+                          step={0.05}
+                          className="h-10 tabular-nums"
+                          placeholder="0.60"
+                          value={qualityThreshold}
+                          onChange={(e) => setQualityThreshold(e.target.value)}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          The score the quality judge needs to pass a reply.
+                          {suggested !== null && qualityThreshold !== String(suggested) && (
+                            <>
+                              {" "}
+                              <button
+                                type="button"
+                                className="font-medium text-primary underline-offset-4 hover:underline"
+                                onClick={() => setQualityThreshold(String(suggested))}
+                              >
+                                Use {suggested.toFixed(2)} from your Judge review
+                              </button>
+                            </>
+                          )}
+                        </p>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="turn-threshold" className="text-xs font-medium">
+                          Reply pass mark
+                        </Label>
+                        <Input
+                          id="turn-threshold"
+                          type="number"
+                          inputMode="decimal"
+                          min={0}
+                          max={1}
+                          step={0.05}
+                          className="h-10 tabular-nums"
+                          placeholder="0.70"
+                          value={turnThreshold}
+                          onChange={(e) => setTurnThreshold(e.target.value)}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          The weighted mean of all judges a reply needs to be labelled PASS.
+                        </p>
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Pass marks and weights are recorded with the run, so a run judged differently is not compared with the previous one as if nothing changed.
+                    </p>
                   </fieldset>
                 </div>
               )}

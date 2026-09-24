@@ -17,7 +17,14 @@ export function JudgeBreakdownPanel({ breakdown }: { breakdown: JudgeBreakdown }
       {binding && breakdown.non_passing_turns > 0 && (
         <p className="mb-4 border-l-2 border-warn pl-3 text-sm text-foreground">
           The <strong>{judgeLabel(binding.name)}</strong> judge passes {pct(binding.pass_rate)} of replies and alone
-          decided {binding.sole_failures} of the {breakdown.non_passing_turns} non-passing turns.
+          decided {binding.sole_failures} of the {breakdown.non_passing_turns} non-passing turns
+          {binding.pass_rate_without != null && <> — without its failures the run could pass up to {pct(binding.pass_rate_without)}</>}.
+          {breakdown.quality_threshold !== undefined && (
+            <span className="text-muted-foreground">
+              {" "}Pass marks this run: quality judge {breakdown.quality_threshold.toFixed(2)}, reply{" "}
+              {(breakdown.turn_pass_threshold ?? 0.7).toFixed(2)} (weighted mean). Check them in Judge review.
+            </span>
+          )}
         </p>
       )}
       <div className="overflow-x-auto rounded-lg border">
@@ -29,6 +36,12 @@ export function JudgeBreakdownPanel({ breakdown }: { breakdown: JudgeBreakdown }
               <TableHead className="text-right font-semibold text-foreground">Pass rate</TableHead>
               <TableHead className="text-right font-semibold text-foreground">Avg score</TableHead>
               <TableHead className="font-semibold text-foreground">Failures</TableHead>
+              <TableHead
+                className="text-right font-semibold text-foreground"
+                title="The run's pass rate if this judge's failures were forgiven: turns it failed alone would pass at best"
+              >
+                Run pass rate without it
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -44,6 +57,14 @@ export function JudgeBreakdownPanel({ breakdown }: { breakdown: JudgeBreakdown }
                         {n}
                       </p>
                     ))}
+                    {!!j.criteria_means && Object.keys(j.criteria_means).length > 0 && (
+                      <p className="mt-1 max-w-sm text-xs text-muted-foreground">
+                        Criteria:{" "}
+                        {Object.entries(j.criteria_means)
+                          .map(([k, v]) => `${k} ${(v * 10).toFixed(1)}/10`)
+                          .join(" · ")}
+                      </p>
+                    )}
                   </TableCell>
                   <TableCell className="text-right align-top tabular-nums">
                     {detector || j.weight === null ? "—" : j.weight.toFixed(2)}
@@ -56,6 +77,9 @@ export function JudgeBreakdownPanel({ breakdown }: { breakdown: JudgeBreakdown }
                     {detector
                       ? `${plural(j.failed_turns, "finding")} in ${j.turns} replies`
                       : `${j.failed_turns} failing · ${j.sole_failures} decided alone`}
+                  </TableCell>
+                  <TableCell className="text-right align-top tabular-nums">
+                    {detector || j.pass_rate_without == null ? "—" : `up to ${pct(j.pass_rate_without)}`}
                   </TableCell>
                 </TableRow>
               );

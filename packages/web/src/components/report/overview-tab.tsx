@@ -10,6 +10,7 @@ import {
   plural,
   releaseVerdict,
   responsesJudged,
+  scoreTone,
   turnLabelCounts,
 } from "@/lib/engine/report";
 import type { CoverageSummary, ReportResponse } from "@/lib/engine/types";
@@ -38,6 +39,7 @@ export function OverviewTab({
   const personaTypes = Object.entries(report.score_by_persona_type ?? {}).sort((a, b) => a[1] - b[1]);
   const fixFirst = analysis.fix_first ?? [];
   const breakdown = analysis.judge_breakdown?.judges.length ? analysis.judge_breakdown : undefined;
+  const scoredJudges = (breakdown?.judges ?? []).filter((j) => j.kind === "scored");
   const builds = analysis.trend?.available && (analysis.trend.previous_build || analysis.trend.current_build) ? analysis.trend : undefined;
 
   return (
@@ -45,7 +47,32 @@ export function OverviewTab({
       <VerdictBanner verdict={verdict} />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatTile label="Pass rate" value={pct(summary.pass_rate)} delta={delta("pass rate")} sub="of judged turns" />
+        <StatTile
+          label="Pass rate"
+          value={pct(summary.pass_rate)}
+          delta={delta("pass rate")}
+          sub="of judged turns"
+          footer={
+            scoredJudges.length ? (
+              <span title="Pass rate per judge; the strictest one sets the headline">
+                {scoredJudges.map((j, i) => (
+                  <span key={j.name}>
+                    {i > 0 && " · "}
+                    {judgeLabel(j.name)} <span className={`font-medium ${scoreTone(j.pass_rate)}`}>{pct(j.pass_rate)}</span>
+                  </span>
+                ))}
+              </span>
+            ) : undefined
+          }
+        />
+        {analysis.loops && (
+          <StatTile
+            label="Stuck conversations"
+            value={`${analysis.loops.stuck_conversations} / ${summary.total_conversations ?? 0}`}
+            sub="bot repeated itself or user re-asked 2+ times"
+            footer={`Bot repeated itself in ${analysis.loops.conversations_with_bot_repeats}; users re-asked in ${analysis.loops.conversations_with_user_reasks}`}
+          />
+        )}
         <StatTile label="Average score" value={pct(summary.average_score)} delta={delta("average score")} sub="across all judges" />
         <StatTile
           label="Failed responses"
@@ -69,13 +96,6 @@ export function OverviewTab({
             label="Test coverage"
             value={`${analysis.coverage.grade} · ${pct(analysis.coverage.overall_coverage)}`}
             sub={`${plural(analysis.coverage.gaps?.length ?? 0, "gap")} identified`}
-          />
-        )}
-        {analysis.loops && (
-          <StatTile
-            label="Stuck conversations"
-            value={`${analysis.loops.stuck_conversations} / ${summary.total_conversations ?? 0}`}
-            sub="bot repeated itself or user re-asked 2+ times"
           />
         )}
         {cost !== undefined && (

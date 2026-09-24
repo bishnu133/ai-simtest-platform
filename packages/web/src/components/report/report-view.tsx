@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ChevronDown, Download, FileText, RotateCcw } from "lucide-react";
+import { ChevronDown, Download, FileText, RotateCcw, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -80,6 +80,16 @@ export function ReportView({
               <span title={data.analysis.bot_build.source}> · build {data.analysis.bot_build.build}</span>
             )}
           </p>
+          {data.analysis?.bot_build && !data.analysis.bot_build.build && (
+            <p className="flex items-start gap-1.5 text-xs text-warn">
+              <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+              <span>
+                Bot build not recorded{data.analysis.bot_build.source ? ` (${data.analysis.bot_build.source})` : ""}, so this
+                report can&apos;t be tied to a bot version. Set a Bot Info URL or version header in Setup → Advanced; the URL
+                is remembered for this bot.
+              </span>
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {data.exports.includes("html") && (

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Check, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { saveSuggestedQualityThreshold } from "@/lib/calibration";
 import { EngineError, engine } from "@/lib/engine/client";
 import { judgeLabel, pct } from "@/lib/engine/report";
 import type { ReviewItem, ReviewResponse, ReviewSummary } from "@/lib/engine/types";
@@ -10,8 +11,12 @@ import { EmptyNote, Panel, StatTile } from "./parts";
 
 const score = (v: number | null | undefined) => (v === null || v === undefined ? "—" : v.toFixed(2));
 
+// Fewer labels than this and a suggested pass mark is mostly noise
+const MIN_LABELS_TO_APPLY = 10;
+
 function SummaryPanel({ summary }: { summary: ReviewSummary }) {
   const boundary = summary.judge_boundary;
+  const [saved, setSaved] = useState(false);
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -33,6 +38,28 @@ function SummaryPanel({ summary }: { summary: ReviewSummary }) {
             summary.suggested_threshold.agreement,
           )} of your labels. This is based only on the replies you labelled, so label more before changing the rubric.`}
       </p>
+      {summary.judge === "quality" && summary.suggested_threshold && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={summary.labelled < MIN_LABELS_TO_APPLY}
+            onClick={() => {
+              saveSuggestedQualityThreshold(summary.suggested_threshold!.threshold);
+              setSaved(true);
+            }}
+          >
+            Use {summary.suggested_threshold.threshold.toFixed(2)} as the quality pass mark for the next run
+          </Button>
+          <span className="text-xs text-muted-foreground">
+            {saved
+              ? "Saved. It will be offered in Setup → Advanced → Judge Weights and Pass Marks."
+              : summary.labelled < MIN_LABELS_TO_APPLY
+                ? `Label at least ${MIN_LABELS_TO_APPLY} replies first.`
+                : "Offered on the setup screen; nothing changes until you start a run with it."}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

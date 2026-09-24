@@ -29,11 +29,14 @@ export function StatTile({
   value,
   sub,
   delta,
+  footer,
 }: {
   label: string;
   value: ReactNode;
   sub?: ReactNode;
   delta?: TrendDelta;
+  /** Always shown, under the delta or sub-line */
+  footer?: ReactNode;
 }) {
   const changed = delta && delta.improved !== null;
   return (
@@ -55,6 +58,7 @@ export function StatTile({
         </p>
       )}
       {sub && !delta && <div className="mt-1 text-xs text-muted-foreground">{sub}</div>}
+      {footer && <div className="mt-2 border-t pt-2 text-xs text-muted-foreground">{footer}</div>}
     </div>
   );
 }
