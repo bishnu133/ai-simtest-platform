@@ -14,9 +14,18 @@ import {
 } from "@/lib/engine/report";
 import type { ReportResponse } from "@/lib/engine/types";
 import { ScoreBars, TurnLabelBar } from "./charts";
+import { JudgeBreakdownPanel, LoopsPanel } from "./judge-breakdown";
 import { EmptyNote, Panel, SeverityBadge, StatTile, VerdictBanner } from "./parts";
 
-export function OverviewTab({ data, onGoToFailures }: { data: ReportResponse; onGoToFailures: () => void }) {
+export function OverviewTab({
+  data,
+  onGoToFailures,
+  onOpenConversation,
+}: {
+  data: ReportResponse;
+  onGoToFailures: () => void;
+  onOpenConversation: (id: string) => void;
+}) {
   const { report, analysis = {} } = data;
   const summary = report.summary ?? {};
   const verdict = releaseVerdict(report, analysis.quality_gates_failed);
@@ -28,6 +37,8 @@ export function OverviewTab({ data, onGoToFailures }: { data: ReportResponse; on
   const judges = Object.entries(report.score_by_judge ?? {}).sort((a, b) => a[1] - b[1]);
   const personaTypes = Object.entries(report.score_by_persona_type ?? {}).sort((a, b) => a[1] - b[1]);
   const fixFirst = analysis.fix_first ?? [];
+  const breakdown = analysis.judge_breakdown?.judges.length ? analysis.judge_breakdown : undefined;
+  const builds = analysis.trend?.available && (analysis.trend.previous_build || analysis.trend.current_build) ? analysis.trend : undefined;
 
   return (
     <div className="space-y-6">
@@ -60,6 +71,13 @@ export function OverviewTab({ data, onGoToFailures }: { data: ReportResponse; on
             sub={`${plural(analysis.coverage.gaps?.length ?? 0, "gap")} identified`}
           />
         )}
+        {analysis.loops && (
+          <StatTile
+            label="Stuck conversations"
+            value={`${analysis.loops.stuck_conversations} / ${summary.total_conversations ?? 0}`}
+            sub="bot repeated itself or user re-asked 2+ times"
+          />
+        )}
         {cost !== undefined && (
           <StatTile
             label="Estimated LLM cost"
@@ -71,7 +89,18 @@ export function OverviewTab({ data, onGoToFailures }: { data: ReportResponse; on
 
       {analysis.trend?.available && !analysis.trend.comparable && (
         <p className="text-xs text-muted-foreground">
-          Not compared with the previous run: {analysis.trend.incomparable_reason || "its configuration differs."}
+          Not compared with the previous run:{" "}
+          {analysis.trend.changes?.length
+            ? `${analysis.trend.changes.join(", ")} changed.`
+            : analysis.trend.incomparable_reason || "its configuration differs."}
+        </p>
+      )}
+      {builds && (
+        <p className="text-xs text-muted-foreground">
+          Bot build:{" "}
+          {builds.previous_build && builds.current_build && builds.previous_build !== builds.current_build
+            ? `${builds.previous_build} → ${builds.current_build} (changed since the previous run)`
+            : `${builds.current_build || "not recorded"}${builds.previous_build === builds.current_build ? " (same as the previous run)" : ""}`}
         </p>
       )}
 
@@ -96,6 +125,15 @@ export function OverviewTab({ data, onGoToFailures }: { data: ReportResponse; on
           </Panel>
         </div>
       </div>
+
+      {breakdown && <JudgeBreakdownPanel breakdown={breakdown} />}
+      {analysis.loops && (
+        <LoopsPanel
+          loops={analysis.loops}
+          conversations={report.judged_conversations ?? []}
+          onOpen={onOpenConversation}
+        />
+      )}
 
       <Panel
         title="Fix these first"

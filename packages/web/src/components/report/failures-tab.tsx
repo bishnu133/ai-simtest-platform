@@ -96,11 +96,36 @@ function PatternRow({ pattern, onOpen }: { pattern: FailurePattern; onOpen: (id:
             <span className="font-medium text-foreground">{shortTitle(full)}</span>
             <SeverityBadge severity={pattern.severity} />
           </div>
-          <div className="text-xs text-muted-foreground">{plural(pattern.frequency ?? 0, "occurrence")}</div>
+          <div className="text-xs text-muted-foreground">
+            {plural(pattern.frequency ?? 0, "failing turn")}
+            {pattern.root_causes?.length ? ` · ${plural(pattern.root_causes.length, "root cause")}` : ""}
+          </div>
         </div>
       }
     >
       <p className="whitespace-pre-line text-sm text-foreground/80">{full}</p>
+      {!!pattern.root_causes?.length && (
+        <div className="space-y-2">
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Root causes by bot reply</h4>
+          <ul className="space-y-2">
+            {pattern.root_causes.map((rc, i) => (
+              <li key={i} className="rounded-md border bg-muted/30 p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="min-w-0 text-sm text-foreground" title={rc.example_reply}>
+                    &ldquo;{rc.reply_opening}…&rdquo;
+                  </p>
+                  <span className="shrink-0 text-xs font-medium tabular-nums text-muted-foreground">
+                    {plural(rc.turns, "turn")}
+                  </span>
+                </div>
+                <div className="mt-2">
+                  <ConversationLinks ids={rc.conversation_ids} onOpen={onOpen} />
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       <ConversationLinks ids={pattern.example_conversation_ids ?? []} onOpen={onOpen} />
     </Expandable>
   );
@@ -146,7 +171,7 @@ export function FailuresTab({ data, onOpenConversation }: { data: ReportResponse
 
       <Panel
         title="All failure patterns"
-        description={`${plural(patterns.length, "pattern")} clustered from judge findings${critical ? ` · ${critical} critical` : ""}.`}
+        description={`${plural(patterns.length, "pattern")} clustered from judge findings${critical ? ` · ${critical} critical` : ""}. Counts are failing turns; a turn that fails several judges can appear in more than one pattern.`}
         action={
           <div className="flex flex-wrap gap-1" role="group" aria-label="Filter by severity">
             {["all", ...SEVERITY_ORDER.filter((s) => counts[s])].map((s) => (

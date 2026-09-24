@@ -48,6 +48,14 @@ function SelectField({ id, label, value, options, onChange }: SelectFieldProps) 
   );
 }
 
+// The engine's default judges and weights (AutonomousOrchestrator._build_simulation_config)
+const DEFAULT_WEIGHTS: [string, number][] = [
+  ["grounding", 0.3],
+  ["safety", 0.3],
+  ["quality", 0.2],
+  ["relevance", 0.2],
+];
+
 export function SetupForm() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -70,6 +78,10 @@ export function SetupForm() {
   const [workflowMode, setWorkflowMode] = useState<"auto" | "choose" | "off">("auto");
   const [workflows, setWorkflows] = useState<string[]>([]);
   const [trackCost, setTrackCost] = useState(true);
+  const [guardrailLlm, setGuardrailLlm] = useState(false);
+  const [versionHeader, setVersionHeader] = useState("");
+  const [infoUrl, setInfoUrl] = useState("");
+  const [weights, setWeights] = useState<Record<string, string>>({});
 
   useEffect(() => {
     // Built-in workflows/policies for the evaluation options; the form works without them
@@ -154,6 +166,14 @@ export function SetupForm() {
         workflows: workflowMode === "choose" ? workflows : [],
         no_workflow: workflowMode === "off",
         track_cost: trackCost,
+        guardrail_llm: guardrailLlm,
+        bot_version_header: versionHeader.trim() || null,
+        bot_info_url: infoUrl.trim() || null,
+        judge_weights: Object.fromEntries(
+          Object.entries(weights)
+            .filter(([, v]) => v.trim() !== "")
+            .map(([k, v]) => [k, Number(v)]),
+        ),
       });
       router.push(`/simulations/${sim.simulation_id}`);
     } catch (err) {
@@ -389,6 +409,78 @@ export function SetupForm() {
                     <Checkbox checked={trackCost} onCheckedChange={(on) => setTrackCost(on === true)} />
                     Track estimated LLM cost for this run
                   </label>
+                  <div className="space-y-1 md:col-span-2">
+                    <label className="flex items-center gap-2 text-sm">
+                      <Checkbox checked={guardrailLlm} onCheckedChange={(on) => setGuardrailLlm(on === true)} />
+                      Check every guardrail rule with an LLM
+                    </label>
+                    <p className="pl-6 text-xs text-muted-foreground">
+                      Without it, rules no pattern covers are listed as not checked. Adds one model call per bot reply.
+                    </p>
+                  </div>
+
+                  <div className="md:col-span-2 border-t pt-6">
+                    <h3 className="text-sm font-semibold text-foreground">Bot build</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Records which build of the bot was tested, so a comparison with the previous run can tell a new build from a new test.
+                    </p>
+                  </div>
+                  <div className="space-y-3">
+                    <Label htmlFor="version-header" className="text-sm font-semibold">Version Header</Label>
+                    <Input
+                      id="version-header"
+                      className="h-11 font-mono text-sm"
+                      placeholder="x-bot-version"
+                      value={versionHeader}
+                      onChange={(e) => setVersionHeader(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">A response header that carries the build. One header name.</p>
+                  </div>
+                  <div className="space-y-3">
+                    <Label htmlFor="info-url" className="text-sm font-semibold">Bot Info URL</Label>
+                    <Input
+                      id="info-url"
+                      type="url"
+                      className="h-11 font-mono text-sm"
+                      placeholder="https://bot.example.com/version"
+                      value={infoUrl}
+                      onChange={(e) => setInfoUrl(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Used when there is no header: the engine fetches this page at the start and end of the run and records a hash of it.
+                    </p>
+                  </div>
+
+                  <fieldset className="space-y-3 md:col-span-2 border-t pt-6">
+                    <legend className="sr-only">Judge weights</legend>
+                    <div>
+                      <h3 className="text-sm font-semibold text-foreground">Judge Weights</h3>
+                      <p className="text-sm text-muted-foreground">
+                        How much each judge counts towards a reply&apos;s score. Leave blank to keep the default.
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                      {DEFAULT_WEIGHTS.map(([judge, fallback]) => (
+                        <div key={judge} className="space-y-1.5">
+                          <Label htmlFor={`weight-${judge}`} className="text-xs font-medium capitalize">
+                            {judge}
+                          </Label>
+                          <Input
+                            id={`weight-${judge}`}
+                            type="number"
+                            inputMode="decimal"
+                            min={0}
+                            max={10}
+                            step={0.05}
+                            className="h-10 tabular-nums"
+                            placeholder={fallback.toFixed(2)}
+                            value={weights[judge] ?? ""}
+                            onChange={(e) => setWeights((w) => ({ ...w, [judge]: e.target.value }))}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </fieldset>
                 </div>
               )}
             </div>

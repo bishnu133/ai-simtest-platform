@@ -16,7 +16,10 @@ export const VERDICT_STYLES = {
 
 const VERDICT_LABELS = { pass: "Pass", warn: "Warning", fail: "Fail" } as const;
 
-type SortKey = "score" | "persona" | "turns";
+type SortKey = "score" | "persona" | "turns" | "loops";
+
+// Same rule as the engine (conversation_loops.STUCK_AT)
+const STUCK_AT = 2;
 
 function failedJudges(jc: JudgedConversation): string[] {
   const names = new Set<string>();
@@ -29,6 +32,7 @@ export function ConversationsTab({ data, onOpen }: { data: ReportResponse; onOpe
   const [query, setQuery] = useState("");
   const [verdict, setVerdict] = useState<"all" | "pass" | "warn" | "fail">("all");
   const [personaType, setPersonaType] = useState("all");
+  const [stuckOnly, setStuckOnly] = useState(false);
   const [sort, setSort] = useState<{ key: SortKey; asc: boolean }>({ key: "score", asc: true });
 
   const rows = useMemo(
@@ -42,6 +46,10 @@ export function ConversationsTab({ data, onOpen }: { data: ReportResponse; onOpe
         score: jc.overall_score ?? 0,
         turns: jc.conversation?.turns?.length ?? 0,
         failed: failedJudges(jc),
+        repeats: jc.bot_repeats ?? 0,
+        reasks: jc.user_reasks ?? 0,
+        loops: (jc.bot_repeats ?? 0) + (jc.user_reasks ?? 0),
+        stuck: (jc.bot_repeats ?? 0) >= STUCK_AT || (jc.user_reasks ?? 0) >= STUCK_AT,
         text: (jc.conversation?.turns ?? []).map((t) => t.message ?? "").join(" ").toLowerCase(),
       })),
     [conversations],
@@ -50,13 +58,14 @@ export function ConversationsTab({ data, onOpen }: { data: ReportResponse; onOpe
   const counts = useMemo(() => {
     const c = { all: rows.length, pass: 0, warn: 0, fail: 0 };
     for (const r of rows) c[r.verdict] += 1;
-    return c;
+    return { ...c, stuck: rows.filter((r) => r.stuck).length };
   }, [rows]);
 
   const q = query.trim().toLowerCase();
   const visible = rows
     .filter((r) => verdict === "all" || r.verdict === verdict)
     .filter((r) => personaType === "all" || r.personaType === personaType)
+    .filter((r) => !stuckOnly || r.stuck)
     .filter((r) => !q || r.persona.toLowerCase().includes(q) || r.text.includes(q))
     .sort((a, b) => {
       const dir = sort.asc ? 1 : -1;
@@ -96,6 +105,11 @@ export function ConversationsTab({ data, onOpen }: { data: ReportResponse; onOpe
               </Button>
             ))}
           </div>
+          {counts.stuck > 0 && (
+            <Button size="xs" variant={stuckOnly ? "default" : "outline"} onClick={() => setStuckOnly((v) => !v)} aria-pressed={stuckOnly}>
+              Stuck {counts.stuck}
+            </Button>
+          )}
           <select
             className="h-7 rounded-md border border-input bg-background px-2 text-xs"
             value={personaType}
@@ -120,13 +134,14 @@ export function ConversationsTab({ data, onOpen }: { data: ReportResponse; onOpe
               <TableHead>Verdict</TableHead>
               <TableHead>{sortButton("score", "Score")}</TableHead>
               <TableHead>{sortButton("turns", "Messages")}</TableHead>
+              <TableHead>{sortButton("loops", "Loops")}</TableHead>
               <TableHead>Failed judges</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {visible.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
+                <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
                   No conversations match these filters.
                 </TableCell>
               </TableRow>
@@ -151,6 +166,17 @@ export function ConversationsTab({ data, onOpen }: { data: ReportResponse; onOpe
                   </TableCell>
                   <TableCell className={`font-semibold tabular-nums ${scoreTone(r.score)}`}>{pct(r.score)}</TableCell>
                   <TableCell className="tabular-nums text-muted-foreground">{r.turns}</TableCell>
+                  <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                    {r.loops ? (
+                      <span title="Bot repeated a reply · user said they were not answered">
+                        <span className={r.stuck ? "font-semibold text-warn" : undefined}>
+                          {r.repeats} repeat{r.repeats === 1 ? "" : "s"} · {r.reasks} re-ask{r.reasks === 1 ? "" : "s"}
+                        </span>
+                      </span>
+                    ) : (
+                      "—"
+                    )}
+                  </TableCell>
                   <TableCell className="whitespace-normal text-sm text-muted-foreground">
                     {r.failed.length ? r.failed.map(judgeLabel).join(", ") : "—"}
                   </TableCell>

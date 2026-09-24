@@ -20,6 +20,7 @@ import { ConversationsTab } from "./conversations-tab";
 import { FailuresTab } from "./failures-tab";
 import { InputsTab } from "./inputs-tab";
 import { OverviewTab } from "./overview-tab";
+import { ReviewTab } from "./review-tab";
 import { TranscriptSheet } from "./transcript-sheet";
 
 const EXPORT_LABELS: Record<string, string> = {
@@ -31,9 +32,13 @@ const EXPORT_LABELS: Record<string, string> = {
   compliance: "Policy compliance (JSON)",
   signature: "Behavioral signature (JSON)",
   audit_trail: "Approval audit trail (JSON)",
+  human_review: "Judge review labels (JSON)",
+  golden_set: "Judge golden set (JSON)",
 };
 
-export type ReportTab = "overview" | "failures" | "conversations" | "inputs";
+const GOLDEN_JUDGES = new Set(["quality", "relevance", "grounding", "safety"]);
+
+export type ReportTab = "overview" | "failures" | "conversations" | "review" | "inputs";
 
 export function ReportView({
   data,
@@ -52,7 +57,10 @@ export function ReportView({
     () => new Map((report.judged_conversations ?? []).map((jc) => [jc.conversation?.id ?? "", jc])),
     [report.judged_conversations],
   );
-  const downloads = data.exports.filter((f) => EXPORT_LABELS[f]);
+  // Judge review writes its label files after the report was loaded
+  const [reviewExports, setReviewExports] = useState<string[]>([]);
+  const exportsList = [...new Set([...data.exports, ...reviewExports])];
+  const downloads = exportsList.filter((f) => EXPORT_LABELS[f]);
   const finished = new Date(status.updated_at);
 
   return (
@@ -68,6 +76,9 @@ export function ReportView({
           </p>
           <p className="truncate font-mono text-xs text-muted-foreground" title={status.config.bot_endpoint}>
             {status.config.bot_endpoint}
+            {data.analysis?.bot_build?.build && (
+              <span title={data.analysis.bot_build.source}> · build {data.analysis.bot_build.build}</span>
+            )}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -115,16 +126,23 @@ export function ReportView({
           <TabsTrigger value="conversations" className="px-4">
             Conversations <span className="ml-1.5 tabular-nums text-muted-foreground">{report.judged_conversations?.length ?? 0}</span>
           </TabsTrigger>
+          <TabsTrigger value="review" className="px-4">Judge review</TabsTrigger>
           <TabsTrigger value="inputs" className="px-4">Inputs</TabsTrigger>
         </TabsList>
         <TabsContent value="overview" className="mt-6">
-          <OverviewTab data={data} onGoToFailures={() => setTab("failures")} />
+          <OverviewTab data={data} onGoToFailures={() => setTab("failures")} onOpenConversation={setOpenId} />
         </TabsContent>
         <TabsContent value="failures" className="mt-6">
           <FailuresTab data={data} onOpenConversation={setOpenId} />
         </TabsContent>
         <TabsContent value="conversations" className="mt-6">
           <ConversationsTab data={data} onOpen={setOpenId} />
+        </TabsContent>
+        <TabsContent value="review" className="mt-6">
+          <ReviewTab simulationId={data.simulation_id} onLabelled={(judge) =>
+              // The engine writes a golden set only for judges it has golden-set categories for
+              setReviewExports((cur) => [...new Set([...cur, "human_review", ...(GOLDEN_JUDGES.has(judge) ? ["golden_set"] : [])])])
+            } />
         </TabsContent>
         <TabsContent value="inputs" className="mt-6">
           <InputsTab data={data} />

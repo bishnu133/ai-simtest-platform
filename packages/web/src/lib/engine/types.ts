@@ -38,6 +38,10 @@ export interface CreateSimulationRequest {
   no_workflow?: boolean;
   policy?: string | null;
   track_cost?: boolean;
+  guardrail_llm?: boolean | null;
+  bot_version_header?: string | null;
+  bot_info_url?: string | null;
+  judge_weights?: Record<string, number> | null;
 }
 
 export interface EngineOptions {
@@ -71,6 +75,10 @@ export interface SimulationStatus {
     no_workflow?: boolean;
     policy?: string | null;
     track_cost?: boolean;
+    guardrail_llm?: boolean | null;
+    bot_version_header?: string | null;
+    bot_info_url?: string | null;
+    judge_weights?: Record<string, number> | null;
   };
 }
 
@@ -103,6 +111,7 @@ export interface ReportSummary {
   critical_failures?: number;
   warnings?: number;
   execution_time_seconds?: number;
+  stuck_conversations?: number;
 }
 
 export interface FailurePattern {
@@ -111,6 +120,15 @@ export interface FailurePattern {
   frequency?: number;
   severity?: string;
   example_conversation_ids?: string[];
+  root_causes?: RootCause[];
+}
+
+/** Failing turns grouped by how the bot's reply opens (engine report_generator). */
+export interface RootCause {
+  reply_opening: string;
+  example_reply: string;
+  turns: number;
+  conversation_ids: string[];
 }
 
 export interface Turn {
@@ -153,6 +171,8 @@ export interface JudgedConversation {
   overall_score?: number;
   pass_rate?: number;
   failure_modes?: string[];
+  bot_repeats?: number;
+  user_reasks?: number;
 }
 
 export interface SimulationReport {
@@ -209,7 +229,40 @@ export interface RunTrend {
   previous_timestamp: string;
   comparable: boolean;
   incomparable_reason: string;
+  changes?: string[];
+  previous_build?: string;
+  current_build?: string;
   deltas: TrendDelta[];
+}
+
+export interface JudgeStat {
+  name: string;
+  /** "scored" judges set the pass rate; "detector" judges report findings. */
+  kind: "scored" | "detector";
+  turns: number;
+  mean_score: number;
+  pass_rate: number;
+  failed_turns: number;
+  /** Non-passing turns where this was the only failing judge. */
+  sole_failures: number;
+  weight: number | null;
+  pass_rate_by_persona_type: Record<string, number>;
+  notes: string[];
+}
+
+export interface JudgeBreakdown {
+  total_turns: number;
+  non_passing_turns: number;
+  multi_judge_failures: number;
+  judges: JudgeStat[];
+}
+
+export interface LoopStats {
+  stuck_conversations: number;
+  conversations_with_bot_repeats: number;
+  conversations_with_user_reasks: number;
+  bot_repeats: number;
+  user_reasks: number;
 }
 
 export interface CoverageSummary {
@@ -246,6 +299,9 @@ export interface RunAnalysis {
   coverage?: CoverageSummary;
   cost?: Record<string, unknown> & { total_estimated_cost_usd?: number; total_calls?: number; total_tokens?: number };
   workflows?: WorkflowSummary[];
+  bot_build?: { build: string; source: string };
+  judge_breakdown?: JudgeBreakdown;
+  loops?: LoopStats;
 }
 
 export interface ApprovedInput {
@@ -262,4 +318,39 @@ export interface ReportResponse {
   analysis?: RunAnalysis;
   inputs?: Record<string, ApprovedInput>;
   exports: string[];
+}
+
+// ── Judge review (label a sample of replies to calibrate a judge) ──
+
+export interface ReviewItem {
+  key: string;
+  conversation_id: string;
+  persona: string;
+  turn_index: number;
+  user_message: string;
+  bot_reply: string;
+  judge_score: number;
+  judge_passed: boolean;
+  judge_message: string;
+  human_pass: boolean | null;
+  note: string;
+}
+
+export interface ReviewSummary {
+  judge: string;
+  labelled: number;
+  agree: number;
+  agreement_rate: number | null;
+  judge_too_strict: number;
+  judge_too_lenient: number;
+  verdict: string;
+  suggested_threshold: { threshold: number; agreement: number } | null;
+  judge_boundary: { lowest_passing_score: number | null; highest_failing_score: number | null };
+}
+
+export interface ReviewResponse {
+  judge: string;
+  judges: string[];
+  items: ReviewItem[];
+  summary: ReviewSummary;
 }
