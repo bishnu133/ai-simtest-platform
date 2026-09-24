@@ -1,0 +1,68 @@
+# AI SimTest — Web Dashboard
+
+Set up and run AI SimTest simulations from the browser instead of the engine CLI.
+The UI follows the Replit design: an 8-step wizard where each AI-generated step
+(domain context → success criteria → guardrails → test plan → personas) waits for
+human approval before the simulation runs, followed by basic and detailed reports.
+
+Stack: Next.js 16 (App Router), React 19, TypeScript, Tailwind v4, shadcn/Radix UI, pnpm.
+
+## How it connects
+
+```
+Browser ──/api/engine/*──▶ Next.js route handler ──/wizard/*──▶ AI SimTest engine (simtest serve)
+                          (server-side proxy)                  src/api/wizard.py
+```
+
+- The browser only calls `/api/engine/...`. The route handler
+  (`src/app/api/engine/[...path]/route.ts`) forwards to `${ENGINE_API_URL}/wizard/...`,
+  so the engine URL and any bot API key never ship in client code.
+- Only the `/wizard/simulations...` surface is proxied; everything else returns 404.
+- If the engine is down, the proxy returns `502 {code: "engine_unreachable"}` and the UI says so.
+
+| Screen | Engine call |
+|---|---|
+| Setup | `POST /wizard/simulations` |
+| Context / Criteria / Guardrails / Test Plan / Personas | `GET /wizard/simulations/{id}/gate` → `POST .../gate/{key}/decision` |
+| Loader | polls `GET /wizard/simulations/{id}` every 1.5 s |
+| Reports | `GET /wizard/simulations/{id}/report`, downloads via `.../exports/{fmt}` |
+
+Button → decision mapping on review screens: **Approve** → `approved` (or `modified`
+with your edits), **Reject** → `regenerate` (the AI drafts a fresh proposal),
+**Stop simulation** → `cancel`. Personas can only be removed, not edited — that's what
+the engine supports.
+
+Mapping between engine proposals and table rows lives in `src/lib/engine/gates.ts`.
+
+## Run locally
+
+**Terminal A — engine** (in the `ai-simtest` repo, with an LLM key in `.env`):
+
+```bash
+API_HOST=127.0.0.1 API_PORT=8100 simtest serve
+```
+
+**Terminal B — dashboard** (this folder):
+
+```bash
+cp .env.example .env.local      # ENGINE_API_URL=http://127.0.0.1:8100
+pnpm install
+pnpm dev                        # http://localhost:3000
+```
+
+Corporate `~/.npmrc` breaking installs? Run with `NPM_CONFIG_USERCONFIG=/dev/null pnpm install`
+(the committed `.npmrc` pins the public registry).
+
+## Checks
+
+```bash
+pnpm lint && pnpm typecheck && pnpm build
+```
+
+## Limitations
+
+- The engine keeps runs in memory: restarting it loses in-flight and finished runs
+  (the Runs page only lists runs since the last engine start).
+- The engine API has no auth — keep it bound to `127.0.0.1` behind this proxy.
+- Results are not yet written into the platform API's Postgres (Phase 2), so the
+  platform's Conversations/Comparisons endpoints don't see dashboard runs.
