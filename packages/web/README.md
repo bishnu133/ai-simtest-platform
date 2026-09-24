@@ -1,36 +1,79 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AI SimTest — Web Dashboard
 
-## Getting Started
+Set up and run AI SimTest simulations from the browser instead of the engine CLI.
+The UI follows the Replit design: an 8-step wizard where each AI-generated step
+(domain context → success criteria → guardrails → test plan → personas) waits for
+human approval before the simulation runs, followed by basic and detailed reports.
 
-First, run the development server:
+Stack: Next.js 16 (App Router), React 19, TypeScript, Tailwind v4, shadcn/Radix UI, pnpm.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## How it connects
+
+```
+Browser ──/api/engine/*──▶ Next.js route handler ──/wizard/*──▶ AI SimTest engine (simtest serve)
+                          (server-side proxy)                  src/api/wizard.py
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+- The browser only calls `/api/engine/...`. The route handler
+  (`src/app/api/engine/[...path]/route.ts`) forwards to `${ENGINE_API_URL}/wizard/...`,
+  so the engine URL and any bot API key never ship in client code.
+- Only the `/wizard/simulations...` surface is proxied; everything else returns 404.
+- If the engine is down, the proxy returns `502 {code: "engine_unreachable"}` and the UI says so.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Screen | Engine call |
+|---|---|
+| Setup | `POST /wizard/simulations` |
+| Context / Criteria / Guardrails / Test Plan / Personas | `GET /wizard/simulations/{id}/gate` → `POST .../gate/{key}/decision` |
+| Loader | polls `GET /wizard/simulations/{id}` every 1.5 s |
+| Reports | `GET /wizard/simulations/{id}/report`, downloads via `.../exports/{fmt}` |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Button → decision mapping on review screens: **Approve** → `approved` (or `modified`
+with your edits), **Reject** → `regenerate` (the AI drafts a fresh proposal),
+**Stop simulation** → `cancel`. Personas can only be removed, not edited — that's what
+the engine supports.
 
-## Learn More
+Mapping between engine proposals and table rows lives in `src/lib/engine/gates.ts`.
 
-To learn more about Next.js, take a look at the following resources:
+## Platform shell pages
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+`/overview`, `/dashboard`, `/conversations` and `/comparisons` (the `(shell)` route group, with
+sidebar + topbar) read from the platform API (`packages/api`) through a second server-side proxy:
+`/api/*` → `${API_INTERNAL_URL}/v1/*`, which injects the dev-auth headers
+(`src/app/api/[...path]/route.ts`, `src/lib/api/`). The `/api/engine/*` route is more specific, so
+engine calls never hit that proxy. Both proxies are server-only; see `.env.example`.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Run locally
 
-## Deploy on Vercel
+**Terminal A — engine** (in the `ai-simtest` repo, with an LLM key in `.env`):
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+API_HOST=127.0.0.1 API_PORT=8100 simtest serve
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+**Terminal B — dashboard** (this folder):
+
+```bash
+cp .env.example .env.local      # ENGINE_API_URL=http://127.0.0.1:8100
+pnpm install
+pnpm dev                        # http://localhost:3000
+```
+
+Uses pnpm 11 (pinned in `package.json`). pnpm 11 refuses packages published in the last 24 h and
+only runs build scripts listed under `allowBuilds` in `pnpm-workspace.yaml`.
+
+Corporate `~/.npmrc` breaking installs? Run with `NPM_CONFIG_USERCONFIG=/dev/null pnpm install`
+(the committed `.npmrc` pins the public registry).
+
+## Checks
+
+```bash
+pnpm lint && pnpm typecheck && pnpm build
+```
+
+## Limitations
+
+- The engine keeps runs in memory: restarting it loses in-flight and finished runs
+  (the Runs page only lists runs since the last engine start).
+- The engine API has no auth — keep it bound to `127.0.0.1` behind this proxy.
+- Results are not yet written into the platform API's Postgres (Phase 2), so the
+  platform's Conversations/Comparisons endpoints don't see dashboard runs.

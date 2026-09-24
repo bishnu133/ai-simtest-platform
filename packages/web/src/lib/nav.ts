@@ -8,7 +8,8 @@ export const NAV: NavGroup[] = [
     { label: "Dashboard", href: "/dashboard", status: "active" },
   ]},
   { heading: "Evaluation", items: [
-    { label: "Simulations", href: "/simulations", status: "soon" },
+    { label: "New simulation", href: "/", status: "active" },
+    { label: "Simulations", href: "/simulations", status: "active" },
     { label: "Conversations", href: "/conversations", status: "active" },
     { label: "Personas", href: "/personas", status: "soon" },
     { label: "Judges & Metrics", href: "/judges", status: "soon" },
