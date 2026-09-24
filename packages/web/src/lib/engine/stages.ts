@@ -34,10 +34,13 @@ export const SIMULATION_PHASES: { key: string; label: string }[] = [
   { key: "judging", label: "Judging response quality, safety and grounding…" },
   { key: "generating_report", label: "Clustering failures and preparing the report…" },
   { key: "exporting_results", label: "Exporting report files…" },
+  { key: "analyzing_results", label: "Scoring coverage, workflows, policy and cost…" },
 ];
 
 export function simulationPhase(status: SimulationStatus) {
-  const key = status.stage === "exporting_results" ? "exporting_results" : status.engine_status ?? "generating_personas";
+  const key = ["exporting_results", "analyzing_results"].includes(status.stage)
+    ? status.stage
+    : status.engine_status ?? "generating_personas";
   const index = Math.max(0, SIMULATION_PHASES.findIndex((p) => p.key === key));
   return {
     index,

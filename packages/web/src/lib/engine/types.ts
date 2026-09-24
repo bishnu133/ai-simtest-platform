@@ -33,6 +33,17 @@ export interface CreateSimulationRequest {
   min_turns: number;
   max_turns: number;
   max_parallel: number;
+  capture_response_headers?: string[];
+  workflows?: string[];
+  no_workflow?: boolean;
+  policy?: string | null;
+  track_cost?: boolean;
+}
+
+export interface EngineOptions {
+  workflows: { id: string; name: string; domain: string }[];
+  policies: { id: string; name: string; description: string }[];
+  request_formats: string[];
 }
 
 export interface SimulationStatus {
@@ -55,6 +66,11 @@ export interface SimulationStatus {
     min_turns: number;
     max_turns: number;
     max_parallel: number;
+    capture_response_headers?: string[];
+    workflows?: string[];
+    no_workflow?: boolean;
+    policy?: string | null;
+    track_cost?: boolean;
   };
 }
 
@@ -109,7 +125,9 @@ export interface JudgeResult {
   passed?: boolean;
   score?: number;
   label?: string;
+  severity?: string;
   message?: string;
+  evidence?: unknown;
 }
 
 export interface JudgedTurn {
@@ -147,10 +165,101 @@ export interface SimulationReport {
   judged_conversations?: JudgedConversation[];
 }
 
+// ── Post-simulation analysis (same helpers as the engine's HTML report) ──
+
+export interface LatencyStats {
+  available: boolean;
+  count: number;
+  p50: number;
+  p90: number;
+  p95: number;
+  p99: number;
+  mean: number;
+  max: number;
+  slowest_conversation_id: string;
+}
+
+export interface TriageItem {
+  rank: number;
+  title: string;
+  detail: string;
+  severity: string;
+  frequency: number;
+  reach: number;
+  score: number;
+  conversation_ids: string[];
+  affected_conversations: number;
+  source: string;
+}
+
+export interface TrendDelta {
+  label: string;
+  current: number;
+  previous: number;
+  delta: number;
+  improved: boolean | null;
+  higher_is_better: boolean;
+  is_percentage: boolean;
+  is_count: boolean;
+  formatted: string;
+}
+
+export interface RunTrend {
+  available: boolean;
+  previous_timestamp: string;
+  comparable: boolean;
+  incomparable_reason: string;
+  deltas: TrendDelta[];
+}
+
+export interface CoverageSummary {
+  overall_coverage?: number;
+  grade?: string;
+  dimension_scores?: Record<string, number>;
+  gaps?: string[];
+  recommendations?: string[];
+  capped_reason?: string | null;
+}
+
+export interface WorkflowSummary {
+  workflow?: string;
+  domain?: string;
+  role?: string;
+  role_label?: string;
+  total_conversations?: number;
+  passed?: number;
+  failed?: number;
+  avg_score?: number;
+  critical_failures?: number;
+  not_applicable?: number;
+  status?: string;
+  scope_check_clean?: boolean;
+  scope_check_message?: string;
+  rule_results?: { rule: string; severity: string; passed: number; checked: number }[];
+}
+
+export interface RunAnalysis {
+  quality_gates_failed?: boolean;
+  latency?: LatencyStats;
+  fix_first?: TriageItem[];
+  trend?: RunTrend;
+  coverage?: CoverageSummary;
+  cost?: Record<string, unknown> & { total_estimated_cost_usd?: number; total_calls?: number; total_tokens?: number };
+  workflows?: WorkflowSummary[];
+}
+
+export interface ApprovedInput {
+  title: string;
+  decision: string;
+  data: unknown;
+}
+
 export interface ReportResponse {
   simulation_id: string;
   name: string;
   report: SimulationReport;
   personas: ReportPersona[];
+  analysis?: RunAnalysis;
+  inputs?: Record<string, ApprovedInput>;
   exports: string[];
 }

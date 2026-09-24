@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type DragEvent, type FormEvent } from "react";
+import { useEffect, useRef, useState, type DragEvent, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, ChevronDown, FileText, Loader2, UploadCloud, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { engine, EngineError } from "@/lib/engine/client";
-import type { RequestFormat } from "@/lib/engine/types";
+import { Checkbox } from "@/components/ui/checkbox";
+import type { EngineOptions, RequestFormat } from "@/lib/engine/types";
 
 // Design options, extended downward so a live demo can run small and fast
 const PERSONA_OPTIONS = ["3", "5", "10", "20", "30", "40", "50", "75", "100"];
@@ -63,6 +64,17 @@ export function SetupForm() {
   const [contextFilename, setContextFilename] = useState("");
   const [contextContent, setContextContent] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [options, setOptions] = useState<EngineOptions | null>(null);
+  const [captureHeaders, setCaptureHeaders] = useState("");
+  const [policy, setPolicy] = useState("");
+  const [workflowMode, setWorkflowMode] = useState<"auto" | "choose" | "off">("auto");
+  const [workflows, setWorkflows] = useState<string[]>([]);
+  const [trackCost, setTrackCost] = useState(true);
+
+  useEffect(() => {
+    // Built-in workflows/policies for the evaluation options; the form works without them
+    engine.getOptions().then(setOptions).catch(() => setOptions(null));
+  }, []);
   const [dragActive, setDragActive] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -110,6 +122,10 @@ export function SetupForm() {
       setError("Minimum turns cannot exceed maximum turns.");
       return;
     }
+    if (workflowMode === "choose" && workflows.length === 0) {
+      setError("Pick at least one workflow, or switch workflows to auto-detect.");
+      return;
+    }
     if (!contextContent.trim()) {
       setError("Upload a Markdown file describing your bot — the engine derives the test plan from it.");
       return;
@@ -130,6 +146,14 @@ export function SetupForm() {
         min_turns: Number(minTurns),
         max_turns: Number(maxTurns),
         max_parallel: Number(parallel),
+        capture_response_headers: captureHeaders
+          .split(",")
+          .map((h) => h.trim())
+          .filter(Boolean),
+        policy: policy || null,
+        workflows: workflowMode === "choose" ? workflows : [],
+        no_workflow: workflowMode === "off",
+        track_cost: trackCost,
       });
       router.push(`/simulations/${sim.simulation_id}`);
     } catch (err) {
@@ -250,7 +274,7 @@ export function SetupForm() {
                 aria-expanded={showAdvanced}
               >
                 <ChevronDown className={`w-4 h-4 transition-transform ${showAdvanced ? "rotate-180" : ""}`} />
-                Advanced: run name, bot authentication &amp; request format
+                Advanced: run name, bot authentication, request format &amp; evaluation
               </button>
 
               {showAdvanced && (
@@ -282,6 +306,89 @@ export function SetupForm() {
                     <Label htmlFor="response-path" className="text-sm font-semibold">Response Path</Label>
                     <Input id="response-path" className="h-11 font-mono text-sm" value={responsePath} onChange={(e) => setResponsePath(e.target.value)} />
                   </div>
+
+                  <div className="md:col-span-2 border-t pt-6">
+                    <h3 className="text-sm font-semibold text-foreground">Evaluation</h3>
+                    <p className="text-sm text-muted-foreground">Extra checks run after the simulation, same as the CLI.</p>
+                  </div>
+                  <div className="space-y-3">
+                    <Label htmlFor="capture-headers" className="text-sm font-semibold">Response Headers to Capture</Label>
+                    <Input
+                      id="capture-headers"
+                      className="h-11 font-mono text-sm"
+                      placeholder="x-simbank-*, x-request-id"
+                      value={captureHeaders}
+                      onChange={(e) => setCaptureHeaders(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Comma-separated; <code>*</code> allowed. Adds bot-label failure rates and judge calibration to the report.
+                    </p>
+                  </div>
+                  <div className="space-y-3">
+                    <Label htmlFor="policy" className="text-sm font-semibold">Compliance Policy</Label>
+                    <select
+                      id="policy"
+                      className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm"
+                      value={policy}
+                      onChange={(e) => setPolicy(e.target.value)}
+                    >
+                      <option value="">None</option>
+                      {options?.policies.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-muted-foreground">Scores the run against a built-in policy-as-code template.</p>
+                  </div>
+                  <fieldset className="space-y-3 md:col-span-2">
+                    <legend className="text-sm font-semibold">Workflow Judging</legend>
+                    <div className="flex flex-wrap gap-4 text-sm">
+                      {(
+                        [
+                          ["auto", "Auto-detect from your docs"],
+                          ["choose", "Choose workflows"],
+                          ["off", "Off"],
+                        ] as const
+                      ).map(([value, label]) => (
+                        <label key={value} className="inline-flex items-center gap-2">
+                          <input
+                            type="radio"
+                            name="workflow-mode"
+                            value={value}
+                            checked={workflowMode === value}
+                            onChange={() => setWorkflowMode(value)}
+                            className="accent-[hsl(var(--primary))]"
+                          />
+                          {label}
+                        </label>
+                      ))}
+                    </div>
+                    {workflowMode === "choose" && (
+                      <div className="grid gap-2 rounded-lg border p-3 sm:grid-cols-2">
+                        {options?.workflows.length ? (
+                          options.workflows.map((w) => (
+                            <label key={w.id} className="flex items-center gap-2 text-sm">
+                              <Checkbox
+                                checked={workflows.includes(w.id)}
+                                onCheckedChange={(on) =>
+                                  setWorkflows((cur) => (on ? [...cur, w.id] : cur.filter((x) => x !== w.id)))
+                                }
+                              />
+                              {w.name}
+                              <span className="text-xs text-muted-foreground">{w.domain}</span>
+                            </label>
+                          ))
+                        ) : (
+                          <p className="text-sm text-muted-foreground">Couldn&apos;t load workflows from the engine.</p>
+                        )}
+                      </div>
+                    )}
+                  </fieldset>
+                  <label className="flex items-center gap-2 text-sm md:col-span-2">
+                    <Checkbox checked={trackCost} onCheckedChange={(on) => setTrackCost(on === true)} />
+                    Track estimated LLM cost for this run
+                  </label>
                 </div>
               )}
             </div>

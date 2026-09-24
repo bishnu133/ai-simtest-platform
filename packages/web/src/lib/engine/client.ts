@@ -4,6 +4,7 @@
  */
 import type {
   CreateSimulationRequest,
+  EngineOptions,
   GateDecision,
   PendingGate,
   ReportResponse,
@@ -69,6 +70,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const engine = {
   createSimulation: (body: CreateSimulationRequest) =>
     request<SimulationStatus>("/simulations", { method: "POST", body: JSON.stringify(body) }),
+
+  getOptions: () => request<EngineOptions>("/options"),
 
   listSimulations: () => request<{ simulations: SimulationStatus[] }>("/simulations"),
 
