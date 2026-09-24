@@ -70,6 +70,7 @@ export function JudgeBreakdownPanel({ breakdown }: { breakdown: JudgeBreakdown }
         </p>
       )}
       <PersonaTypeTable breakdown={breakdown} />
+      <TurnPositionTable breakdown={breakdown} />
     </Panel>
   );
 }
@@ -110,6 +111,57 @@ function PersonaTypeTable({ breakdown }: { breakdown: JudgeBreakdown }) {
           </TableBody>
         </Table>
       </div>
+    </div>
+  );
+}
+
+function TurnPositionTable({ breakdown }: { breakdown: JudgeBreakdown }) {
+  const overall = breakdown.pass_rate_by_turn ?? {};
+  const bands = Object.keys(overall);
+  if (bands.length < 2) return null;
+  const rows: [string, Record<string, number>][] = [
+    ["All judges (turn label)", overall],
+    ...breakdown.judges
+      .filter((j) => j.kind === "scored" && j.pass_rate_by_turn)
+      .map((j): [string, Record<string, number>] => [judgeLabel(j.name), j.pass_rate_by_turn ?? {}]),
+  ];
+  const drop = overall[bands[0]] - overall[bands[bands.length - 1]];
+  return (
+    <div className="mt-6">
+      <h4 className="mb-2 text-sm font-semibold text-foreground">Pass rate by position in the conversation</h4>
+      <div className="overflow-x-auto rounded-lg border">
+        <Table>
+          <TableHeader className="bg-muted/50">
+            <TableRow>
+              <TableHead className="font-semibold text-foreground">Pass rate</TableHead>
+              {bands.map((b) => (
+                <TableHead key={b} className="text-right font-semibold text-foreground">
+                  Replies {b.replace("-", "–")}
+                </TableHead>
+              ))}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map(([name, rates]) => (
+              <TableRow key={name}>
+                <TableCell>{name}</TableCell>
+                {bands.map((b) => (
+                  <TableCell key={b} className={`text-right font-medium tabular-nums ${scoreTone(rates[b])}`}>
+                    {pct(rates[b])}
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+      {drop >= 0.15 && (
+        <p className="mt-3 text-xs text-muted-foreground">
+          Replies pass less often later in the conversation ({pct(overall[bands[0]])} → {pct(overall[bands[bands.length - 1]])}).
+          If the run used a high minimum turn count, simulated users were told to keep asking after their goal was met,
+          so later turns are mostly follow-ups the bot may not be built for.
+        </p>
+      )}
     </div>
   );
 }

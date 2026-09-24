@@ -12,7 +12,7 @@ import {
   responsesJudged,
   turnLabelCounts,
 } from "@/lib/engine/report";
-import type { ReportResponse } from "@/lib/engine/types";
+import type { CoverageSummary, ReportResponse } from "@/lib/engine/types";
 import { ScoreBars, TurnLabelBar } from "./charts";
 import { JudgeBreakdownPanel, LoopsPanel } from "./judge-breakdown";
 import { EmptyNote, Panel, SeverityBadge, StatTile, VerdictBanner } from "./parts";
@@ -168,26 +168,7 @@ export function OverviewTab({
 
       {(analysis.coverage || analysis.workflows?.length) && (
         <div className="grid gap-4 lg:grid-cols-2">
-          {analysis.coverage && (
-            <Panel
-              title="Test coverage"
-              description={
-                analysis.coverage.capped_reason ? `Grade capped: ${analysis.coverage.capped_reason}` : "How much of the bot's surface this run exercised."
-              }
-            >
-              <ScoreBars
-                caption="Coverage by dimension"
-                rows={Object.entries(analysis.coverage.dimension_scores ?? {}).map(([k, v]) => ({ label: judgeLabel(k), value: v }))}
-              />
-              {!!analysis.coverage.gaps?.length && (
-                <ul className="mt-4 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-                  {analysis.coverage.gaps.slice(0, 4).map((g, i) => (
-                    <li key={i}>{g}</li>
-                  ))}
-                </ul>
-              )}
-            </Panel>
-          )}
+          {analysis.coverage && <CoveragePanel coverage={analysis.coverage} />}
           {!!analysis.workflows?.length && (
             <Panel title="Workflows" description="Business workflows the bot was graded on.">
               <ul className="divide-y">
@@ -223,5 +204,31 @@ export function OverviewTab({
         </div>
       )}
     </div>
+  );
+}
+
+function CoveragePanel({ coverage }: { coverage: CoverageSummary }) {
+  const weights = coverage.dimension_weights;
+  // A dimension with no weight was not measured; its score is a placeholder
+  const measured = Object.entries(coverage.dimension_scores ?? {}).filter(([k]) => !weights || (weights[k] ?? 0) > 0);
+  const unmeasured = weights ? Object.keys(coverage.dimension_scores ?? {}).filter((k) => !((weights[k] ?? 0) > 0)) : [];
+  const capped = coverage.capped_reason?.replace(/^Grade capped:\s*/i, "");
+  return (
+    <Panel
+      title="Test coverage"
+      description={capped ? `Grade capped: ${capped}` : "How much of the bot's surface this run exercised."}
+    >
+      <ScoreBars caption="Coverage by dimension" rows={measured.map(([k, v]) => ({ label: judgeLabel(k), value: v }))} />
+      {unmeasured.length > 0 && (
+        <p className="mt-3 text-xs text-muted-foreground">Not measured in this run: {unmeasured.map(judgeLabel).join(", ")}.</p>
+      )}
+      {!!(coverage.gaps?.length || coverage.notes?.length) && (
+        <ul className="mt-4 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+          {[...(coverage.gaps ?? []), ...(coverage.notes ?? [])].slice(0, 5).map((g, i) => (
+            <li key={i}>{g}</li>
+          ))}
+        </ul>
+      )}
+    </Panel>
   );
 }

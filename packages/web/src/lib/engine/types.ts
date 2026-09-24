@@ -39,6 +39,7 @@ export interface CreateSimulationRequest {
   policy?: string | null;
   track_cost?: boolean;
   guardrail_llm?: boolean | null;
+  relevance_llm?: boolean | null;
   bot_version_header?: string | null;
   bot_info_url?: string | null;
   judge_weights?: Record<string, number> | null;
@@ -76,6 +77,7 @@ export interface SimulationStatus {
     policy?: string | null;
     track_cost?: boolean;
     guardrail_llm?: boolean | null;
+  relevance_llm?: boolean | null;
     bot_version_header?: string | null;
     bot_info_url?: string | null;
     judge_weights?: Record<string, number> | null;
@@ -247,6 +249,8 @@ export interface JudgeStat {
   sole_failures: number;
   weight: number | null;
   pass_rate_by_persona_type: Record<string, number>;
+  /** Pass rate by position in the conversation, e.g. { "1-5": 0.3, "6-10": 0.2 } */
+  pass_rate_by_turn?: Record<string, number>;
   notes: string[];
 }
 
@@ -254,6 +258,7 @@ export interface JudgeBreakdown {
   total_turns: number;
   non_passing_turns: number;
   multi_judge_failures: number;
+  pass_rate_by_turn?: Record<string, number>;
   judges: JudgeStat[];
 }
 
@@ -269,9 +274,12 @@ export interface CoverageSummary {
   overall_coverage?: number;
   grade?: string;
   dimension_scores?: Record<string, number>;
+  /** 0 means the dimension was not measured in this run. */
+  dimension_weights?: Record<string, number>;
   gaps?: string[];
   recommendations?: string[];
   capped_reason?: string | null;
+  notes?: string[];
 }
 
 export interface WorkflowSummary {

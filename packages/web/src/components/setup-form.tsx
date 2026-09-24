@@ -48,6 +48,9 @@ function SelectField({ id, label, value, options, onChange }: SelectFieldProps) 
   );
 }
 
+// From this minimum up, users are held in the chat long past their goal
+const LONG_MIN_TURNS = 8;
+
 // The engine's default judges and weights (AutonomousOrchestrator._build_simulation_config)
 const DEFAULT_WEIGHTS: [string, number][] = [
   ["grounding", 0.3],
@@ -79,6 +82,7 @@ export function SetupForm() {
   const [workflows, setWorkflows] = useState<string[]>([]);
   const [trackCost, setTrackCost] = useState(true);
   const [guardrailLlm, setGuardrailLlm] = useState(false);
+  const [relevanceLlm, setRelevanceLlm] = useState(false);
   const [versionHeader, setVersionHeader] = useState("");
   const [infoUrl, setInfoUrl] = useState("");
   const [weights, setWeights] = useState<Record<string, string>>({});
@@ -167,6 +171,7 @@ export function SetupForm() {
         no_workflow: workflowMode === "off",
         track_cost: trackCost,
         guardrail_llm: guardrailLlm,
+        relevance_llm: relevanceLlm,
         bot_version_header: versionHeader.trim() || null,
         bot_info_url: infoUrl.trim() || null,
         judge_weights: Object.fromEntries(
@@ -216,6 +221,13 @@ export function SetupForm() {
               <SelectField id="parallel" label="Parallel Conversations" value={parallel} options={PARALLEL_OPTIONS} onChange={setParallel} />
               <SelectField id="min-turns" label="Minimum Turns" value={minTurns} options={TURN_OPTIONS} onChange={setMinTurns} />
               <SelectField id="max-turns" label="Maximum Turns" value={maxTurns} options={TURN_OPTIONS} onChange={setMaxTurns} />
+              {Number(minTurns) >= LONG_MIN_TURNS && (
+                <p role="note" className="md:col-span-2 rounded-md border border-warn/30 bg-warn/5 px-3 py-2 text-sm text-foreground">
+                  Every conversation will run at least {minTurns} turns. Simulated users are told not to wrap up before
+                  then, so once their goal is met they invent follow-up questions, and those later replies usually fail.
+                  To measure how conversations end naturally, keep the minimum low and raise only the maximum.
+                </p>
+              )}
             </div>
 
             <div className="space-y-3 pt-4 border-t">
@@ -416,6 +428,15 @@ export function SetupForm() {
                     </label>
                     <p className="pl-6 text-xs text-muted-foreground">
                       Without it, rules no pattern covers are listed as not checked. Adds one model call per bot reply.
+                    </p>
+                  </div>
+                  <div className="space-y-1 md:col-span-2">
+                    <label className="flex items-center gap-2 text-sm">
+                      <Checkbox checked={relevanceLlm} onCheckedChange={(on) => setRelevanceLlm(on === true)} />
+                      Judge relevance with an LLM
+                    </label>
+                    <p className="pl-6 text-xs text-muted-foreground">
+                      By default relevance compares wording, which cannot tell whether the question was answered. Adds one model call per bot reply.
                     </p>
                   </div>
 
