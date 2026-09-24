@@ -1,0 +1,311 @@
+"use client";
+
+import { useRef, useState, type DragEvent, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
+import { ArrowRight, ChevronDown, FileText, Loader2, UploadCloud, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { engine, EngineError } from "@/lib/engine/client";
+import type { RequestFormat } from "@/lib/engine/types";
+
+// Design options, extended downward so a live demo can run small and fast
+const PERSONA_OPTIONS = ["3", "5", "10", "20", "30", "40", "50", "75", "100"];
+const TURN_OPTIONS = ["2", "3", "5", "10", "15", "20", "30", "40", "50"];
+const PARALLEL_OPTIONS = ["1", "2", "3", "5", "10", "20"];
+const MAX_FILE_BYTES = 2 * 1024 * 1024;
+
+type SelectFieldProps = {
+  id: string;
+  label: string;
+  value: string;
+  options: string[];
+  onChange: (value: string) => void;
+};
+
+function SelectField({ id, label, value, options, onChange }: SelectFieldProps) {
+  return (
+    <div className="space-y-3">
+      <Label htmlFor={id} className="text-sm font-semibold">
+        {label}
+      </Label>
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger id={id} className="h-11 w-full">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((opt) => (
+            <SelectItem key={opt} value={opt}>
+              {opt}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+export function SetupForm() {
+  const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [name, setName] = useState("");
+  const [endpoint, setEndpoint] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const [format, setFormat] = useState<RequestFormat>("openai");
+  const [responsePath, setResponsePath] = useState("choices.0.message.content");
+  const [personas, setPersonas] = useState("5");
+  const [minTurns, setMinTurns] = useState("3");
+  const [maxTurns, setMaxTurns] = useState("5");
+  const [parallel, setParallel] = useState("2");
+  const [contextFilename, setContextFilename] = useState("");
+  const [contextContent, setContextContent] = useState("");
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleFile = (file: File) => {
+    if (!/\.(md|markdown|txt)$/i.test(file.name)) {
+      setError("Please upload a Markdown (.md) file.");
+      return;
+    }
+    if (file.size > MAX_FILE_BYTES) {
+      setError("Context file must be 2 MB or smaller.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setContextFilename(file.name);
+      setContextContent(String(e.target?.result ?? ""));
+      setError("");
+    };
+    reader.onerror = () => setError("Could not read that file.");
+    reader.readAsText(file);
+  };
+
+  const handleDrag = (e: DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(e.type === "dragenter" || e.type === "dragover");
+  };
+
+  const handleDrop = (e: DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) handleFile(file);
+  };
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!/^https?:\/\/\S+$/.test(endpoint.trim())) {
+      setError("Endpoint must be a valid HTTP/HTTPS URL.");
+      return;
+    }
+    if (Number(minTurns) > Number(maxTurns)) {
+      setError("Minimum turns cannot exceed maximum turns.");
+      return;
+    }
+    if (!contextContent.trim()) {
+      setError("Upload a Markdown file describing your bot — the engine derives the test plan from it.");
+      return;
+    }
+
+    setError("");
+    setSubmitting(true);
+    try {
+      const sim = await engine.createSimulation({
+        name: name.trim() || contextFilename.replace(/\.\w+$/, "") || "Web Simulation",
+        bot_endpoint: endpoint.trim(),
+        bot_api_key: apiKey.trim() || undefined,
+        bot_request_format: format,
+        bot_response_path: responsePath.trim() || "choices.0.message.content",
+        documentation: contextContent,
+        documentation_filename: contextFilename,
+        num_personas: Number(personas),
+        min_turns: Number(minTurns),
+        max_turns: Number(maxTurns),
+        max_parallel: Number(parallel),
+      });
+      router.push(`/simulations/${sim.simulation_id}`);
+    } catch (err) {
+      setError(err instanceof EngineError ? err.message : "Could not start the simulation.");
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="max-w-3xl mx-auto py-8">
+      <div className="mb-10 text-center animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground mb-3">Welcome to AI SimTest</h1>
+        <p className="text-lg md:text-xl text-muted-foreground">The future of QA Automation for AI conversations</p>
+      </div>
+
+      <Card className="shadow-lg border-muted/60 animate-in fade-in slide-in-from-bottom-6 duration-700 delay-150 fill-mode-both py-0 gap-0">
+        <CardHeader className="bg-muted/30 border-b py-6">
+          <CardTitle>Simulation Configuration</CardTitle>
+          <CardDescription>Set up the parameters for your chatbot testing simulation.</CardDescription>
+        </CardHeader>
+        <CardContent className="p-6 md:p-8">
+          <form onSubmit={handleSubmit} className="space-y-8" noValidate>
+            <div className="space-y-3">
+              <Label htmlFor="endpoint" className="text-base font-semibold">
+                Bot Endpoint
+              </Label>
+              <Input
+                id="endpoint"
+                type="url"
+                placeholder="https://your-bot.com/api/chat"
+                className="h-12 text-base"
+                value={endpoint}
+                onChange={(e) => setEndpoint(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <SelectField id="personas" label="Personas to Generate" value={personas} options={PERSONA_OPTIONS} onChange={setPersonas} />
+              <SelectField id="parallel" label="Parallel Conversations" value={parallel} options={PARALLEL_OPTIONS} onChange={setParallel} />
+              <SelectField id="min-turns" label="Minimum Turns" value={minTurns} options={TURN_OPTIONS} onChange={setMinTurns} />
+              <SelectField id="max-turns" label="Maximum Turns" value={maxTurns} options={TURN_OPTIONS} onChange={setMaxTurns} />
+            </div>
+
+            <div className="space-y-3 pt-4 border-t">
+              <Label className="text-base font-semibold">Upload Context</Label>
+              <p className="text-sm text-muted-foreground">
+                Provide domain knowledge, system prompts, or rules as a Markdown file.
+              </p>
+
+              {!contextFilename ? (
+                <button
+                  type="button"
+                  className={`w-full border-2 border-dashed rounded-xl p-10 text-center transition-colors flex flex-col items-center justify-center gap-3 ${
+                    dragActive
+                      ? "border-primary bg-primary/5"
+                      : "border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/20"
+                  }`}
+                  onDragEnter={handleDrag}
+                  onDragLeave={handleDrag}
+                  onDragOver={handleDrag}
+                  onDrop={handleDrop}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <span className="p-4 bg-primary/10 rounded-full">
+                    <UploadCloud className="w-8 h-8 text-primary" />
+                  </span>
+                  <span>
+                    <span className="block font-medium text-foreground">Click to upload or drag and drop</span>
+                    <span className="block text-sm text-muted-foreground mt-1">Markdown (.md) files only</span>
+                  </span>
+                </button>
+              ) : (
+                <div className="flex items-center justify-between p-4 border rounded-xl bg-muted/30">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="p-2 bg-primary/10 rounded-lg">
+                      <FileText className="w-6 h-6 text-primary" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-medium truncate">{contextFilename}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Markdown file loaded · {contextContent.length.toLocaleString()} characters
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Remove file"
+                    onClick={() => {
+                      setContextFilename("");
+                      setContextContent("");
+                    }}
+                  >
+                    <X className="w-5 h-5 text-muted-foreground" />
+                  </Button>
+                </div>
+              )}
+              <input
+                type="file"
+                className="hidden"
+                accept=".md,.markdown,.txt,text/markdown"
+                ref={fileInputRef}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleFile(file);
+                  e.target.value = "";
+                }}
+              />
+            </div>
+
+            <div className="border-t pt-4">
+              <button
+                type="button"
+                className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
+                onClick={() => setShowAdvanced((v) => !v)}
+                aria-expanded={showAdvanced}
+              >
+                <ChevronDown className={`w-4 h-4 transition-transform ${showAdvanced ? "rotate-180" : ""}`} />
+                Advanced: run name, bot authentication &amp; request format
+              </button>
+
+              {showAdvanced && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6">
+                  <div className="space-y-3">
+                    <Label htmlFor="name" className="text-sm font-semibold">Run Name</Label>
+                    <Input id="name" className="h-11" placeholder="Banking bot – release 2.3" value={name} onChange={(e) => setName(e.target.value)} />
+                  </div>
+                  <div className="space-y-3">
+                    <Label htmlFor="api-key" className="text-sm font-semibold">Bot API Key (optional)</Label>
+                    <Input
+                      id="api-key"
+                      type="password"
+                      autoComplete="off"
+                      className="h-11"
+                      placeholder="Sent only to the engine"
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                    />
+                  </div>
+                  <SelectField
+                    id="format"
+                    label="Request Format"
+                    value={format}
+                    options={["openai", "anthropic", "custom"]}
+                    onChange={(v) => setFormat(v as RequestFormat)}
+                  />
+                  <div className="space-y-3">
+                    <Label htmlFor="response-path" className="text-sm font-semibold">Response Path</Label>
+                    <Input id="response-path" className="h-11 font-mono text-sm" value={responsePath} onChange={(e) => setResponsePath(e.target.value)} />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="pt-2 flex flex-col sm:flex-row items-center justify-end gap-4">
+              {error && (
+                <p role="alert" className="text-destructive text-sm font-medium sm:mr-auto">
+                  {error}
+                </p>
+              )}
+              <Button
+                type="submit"
+                size="lg"
+                className="w-full sm:w-auto h-12 px-8 text-base shadow-lg shadow-primary/20"
+                disabled={!endpoint || !contextFilename || submitting}
+              >
+                {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : null}
+                Start AI Simulation Setup
+                {!submitting && <ArrowRight className="w-5 h-5" />}
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
