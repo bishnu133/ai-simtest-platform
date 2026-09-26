@@ -167,7 +167,7 @@ export function StressSettings({
               onChange={(v) => onChange({ ...value, facts: Number(v) })}
               options={FACT_CHOICES.map((f) => ({ id: f, label: f }))}
             />
-            <p className="text-xs text-muted-foreground">Sample customer details such as a name, an order number and a city.</p>
+            <p className="text-xs text-muted-foreground">The customer&apos;s own name and email, plus details such as a reference number, a city and the best time to call.</p>
           </fieldset>
         )}
         {has("contradiction") && (
