@@ -38,7 +38,7 @@ function Notice({
       <div className="flex flex-wrap justify-center gap-3 pt-2">
         {actions}
         <Button asChild>
-          <Link href="/">
+          <Link href="/new">
             <RotateCcw /> Start New Test
           </Link>
         </Button>

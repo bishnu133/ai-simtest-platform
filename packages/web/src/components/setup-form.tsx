@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore, type DragEvent, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, ChevronDown, FileText, Loader2, UploadCloud, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -60,8 +61,9 @@ const DEFAULT_WEIGHTS: [string, number][] = [
   ["relevance", 0.2],
 ];
 
-export function SetupForm() {
+export function SetupForm({ embedded = false }: { embedded?: boolean }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [name, setName] = useState("");
@@ -186,6 +188,7 @@ export function SetupForm() {
             .map(([k, v]) => [k, Number(v)]),
         ),
       });
+      queryClient.invalidateQueries({ queryKey: ["runs"] });
       router.push(`/simulations/${sim.simulation_id}`);
     } catch (err) {
       setError(err instanceof EngineError ? err.message : "Could not start the simulation.");
@@ -194,13 +197,17 @@ export function SetupForm() {
   };
 
   return (
-    <div className="max-w-3xl mx-auto py-8">
-      <div className="mb-10 text-center animate-in fade-in slide-in-from-bottom-4 duration-500">
-        <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground mb-3">Welcome to AI SimTest</h1>
-        <p className="text-lg md:text-xl text-muted-foreground">The future of QA Automation for AI conversations</p>
-      </div>
+    <div className={embedded ? "max-w-4xl" : "max-w-3xl mx-auto py-8"}>
+      {!embedded && (
+        <div className="mb-10 text-center animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground mb-3">Welcome to AI SimTest</h1>
+          <p className="text-lg md:text-xl text-muted-foreground">The future of QA Automation for AI conversations</p>
+        </div>
+      )}
 
-      <Card className="shadow-lg border-muted/60 animate-in fade-in slide-in-from-bottom-6 duration-700 delay-150 fill-mode-both py-0 gap-0">
+      <Card
+        className={`shadow-xs border-muted/60 py-0 gap-0 ${embedded ? "" : "animate-in fade-in slide-in-from-bottom-6 duration-700 delay-150 fill-mode-both"}`}
+      >
         <CardHeader className="bg-muted/30 border-b py-6">
           <CardTitle>Simulation Configuration</CardTitle>
           <CardDescription>Set up the parameters for your chatbot testing simulation.</CardDescription>

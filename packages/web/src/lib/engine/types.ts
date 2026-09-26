@@ -53,6 +53,18 @@ export interface EngineOptions {
   request_formats: string[];
 }
 
+/** Headline numbers for a finished run, without fetching its report. */
+export interface RunSummary {
+  pass_rate?: number | null;
+  average_score?: number | null;
+  total_conversations?: number | null;
+  total_turns?: number | null;
+  critical_failures?: number | null;
+  warnings?: number | null;
+  stuck_conversations?: number | null;
+  execution_time_seconds?: number | null;
+}
+
 export interface SimulationStatus {
   simulation_id: string;
   name: string;
@@ -65,6 +77,8 @@ export interface SimulationStatus {
   error: string | null;
   created_at: string;
   updated_at: string;
+  bot_build?: string;
+  summary?: RunSummary | null;
   config: {
     bot_endpoint: string;
     bot_request_format: string;

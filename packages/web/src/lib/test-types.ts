@@ -1,0 +1,148 @@
+/**
+ * The kinds of test the platform offers. Each maps to an engine capability;
+ * those not yet wired into the platform say how to run them from the CLI today.
+ */
+import {
+  BookOpenCheck,
+  BrainCircuit,
+  Database,
+  FileClock,
+  GitCompareArrows,
+  Layers,
+  ListRestart,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
+
+export type TestTypeId =
+  | "simulation"
+  | "scenarios"
+  | "stress"
+  | "replay"
+  | "compare"
+  | "regression"
+  | "rag"
+  | "calibration";
+
+export interface TestType {
+  id: TestTypeId;
+  name: string;
+  icon: LucideIcon;
+  tagline: string;
+  description: string;
+  checks: string[];
+  needs: string[];
+  available: boolean;
+  /** Where it lands in the Phase 2 plan, for types not yet in the platform */
+  roadmap?: string;
+  /** How to run it from the engine CLI today */
+  cli?: string;
+}
+
+export const TEST_TYPES: TestType[] = [
+  {
+    id: "simulation",
+    name: "Persona simulation",
+    icon: Users,
+    tagline: "Realistic customers talk to your bot; every reply is judged.",
+    description:
+      "AI reads your documentation, proposes success criteria, guardrails, a test plan and personas for you to review, then runs the conversations and judges every reply for quality, grounding, safety and your rules.",
+    checks: ["Answer quality and relevance", "Grounding in your documentation", "Safety and approved guardrails", "Business workflows and compliance policy", "Conversation loops and stuck customers"],
+    needs: ["Bot endpoint", "Your bot's documentation (Markdown)"],
+    available: true,
+  },
+  {
+    id: "scenarios",
+    name: "Scenario packs",
+    icon: Layers,
+    tagline: "Structured test patterns: escalation, ambiguity, off-topic, adversarial.",
+    description:
+      "Runs curated scenario templates alongside personas, so specific behaviours are exercised on every run instead of left to chance.",
+    checks: ["Escalation handling", "Ambiguous and multi-part questions", "Off-topic and adversarial pressure"],
+    needs: ["Bot endpoint", "Documentation"],
+    available: false,
+    roadmap: "Phase 2 · Step 3",
+    cli: "simtest run --bot-endpoint URL --doc-file kb.md --scenarios all",
+  },
+  {
+    id: "stress",
+    name: "Memory & context stress",
+    icon: BrainCircuit,
+    tagline: "Long conversations that test what the bot remembers.",
+    description:
+      "30+ turn conversations that seed facts early, introduce contradictions and grow in complexity, then check whether the bot still carries the context.",
+    checks: ["Fact recall across many turns", "Handling contradictions", "Progressive complexity"],
+    needs: ["Bot endpoint", "Documentation"],
+    available: false,
+    roadmap: "Phase 2 · Step 3",
+    cli: "simtest run --bot-endpoint URL --doc-file kb.md --stress-memory --stress-turns 30",
+  },
+  {
+    id: "replay",
+    name: "Production replay",
+    icon: FileClock,
+    tagline: "Judge real conversations from production, with PII masked.",
+    description:
+      "Import chat logs, mask personal data, sample and filter, then judge them with the same judges and report as a simulation.",
+    checks: ["Real-world answer quality", "Safety and rule breaches in live traffic", "PII detection and masking"],
+    needs: ["Conversation logs (JSONL, CSV or text)", "Documentation (optional)"],
+    available: false,
+    roadmap: "Phase 2 · Step 4",
+    cli: "simtest run --input logs.jsonl --pii-masking mask --sample 200",
+  },
+  {
+    id: "compare",
+    name: "Model comparison",
+    icon: GitCompareArrows,
+    tagline: "Same personas against several models or configurations.",
+    description:
+      "Runs one persona set against two or more endpoints, models or keys and compares them judge by judge, including where one passed and another failed.",
+    checks: ["Side-by-side pass rates", "Per-judge differences", "Conversations that diverge"],
+    needs: ["Two or more bot endpoints or keys"],
+    available: false,
+    roadmap: "Phase 2 · Step 5",
+    cli: "simtest multi-compare --config compare.yaml",
+  },
+  {
+    id: "regression",
+    name: "Regression suite",
+    icon: ListRestart,
+    tagline: "Save today's failures; re-run them against every new build.",
+    description:
+      "Turns a run's failures into a suite and replays it against a new build, reporting what is fixed, what still fails and what regressed.",
+    checks: ["Fixed since last build", "Still failing", "New regressions"],
+    needs: ["A finished run", "The bot endpoint to test"],
+    available: false,
+    roadmap: "Phase 2 · Step 6",
+    cli: "simtest save-suite --report report.json --name banking-v1\nsimtest replay --suite suites/banking-v1 --bot-endpoint URL",
+  },
+  {
+    id: "rag",
+    name: "RAG & tool evaluation",
+    icon: Database,
+    tagline: "Retrieval accuracy, citations and tool calls.",
+    description:
+      "Checks whether the bot retrieved the right context, cited it, and called tools with the right parameters.",
+    checks: ["Retrieval accuracy", "Citation quality", "Tool-call correctness"],
+    needs: ["Bot endpoint", "Tool definitions (optional)"],
+    available: false,
+    roadmap: "Phase 2 · Step 8",
+    cli: "simtest run --bot-endpoint URL --doc-file kb.md --rag-eval --tool-defs tools.json",
+  },
+  {
+    id: "calibration",
+    name: "Judge calibration",
+    icon: BookOpenCheck,
+    tagline: "Check the judges against human-labelled examples.",
+    description:
+      "Runs the judges on a golden set built from your Judge review labels and reports how often each agrees with a person.",
+    checks: ["Agreement with human labels", "Judges too strict or too lenient", "Drift across rubric versions"],
+    needs: ["A golden set (exported from Judge review)"],
+    available: false,
+    roadmap: "Phase 2 · Step 7",
+    cli: "simtest calibrate --golden-file golden_set.json",
+  },
+];
+
+export const testType = (id: string | null | undefined): TestType =>
+  TEST_TYPES.find((t) => t.id === id) ?? TEST_TYPES[0];

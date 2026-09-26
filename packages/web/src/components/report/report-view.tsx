@@ -120,7 +120,7 @@ export function ReportView({
             </DropdownMenu>
           )}
           <Button asChild>
-            <Link href="/">
+            <Link href="/new">
               <RotateCcw /> New test
             </Link>
           </Button>
