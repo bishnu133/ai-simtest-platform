@@ -23,8 +23,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { readSuggestedQualityThreshold, subscribeCalibration } from "@/lib/calibration";
 import { engine, EngineError } from "@/lib/engine/client";
-import type { EngineOptions, ReplayOptions, RequestFormat, RunMode, StressOptions } from "@/lib/engine/types";
+import type { CompareOptions, EngineOptions, ReplayOptions, RequestFormat, RunMode, StressOptions } from "@/lib/engine/types";
 import { ChoiceCards, ListEditor, Section, Segmented, lines } from "./setup/controls";
+import { CompareTargets, DEFAULT_COMPARE } from "./setup/compare-targets";
 import { DEFAULT_REPLAY, ReplaySource, countConversations } from "./setup/replay-source";
 import { DEFAULT_STRESS, ScenarioPicker, StressSettings } from "./setup/test-focus";
 import { MODES, REVIEW_STEPS, SIZES, STRICTNESS, estimate, money, type SizeId, type StrictnessId } from "./setup/presets";
@@ -123,7 +124,7 @@ function Disclosure({ label, children }: { label: string; children: ReactNode })
 }
 
 /** What the run concentrates on, on top of the persona simulation. */
-export type TestFocus = "simulation" | "scenarios" | "stress" | "replay";
+export type TestFocus = "simulation" | "scenarios" | "stress" | "replay" | "compare";
 
 export function SetupForm({ embedded = false, focus = "simulation" }: { embedded?: boolean; focus?: TestFocus }) {
   const router = useRouter();
@@ -141,6 +142,7 @@ export function SetupForm({ embedded = false, focus = "simulation" }: { embedded
   const [format, setFormat] = useState<RequestFormat>("openai");
   const [responsePath, setResponsePath] = useState("choices.0.message.content");
   const [versionHeader, setVersionHeader] = useState("");
+  const [botModel, setBotModel] = useState("");
   // 3. What it knows
   const [contextFilename, setContextFilename] = useState("");
   const [contextContent, setContextContent] = useState("");
@@ -174,6 +176,9 @@ export function SetupForm({ embedded = false, focus = "simulation" }: { embedded
   const [scenarioIds, setScenarioIds] = useState<string[] | null>(null);
   const [stress, setStress] = useState<StressOptions>(DEFAULT_STRESS);
   const [replay, setReplay] = useState<ReplayOptions>(DEFAULT_REPLAY);
+  const [compare, setCompare] = useState<CompareOptions>(DEFAULT_COMPARE);
+  // Every bot in a comparison meets the same customers
+  const bots = focus === "compare" ? 1 + compare.targets.length : 1;
   const replayCount = focus === "replay" ? countConversations(replay) : null;
 
   const [dragActive, setDragActive] = useState(false);
@@ -202,7 +207,8 @@ export function SetupForm({ embedded = false, focus = "simulation" }: { embedded
       ? { min: stress.turns, max: Math.max(run.maxTurns, stress.turns) }
       : { min: Math.max(run.minTurns, scenarioTurns), max: Math.max(run.maxTurns, scenarioTurns) };
   const strict = STRICTNESS.find((s) => s.id === strictness)!;
-  const cost = estimate(run.personas, lengths.min, lengths.max, guardrailLlm, relevanceLlm);
+  const single = estimate(run.personas, lengths.min, lengths.max, guardrailLlm, relevanceLlm);
+  const cost = { replies: single.replies * bots, low: single.low * bots, high: single.high * bots };
   // Manual runs skip review of whatever the tester wrote themselves; a
   // replay has real customers, so no test plan or personas to review
   const reviewSteps =
@@ -272,6 +278,17 @@ export function SetupForm({ embedded = false, focus = "simulation" }: { embedded
       setError("Pick at least one scenario to run.");
       return;
     }
+    if (focus === "compare") {
+      const names = [compare.baseline_name, ...compare.targets.map((t) => t.name)].map((n) => n.trim().toLowerCase());
+      if (names.some((n) => !n) || new Set(names).size !== names.length) {
+        setError("Give every bot in the comparison its own name.");
+        return;
+      }
+      if (compare.targets.some((t) => !/^https?:\/\/\S+$/.test(t.bot_endpoint.trim()))) {
+        setError("Enter an http(s) endpoint for every bot you compare.");
+        return;
+      }
+    }
     if (focus === "replay" && !replay.conversations.trim()) {
       setError("Upload the conversations to replay.");
       return;
@@ -333,6 +350,19 @@ export function SetupForm({ embedded = false, focus = "simulation" }: { embedded
         scenarios: focus === "scenarios" ? chosenScenarios : [],
         stress: focus === "stress" ? stress : null,
         replay: focus === "replay" ? replay : null,
+        bot_model: botModel.trim() || null,
+        compare:
+          focus === "compare"
+            ? {
+                baseline_name: compare.baseline_name.trim(),
+                targets: compare.targets.map((t) => ({
+                  name: t.name.trim(),
+                  bot_endpoint: t.bot_endpoint.trim(),
+                  bot_api_key: t.bot_api_key?.trim() || undefined,
+                  model: t.model?.trim() || null,
+                })),
+              }
+            : null,
       });
       queryClient.invalidateQueries({ queryKey: ["runs"] });
       router.push(`/simulations/${sim.simulation_id}`);
@@ -455,7 +485,7 @@ export function SetupForm({ embedded = false, focus = "simulation" }: { embedded
           </Section>
         )}
 
-        <Section n={2 + step} title="Your bot" description="Where to reach it. Only the endpoint is required.">
+        <Section n={focus === "compare" ? 2 : 2 + step} title="Your bot" description="Where to reach it. Only the endpoint is required.">
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2 md:col-span-2">
               <Label htmlFor="endpoint" className="text-sm font-semibold">
@@ -535,7 +565,19 @@ export function SetupForm({ embedded = false, focus = "simulation" }: { embedded
                       onChange={(e) => setResponsePath(e.target.value)}
                     />
                   </div>
-                  <div className="space-y-2 md:col-span-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="bot-model" className="text-sm font-semibold">
+                      Model <span className="font-normal text-muted-foreground">(sent as &quot;model&quot;)</span>
+                    </Label>
+                    <Input
+                      id="bot-model"
+                      className="h-10 font-mono text-sm"
+                      placeholder="Blank: your endpoint decides"
+                      value={botModel}
+                      onChange={(e) => setBotModel(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
                     <Label htmlFor="version-header" className="text-sm font-semibold">
                       Version header <span className="font-normal text-muted-foreground">(instead of a version page)</span>
                     </Label>
@@ -552,6 +594,12 @@ export function SetupForm({ embedded = false, focus = "simulation" }: { embedded
             </div>
           </div>
         </Section>
+
+        {focus === "compare" && (
+          <Section n={3} title="Bots to compare" description="The same customers, judged the same way, against each bot.">
+            <CompareTargets value={compare} onChange={setCompare} mainEndpoint={endpoint.trim()} mainModel={botModel.trim()} />
+          </Section>
+        )}
 
         <Section
           n={3 + step}
@@ -858,7 +906,7 @@ export function SetupForm({ embedded = false, focus = "simulation" }: { embedded
             ) : (
               <>
                 <p className="font-medium text-foreground">
-                  {run.personas} customers ·{" "}
+                  {run.personas} customers{bots > 1 ? ` × ${bots} bots` : ""} ·{" "}
                   {focus === "stress" ? `${stress.turns} messages each` : `up to ${lengths.max} messages`}
                   {focus === "scenarios" && ` · ${chosenScenarios.length} scenario${chosenScenarios.length === 1 ? "" : "s"}`} · about{" "}
                   {cost.replies.toLocaleString()} bot replies

@@ -34,6 +34,65 @@ export interface StressOptions {
   contradictions: number;
 }
 
+/** Another bot run against the same personas (model comparison). */
+export interface CompareTarget {
+  name: string;
+  bot_endpoint: string;
+  /** Blank: the main bot's key, sent only if this bot is on the same origin */
+  bot_api_key?: string;
+  bot_request_format?: string | null;
+  bot_response_path?: string | null;
+  /** Sent as "model" in the request; blank: the main bot's */
+  model?: string | null;
+}
+
+export interface CompareOptions {
+  baseline_name: string;
+  targets: CompareTarget[];
+}
+
+export interface CompareBot {
+  name: string;
+  baseline: boolean;
+  error: string;
+  pass_rate?: number | null;
+  average_score?: number | null;
+  conversations?: number | null;
+  critical_failures?: number;
+  stuck_conversations?: number;
+  judge_pass_rates?: Record<string, number>;
+  latency_ms?: { median: number | null; p95: number | null };
+}
+
+export interface CompareVersus {
+  name: string;
+  paired_personas: number;
+  wins: number;
+  losses: number;
+  ties: number;
+  /** Mean per-persona difference in replies passed (challenger minus main bot) */
+  mean_difference: number | null;
+  range_low: number | null;
+  range_high: number | null;
+  verdict: "better" | "worse" | "too close to call" | "not enough data";
+}
+
+export interface CompareResult {
+  baseline: string;
+  bots: CompareBot[];
+  versus_baseline: CompareVersus[];
+  leader: string | null;
+  decisive: boolean;
+  diverging: {
+    persona_id: string;
+    persona: string;
+    persona_type: string;
+    spread: number;
+    bots: { name: string; conversation_id: string; pass_share: number; first_issue: string }[];
+  }[];
+  method: string;
+}
+
 export type ReplayFormat = "auto" | "json" | "jsonl" | "csv" | "tsv" | "text" | "markdown";
 
 /** Production replay: judge real conversations instead of simulating. */
@@ -96,6 +155,8 @@ export interface CreateSimulationRequest {
   bot_api_key?: string;
   bot_request_format: RequestFormat;
   bot_response_path: string;
+  /** Sent as "model" in the request body */
+  bot_model?: string | null;
   documentation: string;
   documentation_filename: string;
   num_personas: number;
@@ -117,6 +178,7 @@ export interface CreateSimulationRequest {
   scenarios?: string[];
   stress?: StressOptions | null;
   replay?: ReplayOptions | null;
+  compare?: CompareOptions | null;
 }
 
 export interface EngineOptions {
@@ -185,7 +247,10 @@ export interface SimulationStatus {
     scenarios?: string[];
     stress?: StressOptions | null;
     replay?: (Omit<ReplayOptions, "conversations"> & { conversations_loaded?: number; conversations_judged?: number }) | null;
+    compare?: { baseline_name: string; targets: Omit<CompareTarget, "bot_api_key">[] } | null;
   };
+  /** While a comparison runs: which bot, of how many */
+  compare_progress?: { index: number; total: number; name: string } | null;
 }
 
 export interface GateItem {
@@ -423,6 +488,7 @@ export interface RunAnalysis {
   scenarios?: ScenarioResult[];
   memory?: MemoryResult;
   replay?: ReplayLoad;
+  compare?: CompareResult;
 }
 
 /** One scenario template's results, weakest first. */

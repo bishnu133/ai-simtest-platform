@@ -3,6 +3,7 @@
  * Next.js proxy at /api/engine so the engine URL never reaches the client.
  */
 import type {
+  JudgedConversation,
   CreateSimulationRequest,
   EngineOptions,
   GateDecision,
@@ -94,6 +95,12 @@ export const engine = {
     request<SimulationStatus>(`/simulations/${encodeURIComponent(id)}/cancel`, { method: "POST" }),
 
   getReport: (id: string) => request<ReportResponse>(`/simulations/${encodeURIComponent(id)}/report`),
+
+  /** One conversation from any bot in a comparison (side-by-side reading). */
+  getComparedConversation: (id: string, conversationId: string) =>
+    request<{ bot: string; judged_conversation: JudgedConversation }>(
+      `/simulations/${encodeURIComponent(id)}/compare/conversations/${encodeURIComponent(conversationId)}`,
+    ),
 
   getReview: (id: string, judge: string, size = 20) =>
     request<ReviewResponse>(

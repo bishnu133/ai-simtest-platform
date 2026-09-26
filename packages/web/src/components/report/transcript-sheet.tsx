@@ -43,6 +43,36 @@ function Judgments({ jt }: { jt: JudgedTurn }) {
   );
 }
 
+/** A judged conversation's messages, with each bot reply's verdicts. */
+export function TranscriptTurns({ conversation, className = "" }: { conversation: JudgedConversation; className?: string }) {
+  const judgedById = new Map((conversation.judged_turns ?? []).map((jt) => [jt.turn?.id, jt]));
+  return (
+    <div className={`space-y-4 ${className}`}>
+      {(conversation.conversation?.turns ?? []).map((turn, i) => {
+        const isUser = (turn.speaker ?? "").toLowerCase() === "user";
+        const judged = turn.id ? judgedById.get(turn.id) : undefined;
+        const failed = (judged?.overall_label ?? "").toLowerCase() === "fail";
+        return (
+          <div key={turn.id ?? i} className={`flex ${isUser ? "justify-start" : "justify-end"}`}>
+            <div
+              className={`max-w-[90%] rounded-lg p-3 text-sm ${
+                isUser ? "rounded-tl-none bg-muted" : failed ? "rounded-tr-none bg-fail/10" : "rounded-tr-none bg-accent"
+              }`}
+            >
+              <div className="mb-1 flex items-center justify-between gap-4 text-xs font-semibold text-muted-foreground">
+                <span>{isUser ? "User" : "Bot"}</span>
+                {!isUser && turn.latency_ms ? <span className="font-normal">{formatMs(turn.latency_ms)}</span> : null}
+              </div>
+              <p className="whitespace-pre-wrap text-foreground">{turn.message}</p>
+              {judged && <Judgments jt={judged} />}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function TranscriptSheet({
   conversation,
   onClose,
@@ -50,7 +80,6 @@ export function TranscriptSheet({
   conversation: JudgedConversation | null;
   onClose: () => void;
 }) {
-  const judgedById = new Map((conversation?.judged_turns ?? []).map((jt) => [jt.turn?.id, jt]));
   const verdict = conversation ? conversationVerdict(conversation) : "pass";
 
   return (
@@ -71,29 +100,7 @@ export function TranscriptSheet({
               </SheetDescription>
             </SheetHeader>
 
-            <div className="mt-6 space-y-4">
-              {(conversation.conversation?.turns ?? []).map((turn, i) => {
-                const isUser = (turn.speaker ?? "").toLowerCase() === "user";
-                const judged = turn.id ? judgedById.get(turn.id) : undefined;
-                const failed = (judged?.overall_label ?? "").toLowerCase() === "fail";
-                return (
-                  <div key={turn.id ?? i} className={`flex ${isUser ? "justify-start" : "justify-end"}`}>
-                    <div
-                      className={`max-w-[90%] rounded-lg p-3 text-sm ${
-                        isUser ? "rounded-tl-none bg-muted" : failed ? "rounded-tr-none bg-fail/10" : "rounded-tr-none bg-accent"
-                      }`}
-                    >
-                      <div className="mb-1 flex items-center justify-between gap-4 text-xs font-semibold text-muted-foreground">
-                        <span>{isUser ? "User" : "Bot"}</span>
-                        {!isUser && turn.latency_ms ? <span className="font-normal">{formatMs(turn.latency_ms)}</span> : null}
-                      </div>
-                      <p className="whitespace-pre-wrap text-foreground">{turn.message}</p>
-                      {judged && <Judgments jt={judged} />}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            <TranscriptTurns conversation={conversation} className="mt-6" />
           </>
         )}
       </SheetContent>

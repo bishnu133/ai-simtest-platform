@@ -37,6 +37,7 @@ const EXPORT_LABELS: Record<string, string> = {
   scenarios: "Scenario results (JSON)",
   memory: "Memory & context results (JSON)",
   replay: "Replay and personal data summary (JSON)",
+  compare: "Model comparison (JSON)",
 };
 
 const GOLDEN_JUDGES = new Set(["quality", "relevance", "grounding", "safety"]);
@@ -63,7 +64,15 @@ export function ReportView({
   // Judge review writes its label files after the report was loaded
   const [reviewExports, setReviewExports] = useState<string[]>([]);
   const exportsList = [...new Set([...data.exports, ...reviewExports])];
-  const downloads = exportsList.filter((f) => EXPORT_LABELS[f]);
+  // A comparison's other bots: compare_<n>_<jsonl|csv>, named from the comparison
+  const comparedBots = (data.analysis?.compare?.bots ?? []).filter((b) => !b.baseline).map((b) => b.name);
+  const labelFor = (fmt: string) => {
+    const m = /^compare_(\d+)_(jsonl|csv)$/.exec(fmt);
+    if (!m) return EXPORT_LABELS[fmt];
+    const bot = comparedBots[Number(m[1]) - 1] ?? `Bot ${Number(m[1]) + 1}`;
+    return m[2] === "jsonl" ? `${bot}: conversations (JSONL)` : `${bot}: turn-level results (CSV)`;
+  };
+  const downloads = exportsList.filter((f) => labelFor(f));
   const finished = new Date(status.updated_at);
 
   return (
@@ -115,7 +124,7 @@ export function ReportView({
                 {downloads.map((fmt) => (
                   <DropdownMenuItem key={fmt} asChild>
                     <a href={engine.exportUrl(data.simulation_id, fmt)} download>
-                      {EXPORT_LABELS[fmt]}
+                      {labelFor(fmt)}
                     </a>
                   </DropdownMenuItem>
                 ))}

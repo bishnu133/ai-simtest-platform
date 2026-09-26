@@ -44,6 +44,18 @@ const REPLAY_LABELS: Record<string, string> = {
   judging: "Judging the real conversations for quality, safety and grounding…",
 };
 
+/** In a comparison, which bot is meeting the customers now. */
+function compareLabel(status: SimulationStatus, key: string): string | null {
+  const compare = status.config.compare;
+  if (!compare || !["running", "judging", "generating_personas"].includes(key)) return null;
+  const total = compare.targets.length + 1;
+  const progress = status.compare_progress;
+  const [name, number] = progress ? [progress.name, progress.index + 1] : [compare.baseline_name, 1];
+  return key === "judging"
+    ? `Judging ${name}'s replies (bot ${number} of ${total})…`
+    : `Running the customers against ${name} (bot ${number} of ${total})…`;
+}
+
 export function simulationPhase(status: SimulationStatus) {
   const key = ["exporting_results", "analyzing_results"].includes(status.stage)
     ? status.stage
@@ -51,7 +63,9 @@ export function simulationPhase(status: SimulationStatus) {
   const index = Math.max(0, SIMULATION_PHASES.findIndex((p) => p.key === key));
   return {
     index,
-    label: (status.config.replay && REPLAY_LABELS[SIMULATION_PHASES[index].key]) || SIMULATION_PHASES[index].label,
+    label: compareLabel(status, SIMULATION_PHASES[index].key) ||
+      (status.config.replay && REPLAY_LABELS[SIMULATION_PHASES[index].key]) ||
+      SIMULATION_PHASES[index].label,
     percent: Math.round(((index + 0.5) / SIMULATION_PHASES.length) * 100),
   };
 }

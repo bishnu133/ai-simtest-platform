@@ -15,6 +15,7 @@ import {
 } from "@/lib/engine/report";
 import type { CoverageSummary, ReportResponse } from "@/lib/engine/types";
 import { ScoreBars, TurnLabelBar } from "./charts";
+import { ComparePanel } from "./compare-panel";
 import { MemoryPanel, ReplayPanel, ScenarioResultsPanel } from "./focus-panels";
 import { JudgeBreakdownPanel, LoopsPanel } from "./judge-breakdown";
 import { EmptyNote, Panel, SeverityBadge, StatTile, VerdictBanner } from "./parts";
@@ -125,6 +126,7 @@ export function OverviewTab({
         </p>
       )}
 
+      {analysis.compare && <ComparePanel simulationId={data.simulation_id} result={analysis.compare} />}
       {analysis.replay && <ReplayPanel replay={analysis.replay} />}
       {!!analysis.scenarios?.length && <ScenarioResultsPanel scenarios={analysis.scenarios} onOpen={onOpenConversation} />}
       {analysis.memory && <MemoryPanel memory={analysis.memory} onOpen={onOpenConversation} />}
