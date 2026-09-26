@@ -23,8 +23,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { readSuggestedQualityThreshold, subscribeCalibration } from "@/lib/calibration";
 import { engine, EngineError } from "@/lib/engine/client";
-import type { EngineOptions, RequestFormat, RunMode, StressOptions } from "@/lib/engine/types";
+import type { EngineOptions, ReplayOptions, RequestFormat, RunMode, StressOptions } from "@/lib/engine/types";
 import { ChoiceCards, ListEditor, Section, Segmented, lines } from "./setup/controls";
+import { DEFAULT_REPLAY, ReplaySource, countConversations } from "./setup/replay-source";
 import { DEFAULT_STRESS, ScenarioPicker, StressSettings } from "./setup/test-focus";
 import { MODES, REVIEW_STEPS, SIZES, STRICTNESS, estimate, money, type SizeId, type StrictnessId } from "./setup/presets";
 
@@ -122,7 +123,7 @@ function Disclosure({ label, children }: { label: string; children: ReactNode })
 }
 
 /** What the run concentrates on, on top of the persona simulation. */
-export type TestFocus = "simulation" | "scenarios" | "stress";
+export type TestFocus = "simulation" | "scenarios" | "stress" | "replay";
 
 export function SetupForm({ embedded = false, focus = "simulation" }: { embedded?: boolean; focus?: TestFocus }) {
   const router = useRouter();
@@ -172,6 +173,8 @@ export function SetupForm({ embedded = false, focus = "simulation" }: { embedded
   // Scenario packs / memory stress (test types built on the simulation)
   const [scenarioIds, setScenarioIds] = useState<string[] | null>(null);
   const [stress, setStress] = useState<StressOptions>(DEFAULT_STRESS);
+  const [replay, setReplay] = useState<ReplayOptions>(DEFAULT_REPLAY);
+  const replayCount = focus === "replay" ? countConversations(replay) : null;
 
   const [dragActive, setDragActive] = useState(false);
   const [error, setError] = useState("");
@@ -200,14 +203,17 @@ export function SetupForm({ embedded = false, focus = "simulation" }: { embedded
       : { min: Math.max(run.minTurns, scenarioTurns), max: Math.max(run.maxTurns, scenarioTurns) };
   const strict = STRICTNESS.find((s) => s.id === strictness)!;
   const cost = estimate(run.personas, lengths.min, lengths.max, guardrailLlm, relevanceLlm);
-  // Manual runs skip review of whatever the tester wrote themselves
+  // Manual runs skip review of whatever the tester wrote themselves; a
+  // replay has real customers, so no test plan or personas to review
   const reviewSteps =
-    mode === "manual"
+    (mode === "manual"
       ? REVIEW_STEPS.manual - [criteria, rules, topics].filter((t) => lines(t).length > 0).length
-      : REVIEW_STEPS[mode];
+      : REVIEW_STEPS[mode]) - (focus === "replay" ? 2 : 0);
 
-  // Scenario and stress runs get their own section after the mode
+  // Scenario, stress and replay runs get their own section after the mode;
+  // a replay's size is the file, so it has no size section
   const step = focus === "simulation" ? 0 : 1;
+  const afterSize = focus === "replay" ? -1 : 0;
 
   const handleFile = (file: File) => {
     if (!/\.(md|markdown|txt)$/i.test(file.name)) {
@@ -266,6 +272,10 @@ export function SetupForm({ embedded = false, focus = "simulation" }: { embedded
       setError("Pick at least one scenario to run.");
       return;
     }
+    if (focus === "replay" && !replay.conversations.trim()) {
+      setError("Upload the conversations to replay.");
+      return;
+    }
     if (focus === "stress" && stress.patterns.length === 0) {
       setError("Pick at least one thing for the memory test to check.");
       return;
@@ -322,6 +332,7 @@ export function SetupForm({ embedded = false, focus = "simulation" }: { embedded
         ),
         scenarios: focus === "scenarios" ? chosenScenarios : [],
         stress: focus === "stress" ? stress : null,
+        replay: focus === "replay" ? replay : null,
       });
       queryClient.invalidateQueries({ queryKey: ["runs"] });
       router.push(`/simulations/${sim.simulation_id}`);
@@ -433,6 +444,11 @@ export function SetupForm({ embedded = false, focus = "simulation" }: { embedded
             <ScenarioPicker scenarios={options?.scenarios} selected={chosenScenarios} onChange={setScenarioIds} customers={run.personas} />
           </Section>
         )}
+        {focus === "replay" && (
+          <Section n={2} title="Your conversations" description="Real conversations from production, judged the same way as a simulation.">
+            <ReplaySource value={replay} onChange={setReplay} formats={options?.replay_formats} piiEngine={options?.pii_engine} onError={setError} />
+          </Section>
+        )}
         {focus === "stress" && (
           <Section n={2} title="Memory stress" description="Long conversations that check whether your bot keeps track of what the customer told it.">
             <StressSettings patterns={options?.stress_patterns} value={stress} onChange={setStress} />
@@ -454,6 +470,12 @@ export function SetupForm({ embedded = false, focus = "simulation" }: { embedded
                 onChange={(e) => setEndpoint(e.target.value)}
                 required
               />
+              {focus === "replay" && (
+                <p className="text-xs text-muted-foreground">
+                  The bot these conversations came from: runs of the same bot are compared over time.
+                  {replay.resend ? " The customers' messages are sent here." : " Nothing is sent to it."}
+                </p>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="api-key" className="text-sm font-semibold">
@@ -593,6 +615,7 @@ export function SetupForm({ embedded = false, focus = "simulation" }: { embedded
           )}
         </Section>
 
+        {focus !== "replay" && (
         <Section n={4 + step} title="How big a test?" description="More simulated customers find rarer problems, and take longer.">
           <div className="space-y-4">
             <ChoiceCards
@@ -626,8 +649,9 @@ export function SetupForm({ embedded = false, focus = "simulation" }: { embedded
             )}
           </div>
         </Section>
+        )}
 
-        <Section n={5 + step} title="What to check" description="Every reply is judged for quality, grounding and safety. Add more here.">
+        <Section n={5 + step + afterSize} title="What to check" description="Every reply is judged for quality, grounding and safety. Add more here.">
           <div className="space-y-5">
             <fieldset className="space-y-2">
               <legend className="text-sm font-semibold text-foreground">Business workflows</legend>
@@ -696,7 +720,7 @@ export function SetupForm({ embedded = false, focus = "simulation" }: { embedded
           </div>
         </Section>
 
-        <Section n={6 + step} title="How strict?" description="How good a reply has to be to count as a pass.">
+        <Section n={6 + step + afterSize} title="How strict?" description="How good a reply has to be to count as a pass.">
           <div className="space-y-3">
             <Segmented
               label="Strictness"
@@ -818,15 +842,32 @@ export function SetupForm({ embedded = false, focus = "simulation" }: { embedded
 
         <div className="sticky bottom-0 z-10 flex flex-col gap-3 rounded-b-xl border-t bg-card/95 px-6 py-4 backdrop-blur md:flex-row md:items-center md:justify-between md:px-8">
           <div className="text-sm">
-            <p className="font-medium text-foreground">
-              {run.personas} customers ·{" "}
-              {focus === "stress" ? `${stress.turns} messages each` : `up to ${lengths.max} messages`}
-              {focus === "scenarios" && ` · ${chosenScenarios.length} scenario${chosenScenarios.length === 1 ? "" : "s"}`} · about{" "}
-              {cost.replies.toLocaleString()} bot replies
-            </p>
-            <p className="text-xs text-muted-foreground" title="Rough estimate from earlier runs; the report shows the actual cost.">
-              Rough cost {money(cost.low)}–{money(cost.high)} · {handsOff ? "runs hands-off" : `${reviewSteps} review steps`}
-            </p>
+            {focus === "replay" ? (
+              <>
+                <p className="font-medium text-foreground">
+                  {replay.filename
+                    ? `${replay.sample ? `A sample of ${replay.sample}` : replayCount != null ? `${replayCount.toLocaleString()}` : "All"} real conversations`
+                    : "No conversations uploaded yet"}{" "}
+                  · {replay.resend ? "re-sent to your bot" : "replies from the file"} ·{" "}
+                  {replay.privacy === "mask" ? "personal data masked" : "personal data reported only"}
+                </p>
+                <p className="text-xs text-muted-foreground" title="Rough estimate from earlier runs; the report shows the actual cost.">
+                  About $0.03 per bot reply judged · {handsOff ? "runs hands-off" : `${reviewSteps} review steps`}
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="font-medium text-foreground">
+                  {run.personas} customers ·{" "}
+                  {focus === "stress" ? `${stress.turns} messages each` : `up to ${lengths.max} messages`}
+                  {focus === "scenarios" && ` · ${chosenScenarios.length} scenario${chosenScenarios.length === 1 ? "" : "s"}`} · about{" "}
+                  {cost.replies.toLocaleString()} bot replies
+                </p>
+                <p className="text-xs text-muted-foreground" title="Rough estimate from earlier runs; the report shows the actual cost.">
+                  Rough cost {money(cost.low)}–{money(cost.high)} · {handsOff ? "runs hands-off" : `${reviewSteps} review steps`}
+                </p>
+              </>
+            )}
             {error && (
               <p role="alert" className="mt-1 text-sm font-medium text-destructive">
                 {error}

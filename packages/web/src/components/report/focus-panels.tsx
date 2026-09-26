@@ -1,9 +1,9 @@
 "use client";
 
-import { CheckCircle2, CircleAlert, XCircle } from "lucide-react";
+import { CheckCircle2, CircleAlert, ShieldAlert, ShieldCheck, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { pct, plural } from "@/lib/engine/report";
-import type { MemoryResult, ScenarioResult } from "@/lib/engine/types";
+import type { MemoryResult, ReplayLoad, ScenarioResult } from "@/lib/engine/types";
 import { categoryLabel } from "@/components/setup/test-focus";
 import { ScoreBars } from "./charts";
 import { EmptyNote, Panel } from "./parts";
@@ -39,6 +39,7 @@ export function ScenarioResultsPanel({
   onOpen: (conversationId: string) => void;
 }) {
   const failing = scenarios.filter((s) => s.pass_rate < TARGET).length;
+  const thin = scenarios.filter((s) => s.conversations < 3).length;
   return (
     <Panel
       title="Scenario results"
@@ -96,6 +97,12 @@ export function ScenarioResultsPanel({
       <p className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
         <span className="inline-block h-3 w-px bg-foreground/40" aria-hidden /> Target {pct(TARGET)} of replies passing
       </p>
+      {thin > 0 && (
+        <p role="note" className="mt-2 text-xs text-muted-foreground">
+          {thin === scenarios.length ? "Every scenario" : plural(thin, "scenario")} ran in fewer than 3 conversations, so
+          one bad chat moves its pass rate a lot. Run a bigger test before drawing conclusions from a single scenario.
+        </p>
+      )}
     </Panel>
   );
 }
@@ -198,6 +205,102 @@ export function MemoryPanel({ memory, onOpen }: { memory: MemoryResult; onOpen: 
           <EmptyNote>{memory.facts_asked ? "Nothing — every detail asked for came back." : "No details were asked for, so nothing could be forgotten."}</EmptyNote>
         )}
       </div>
+    </Panel>
+  );
+}
+
+const ENTITY_LABELS: Record<string, string> = {
+  PERSON: "Names",
+  EMAIL_ADDRESS: "Email addresses",
+  PHONE_NUMBER: "Phone numbers",
+  CREDIT_CARD: "Card numbers",
+  ACCOUNT_NUMBER: "Account numbers",
+  NATIONAL_ID: "National ID numbers",
+  US_SSN: "Social security numbers",
+  DATE_OF_BIRTH: "Dates of birth",
+  IBAN_CODE: "IBANs",
+  IP_ADDRESS: "IP addresses",
+  LOCATION: "Places",
+};
+
+/** What the replay read, what it judged, and what personal data it found. */
+export function ReplayPanel({ replay }: { replay: ReplayLoad }) {
+  const pii = replay.pii;
+  const masked = pii.strategy === "mask";
+  const types = Object.entries(pii.by_type);
+  const skipped = replay.conversations_loaded - replay.conversations_judged;
+  return (
+    <Panel
+      title="Production replay"
+      description={`${replay.filename} · ${replay.resend ? "customer messages re-sent to your bot; today's replies judged" : "the replies in the file judged"}.`}
+    >
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Headline
+          label="Conversations judged"
+          value={replay.conversations_judged.toLocaleString()}
+          sub={
+            skipped > 0
+              ? `of ${replay.conversations_loaded.toLocaleString()} in the file (${skipped.toLocaleString()} filtered or sampled out)`
+              : `every conversation in the file`
+          }
+        />
+        <Headline
+          label={masked ? "Personal data masked" : "Personal data found"}
+          value={(masked ? pii.masked : pii.detected).toLocaleString()}
+          sub={`in ${plural(pii.conversations_with_pii, "conversation")}; ${pii.conversations_clean.toLocaleString()} had none`}
+        />
+        <Headline
+          label="Transcript quality"
+          value={`${replay.quality.complete.toLocaleString()} complete`}
+          sub={
+            replay.quality.partial + replay.quality.low
+              ? `${replay.quality.partial} partial, ${replay.quality.low} hard to read`
+              : "every conversation had both sides"
+          }
+        />
+      </div>
+
+      <div
+        className={`mt-4 flex gap-3 rounded-lg border p-3 text-sm ${masked ? "border-pass/30 bg-pass/5" : "border-warn/30 bg-warn/5"}`}
+      >
+        {masked ? (
+          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-pass" aria-hidden />
+        ) : (
+          <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-warn" aria-hidden />
+        )}
+        <div className="space-y-1">
+          <p className="font-medium text-foreground">
+            {masked
+              ? "Personal data was masked before the judges, the report or the exports saw it."
+              : "Personal data was only reported: the transcripts, report and exports contain it as uploaded."}
+          </p>
+          {types.length > 0 && (
+            <p className="text-muted-foreground">
+              {types.map(([t, n]) => `${ENTITY_LABELS[t] ?? t} ${n}`).join(" · ")}
+            </p>
+          )}
+          <p className="text-xs text-muted-foreground">
+            Found with {pii.engine === "presidio+patterns" ? "Presidio and pattern matching" : "pattern matching"}. The uploaded file
+            was not kept.
+          </p>
+          {pii.warnings.map((w) => (
+            <p key={w} className="text-xs font-medium text-warn">
+              {w}
+            </p>
+          ))}
+        </div>
+      </div>
+
+      {(replay.parse_errors.length > 0 || replay.unknown_roles.length > 0) && (
+        <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-muted-foreground">
+          {replay.unknown_roles.length > 0 && (
+            <li>Messages from other roles were kept aside and not judged: {replay.unknown_roles.join(", ")}.</li>
+          )}
+          {replay.parse_errors.map((e) => (
+            <li key={e}>{e}</li>
+          ))}
+        </ul>
+      )}
     </Panel>
   );
 }

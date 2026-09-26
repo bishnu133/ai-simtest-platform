@@ -34,6 +34,48 @@ export interface StressOptions {
   contradictions: number;
 }
 
+export type ReplayFormat = "auto" | "json" | "jsonl" | "csv" | "tsv" | "text" | "markdown";
+
+/** Production replay: judge real conversations instead of simulating. */
+export interface ReplayOptions {
+  /** The uploaded log; the engine masks it and never stores or echoes it */
+  conversations: string;
+  filename: string;
+  format: ReplayFormat;
+  /** mask: replace personal data before anything reads it; detect: only report it */
+  privacy: "mask" | "detect";
+  /** Send the customer messages to the bot again and judge today's replies */
+  resend: boolean;
+  sample?: number | null;
+  min_turns?: number | null;
+  max_turns?: number | null;
+  contains?: string | null;
+}
+
+/** What loading a replay found (settings plus counts; never the conversations). */
+export interface ReplayLoad {
+  filename: string;
+  format: ReplayFormat;
+  privacy: "mask" | "detect";
+  resend: boolean;
+  conversations_loaded: number;
+  conversations_after_filter: number;
+  conversations_judged: number;
+  quality: { complete: number; partial: number; low: number };
+  unknown_roles: string[];
+  parse_errors: string[];
+  pii: {
+    strategy: string;
+    engine: string;
+    warnings: string[];
+    detected: number;
+    masked: number;
+    by_type: Record<string, number>;
+    conversations_with_pii: number;
+    conversations_clean: number;
+  };
+}
+
 export interface ScenarioTemplate {
   id: string;
   name: string;
@@ -74,6 +116,7 @@ export interface CreateSimulationRequest {
   judge_weights?: Record<string, number> | null;
   scenarios?: string[];
   stress?: StressOptions | null;
+  replay?: ReplayOptions | null;
 }
 
 export interface EngineOptions {
@@ -83,6 +126,9 @@ export interface EngineOptions {
   /** Engines before Phase 2 · Step 3 do not send these */
   scenarios?: ScenarioTemplate[];
   stress_patterns?: { id: StressPatternId; name: string; description: string }[];
+  replay_formats?: ReplayFormat[];
+  /** "patterns" when the engine lacks Presidio: names are only partly masked */
+  pii_engine?: "presidio+patterns" | "patterns";
 }
 
 /** Headline numbers for a finished run, without fetching its report. */
@@ -138,6 +184,7 @@ export interface SimulationStatus {
     judge_weights?: Record<string, number> | null;
     scenarios?: string[];
     stress?: StressOptions | null;
+    replay?: (Omit<ReplayOptions, "conversations"> & { conversations_loaded?: number; conversations_judged?: number }) | null;
   };
 }
 
@@ -375,6 +422,7 @@ export interface RunAnalysis {
   loops?: LoopStats;
   scenarios?: ScenarioResult[];
   memory?: MemoryResult;
+  replay?: ReplayLoad;
 }
 
 /** One scenario template's results, weakest first. */

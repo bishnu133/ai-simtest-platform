@@ -38,6 +38,12 @@ export const SIMULATION_PHASES: { key: string; label: string }[] = [
   { key: "analyzing_results", label: "Scoring coverage, workflows, policy and cost…" },
 ];
 
+// A production replay has real customers, not personas
+const REPLAY_LABELS: Record<string, string> = {
+  running: "Sending the customers' messages to your bot again…",
+  judging: "Judging the real conversations for quality, safety and grounding…",
+};
+
 export function simulationPhase(status: SimulationStatus) {
   const key = ["exporting_results", "analyzing_results"].includes(status.stage)
     ? status.stage
@@ -45,7 +51,7 @@ export function simulationPhase(status: SimulationStatus) {
   const index = Math.max(0, SIMULATION_PHASES.findIndex((p) => p.key === key));
   return {
     index,
-    label: SIMULATION_PHASES[index].label,
+    label: (status.config.replay && REPLAY_LABELS[SIMULATION_PHASES[index].key]) || SIMULATION_PHASES[index].label,
     percent: Math.round(((index + 0.5) / SIMULATION_PHASES.length) * 100),
   };
 }

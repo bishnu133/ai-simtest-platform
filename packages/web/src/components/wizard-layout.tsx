@@ -5,13 +5,15 @@ type WizardLayoutProps = {
   children: ReactNode;
   /** Current step in the 8-step flow; omit to hide the stepper */
   stepIndex?: number;
+  /** Steps this run does not have */
+  skippedSteps?: number[];
 };
 
 /** A run's pages inside the app shell: the 8-step stepper above the content. */
-export function WizardLayout({ children, stepIndex }: WizardLayoutProps) {
+export function WizardLayout({ children, stepIndex, skippedSteps }: WizardLayoutProps) {
   return (
     <div className="flex min-h-full flex-col">
-      {stepIndex !== undefined && <ProgressStepper currentStepIndex={stepIndex} />}
+      {stepIndex !== undefined && <ProgressStepper currentStepIndex={stepIndex} skipped={skippedSteps} />}
       <div className="flex-1 p-4 md:p-8">
         <div className="mx-auto w-full max-w-6xl">{children}</div>
       </div>

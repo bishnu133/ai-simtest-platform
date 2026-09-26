@@ -1,11 +1,13 @@
 import { STEPS } from "@/lib/engine/stages";
 
-export function ProgressStepper({ currentStepIndex }: { currentStepIndex: number }) {
+/** `skipped` steps (a replay has no test plan or personas) are shown struck through. */
+export function ProgressStepper({ currentStepIndex, skipped = [] }: { currentStepIndex: number; skipped?: number[] }) {
   return (
     <div className="w-full py-4 border-b bg-card" aria-label="Progress">
       <ol className="max-w-5xl mx-auto px-4 md:px-6 flex items-center justify-between">
         {STEPS.map((label, index) => {
-          const isCompleted = index < currentStepIndex;
+          const isSkipped = skipped.includes(index);
+          const isCompleted = index < currentStepIndex && !isSkipped;
           const isCurrent = index === currentStepIndex;
 
           return (
@@ -26,14 +28,15 @@ export function ProgressStepper({ currentStepIndex }: { currentStepIndex: number
                   isCompleted || isCurrent ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
                 } ${isCurrent ? "ring-4 ring-primary/20" : ""}`}
               >
-                {isCompleted ? "✓" : index + 1}
+                {isSkipped ? "–" : isCompleted ? "✓" : index + 1}
               </div>
               <span
                 className={`hidden sm:block text-xs font-medium uppercase tracking-wider text-center ${
                   isCurrent ? "text-foreground" : "text-muted-foreground"
-                }`}
+                } ${isSkipped ? "line-through opacity-60" : ""}`}
               >
                 {label}
+                {isSkipped && <span className="sr-only"> (not needed)</span>}
               </span>
             </li>
           );

@@ -201,7 +201,7 @@ export function RunView({ id, detailed = false }: { id: string; detailed?: boole
   }
 
   return (
-    <WizardLayout stepIndex={step}>
+    <WizardLayout stepIndex={step} skippedSteps={status?.config.replay ? [4, 5] : undefined}>
       {status && status.status !== "completed" && (
         <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
           <span className="truncate">

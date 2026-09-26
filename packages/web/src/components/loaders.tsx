@@ -63,12 +63,25 @@ export function SimulationLoader({ status }: { status: SimulationStatus }) {
       </div>
 
       <div className="space-y-4">
-        <h2 className="text-3xl font-bold tracking-tight">Simulation in Progress</h2>
-        <p className="text-lg text-muted-foreground leading-relaxed">
-          Your personas are playing with our agents and chatbots.
-          <br />
-          Hang in there while AI SimTest makes your chatbot sweat.
-        </p>
+        {status.config.replay ? (
+          <>
+            <h2 className="text-3xl font-bold tracking-tight">Replay in Progress</h2>
+            <p className="text-lg text-muted-foreground leading-relaxed">
+              {status.config.replay.resend
+                ? "Your real customers' messages are going to your bot again."
+                : "Your real conversations are being judged, reply by reply."}
+            </p>
+          </>
+        ) : (
+          <>
+            <h2 className="text-3xl font-bold tracking-tight">Simulation in Progress</h2>
+            <p className="text-lg text-muted-foreground leading-relaxed">
+              Your personas are playing with our agents and chatbots.
+              <br />
+              Hang in there while AI SimTest makes your chatbot sweat.
+            </p>
+          </>
+        )}
       </div>
 
       <div className="w-full space-y-4 pt-4" aria-live="polite">
