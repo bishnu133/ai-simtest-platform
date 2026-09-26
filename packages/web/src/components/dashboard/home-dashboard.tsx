@@ -301,7 +301,7 @@ export function HomeDashboard() {
             />
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-3">
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-3">
             <Panel
               title="Pass rate by run"
               description={`The last ${chartRuns.length} completed ${chartRuns.length === 1 ? "run" : "runs"}, oldest first. Select a column to open the run.`}

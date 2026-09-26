@@ -15,7 +15,10 @@ export type SessionStatus =
 
 export const TERMINAL_STATUSES: SessionStatus[] = ["completed", "aborted", "failed", "cancelled"];
 
-export type GateName = "bot_context" | "success_criteria" | "guardrail_rules" | "test_plan" | "personas";
+export type GateName = "bot_discovery" | "bot_context" | "success_criteria" | "guardrail_rules" | "test_plan" | "personas";
+
+/** How a run gets its bearings (the engine's --mode). */
+export type RunMode = "partial" | "auto" | "manual";
 
 export type GateDecision = "approved" | "modified" | "regenerate" | "rejected";
 
@@ -23,6 +26,11 @@ export type RequestFormat = "openai" | "anthropic" | "custom";
 
 export interface CreateSimulationRequest {
   name: string;
+  mode?: RunMode;
+  auto_approve?: boolean;
+  success_criteria?: string[];
+  guardrail_rules?: string[];
+  topics?: string[];
   bot_endpoint: string;
   bot_api_key?: string;
   bot_request_format: RequestFormat;
@@ -81,6 +89,11 @@ export interface SimulationStatus {
   summary?: RunSummary | null;
   config: {
     bot_endpoint: string;
+    mode?: RunMode;
+    auto_approve?: boolean;
+    success_criteria?: string[];
+    guardrail_rules?: string[];
+    topics?: string[];
     bot_request_format: string;
     documentation_filename: string;
     num_personas: number;

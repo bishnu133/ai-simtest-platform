@@ -21,7 +21,7 @@ function shortDate(iso: string) {
 export function PassRateByRunChart({ runs }: { runs: SimulationStatus[] }) {
   return (
     <figure aria-label="Pass rate by run" className="space-y-2">
-      <div className="grid grid-cols-[2.5rem_1fr] gap-2">
+      <div className="grid grid-cols-[2.5rem_minmax(0,1fr)] gap-2">
         <div className="relative h-48 text-right text-[11px] tabular-nums text-muted-foreground" aria-hidden>
           {TICKS.map((t) => (
             <span key={t} className="absolute right-0 -translate-y-1/2" style={{ top: `${(1 - t) * 100}%` }}>
@@ -80,7 +80,7 @@ export function PassRateByRunChart({ runs }: { runs: SimulationStatus[] }) {
           </div>
         </div>
       </div>
-      <div className="grid grid-cols-[2.5rem_1fr] gap-2" aria-hidden>
+      <div className="grid grid-cols-[2.5rem_minmax(0,1fr)] gap-2" aria-hidden>
         <span />
         <div className="flex gap-[2px] px-1 text-[11px] text-muted-foreground">
           {runs.map((run, i) => (

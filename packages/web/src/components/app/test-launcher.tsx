@@ -83,8 +83,8 @@ export function TestLauncher({ initialType }: { initialType?: string }) {
   };
 
   return (
-    <div className="mx-auto grid w-full max-w-7xl gap-6 p-4 md:p-8 lg:grid-cols-[300px_1fr]">
-      <aside className="space-y-3 lg:sticky lg:top-0 lg:self-start">
+    <div className="mx-auto grid w-full max-w-7xl grid-cols-[minmax(0,1fr)] gap-6 p-4 md:p-8 lg:grid-cols-[300px_minmax(0,1fr)]">
+      <aside className="min-w-0 space-y-3 lg:sticky lg:top-0 lg:self-start">
         <div>
           <h2 className="text-lg font-semibold text-foreground">What do you want to test?</h2>
           <p className="text-sm text-muted-foreground">Pick a test type to see what it checks and set it up.</p>

@@ -6,6 +6,7 @@ import type { ApprovedInput, ReportResponse } from "@/lib/engine/types";
 import { EmptyNote, Panel } from "./parts";
 
 const GATES: { key: string; title: string; description: string }[] = [
+  { key: "bot_discovery", title: "What the bot told us", description: "What AI SimTest learned by chatting with the bot (endpoint-only runs)." },
   { key: "bot_context", title: "Domain context", description: "What the AI inferred about the bot from your documentation." },
   { key: "success_criteria", title: "Success criteria", description: "What every response was judged against." },
   { key: "guardrail_rules", title: "Guardrails", description: "Boundaries the bot must not cross." },
@@ -21,15 +22,15 @@ function cell(value: unknown): string {
   return String(value);
 }
 
+const DECISION_LABELS: Record<string, { label: string; className: string }> = {
+  modified: { label: "Edited & approved", className: "bg-warn/10 text-warn" },
+  auto_approved: { label: "Auto-approved (hands-off)", className: "bg-muted text-muted-foreground" },
+  provided: { label: "Written by you", className: "bg-primary/10 text-primary" },
+};
+
 function DecisionTag({ input }: { input: ApprovedInput }) {
-  const modified = input.decision === "modified";
-  return (
-    <span
-      className={`rounded-full px-2 py-0.5 text-xs font-semibold ${modified ? "bg-warn/10 text-warn" : "bg-pass/10 text-pass"}`}
-    >
-      {modified ? "Edited & approved" : "Approved"}
-    </span>
-  );
+  const meta = DECISION_LABELS[input.decision] ?? { label: "Approved", className: "bg-pass/10 text-pass" };
+  return <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${meta.className}`}>{meta.label}</span>;
 }
 
 function RowsTable({ rows }: { rows: Record<string, unknown>[] }) {

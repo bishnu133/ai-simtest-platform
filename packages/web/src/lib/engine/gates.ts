@@ -39,6 +39,30 @@ const str = (v: unknown) => (v === null || v === undefined ? "" : String(v));
 const asRecord = (v: unknown): Record<string, unknown> =>
   v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
 
+// ── Stage 0: what discovery learned by talking to the bot (endpoint-only) ──
+
+const markdownless = (text: string) => text.replace(/\*\*/g, "").trim();
+
+const botDiscovery: GateAdapter = {
+  step: 1,
+  title: "What Your Bot Told Us",
+  description:
+    "AI SimTest chatted with your bot to learn what it does. Approve to build the test from this, or reject to have it ask again with follow-up questions.",
+  mode: "edit",
+  canAddRows: false,
+  columns: [
+    { key: "finding", header: "Finding", width: "80%" },
+    { key: "confidence", header: "Confidence", width: "20%" },
+  ],
+  toRows: (gate) =>
+    gate.items.map((item) => ({
+      id: item.id,
+      finding: markdownless(str(item.content)),
+      confidence: str(item.confidence).charAt(0).toUpperCase() + str(item.confidence).slice(1),
+    })),
+  toModified: (_rows, gate) => gate.items.map((item) => item.content),
+};
+
 // ── Stage 1: bot context (single object → one row per field) ─────────────
 
 const CONTEXT_FIELDS: { key: string; label: string; list?: boolean }[] = [
@@ -308,6 +332,7 @@ const personas: GateAdapter = {
 };
 
 export const GATE_ADAPTERS: Record<GateName, GateAdapter> = {
+  bot_discovery: botDiscovery,
   bot_context: botContext,
   success_criteria: successCriteria,
   guardrail_rules: guardrailRules,

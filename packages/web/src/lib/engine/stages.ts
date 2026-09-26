@@ -15,6 +15,7 @@ export function stepForStatus(status: SimulationStatus): number {
 /** What the engine is doing while no approval is pending (pipeline stages 0-5). */
 export const GENERATING_LABELS: Record<string, string> = {
   queued: "Starting the pipeline…",
+  discovering_bot: "Chatting with your bot to learn what it does…",
   loading_documents: "Reading your uploaded context…",
   analyzing_documents: "Inferring domain context from your documentation…",
   generating_criteria: "Drafting success criteria…",
