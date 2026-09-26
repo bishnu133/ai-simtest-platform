@@ -14,7 +14,9 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${inter.variable} h-full`}>
+    // Browser extensions (e.g. device emulators, password managers) add attributes
+    // to <html> before React hydrates; ignore attribute mismatches on this element only.
+    <html lang="en" className={`${inter.variable} h-full`} suppressHydrationWarning>
       <body className="min-h-full">{children}</body>
     </html>
   );

@@ -25,7 +25,14 @@ Browser ──/api/engine/*──▶ Next.js route handler ──/wizard/*──
 | Setup | `POST /wizard/simulations` |
 | Context / Criteria / Guardrails / Test Plan / Personas | `GET /wizard/simulations/{id}/gate` → `POST .../gate/{key}/decision` |
 | Loader | polls `GET /wizard/simulations/{id}` every 1.5 s |
-| Reports | `GET /wizard/simulations/{id}/report`, downloads via `.../exports/{fmt}` |
+| Setup evaluation options | `GET /wizard/options` (built-in workflows and policies) |
+| Report | `GET /wizard/simulations/{id}/report` (report + `analysis` + approved `inputs`), downloads via `.../exports/{fmt}` |
+
+The report page has four tabs:
+- **Overview**: release-readiness verdict (rule shown on the page), headline numbers with change since the bot's previous run, latency p50/p95, coverage, cost, judge scores, turn outcomes, score by persona type, Fix These First, workflows
+- **Failures**: the ranked Fix These First queue, all failure patterns (filter by severity, expand for the judge's full reasoning), recommendations
+- **Conversations**: searchable, filterable, sortable table; a row opens the transcript with every judge's score and reasoning per bot reply
+- **Inputs**: the context, criteria, guardrails and test plan that were approved, and the personas that ran
 
 Button → decision mapping on review screens: **Approve** → `approved` (or `modified`
 with your edits), **Reject** → `regenerate` (the AI drafts a fresh proposal),

@@ -4,9 +4,12 @@
  */
 import type {
   CreateSimulationRequest,
+  EngineOptions,
   GateDecision,
   PendingGate,
   ReportResponse,
+  ReviewResponse,
+  ReviewSummary,
   SimulationStatus,
 } from "./types";
 
@@ -70,6 +73,8 @@ export const engine = {
   createSimulation: (body: CreateSimulationRequest) =>
     request<SimulationStatus>("/simulations", { method: "POST", body: JSON.stringify(body) }),
 
+  getOptions: () => request<EngineOptions>("/options"),
+
   listSimulations: () => request<{ simulations: SimulationStatus[] }>("/simulations"),
 
   getSimulation: (id: string) => request<SimulationStatus>(`/simulations/${encodeURIComponent(id)}`),
@@ -89,6 +94,17 @@ export const engine = {
     request<SimulationStatus>(`/simulations/${encodeURIComponent(id)}/cancel`, { method: "POST" }),
 
   getReport: (id: string) => request<ReportResponse>(`/simulations/${encodeURIComponent(id)}/report`),
+
+  getReview: (id: string, judge: string, size = 20) =>
+    request<ReviewResponse>(
+      `/simulations/${encodeURIComponent(id)}/review?judge=${encodeURIComponent(judge)}&size=${size}`,
+    ),
+
+  postReview: (id: string, body: { judge: string; key: string; human_pass: boolean | null; note?: string }) =>
+    request<ReviewSummary>(`/simulations/${encodeURIComponent(id)}/review`, {
+      method: "POST",
+      body: JSON.stringify({ note: "", ...body }),
+    }),
 
   exportUrl: (id: string, format: string) =>
     `${BASE}/simulations/${encodeURIComponent(id)}/exports/${encodeURIComponent(format)}`,

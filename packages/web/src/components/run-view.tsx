@@ -3,8 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { AlertOctagon, Ban, Loader2, RotateCcw, ServerCrash, StopCircle } from "lucide-react";
-import { BasicReport } from "@/components/basic-report";
-import { DetailedReport } from "@/components/detailed-report";
+import { ReportView } from "@/components/report/report-view";
 import { GeneratingPanel, SimulationLoader } from "@/components/loaders";
 import { ReviewGate } from "@/components/review-gate";
 import { Button } from "@/components/ui/button";
@@ -161,7 +160,7 @@ export function RunView({ id, detailed = false }: { id: string; detailed?: boole
     );
   } else if (status.status === "completed") {
     body = report ? (
-      detailed ? <DetailedReport data={report} /> : <BasicReport data={report} />
+      <ReportView data={report} status={status} initialTab={detailed ? "failures" : "overview"} />
     ) : error ? (
       errorNotice(error)
     ) : (
@@ -203,7 +202,7 @@ export function RunView({ id, detailed = false }: { id: string; detailed?: boole
 
   return (
     <WizardLayout stepIndex={step}>
-      {status && (
+      {status && status.status !== "completed" && (
         <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
           <span className="truncate">
             <span className="font-medium text-foreground">{status.name}</span> ·{" "}

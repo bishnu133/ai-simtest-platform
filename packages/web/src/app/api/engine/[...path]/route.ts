@@ -3,14 +3,14 @@
  *
  * The browser never talks to the engine directly. This keeps the engine URL
  * (and anything sent to it, such as a bot API key) off the client bundle and
- * lets the engine stay bound to localhost. Only the /wizard surface is exposed.
+ * lets the engine stay bound to localhost. Only the /wizard simulations + options surface is exposed.
  */
 import type { NextRequest } from "next/server";
 
 const ENGINE_API_URL = (process.env.ENGINE_API_URL ?? "http://127.0.0.1:8100").replace(/\/$/, "");
 
 // First path segment must be one of these — nothing else on the engine is reachable.
-const ALLOWED_ROOTS = new Set(["simulations"]);
+const ALLOWED_ROOTS = new Set(["simulations", "options"]);
 
 // Headers from the engine response that are safe and useful to pass through.
 const PASSTHROUGH_HEADERS = ["content-type", "content-disposition", "content-length"];
