@@ -53,7 +53,11 @@ export function OverviewTab({
           label="Pass rate"
           value={pct(summary.pass_rate)}
           delta={delta("pass rate")}
-          sub="of judged turns"
+          sub={
+            summary.memory_checked_turns
+              ? `of judged turns, not counting ${plural(summary.memory_checked_turns, "recall question")}`
+              : "of judged turns"
+          }
           footer={
             scoredJudges.length ? (
               <span title="Pass rate per judge; the strictest one sets the headline">
@@ -73,6 +77,14 @@ export function OverviewTab({
             value={`${analysis.loops.stuck_conversations} / ${summary.total_conversations ?? 0}`}
             sub="bot repeated itself or user re-asked 2+ times"
             footer={`Bot repeated itself in ${analysis.loops.conversations_with_bot_repeats}; users re-asked in ${analysis.loops.conversations_with_user_reasks}`}
+          />
+        )}
+        {!!summary.memory_checked_turns && (
+          <StatTile
+            label="Memory recall"
+            value={`${summary.memory_recalled_turns ?? 0} / ${summary.memory_checked_turns}`}
+            sub="recall questions answered with the exact detail"
+            footer="Scored by exact match, separately from the pass rate"
           />
         )}
         <StatTile label="Average score" value={pct(summary.average_score)} delta={delta("average score")} sub="across all judges" />

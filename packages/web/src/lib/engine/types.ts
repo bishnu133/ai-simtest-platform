@@ -283,6 +283,9 @@ export interface ReportSummary {
   warnings?: number;
   execution_time_seconds?: number;
   stuck_conversations?: number;
+  /** Memory stress: recall replies scored by exact match, left out of pass_rate */
+  memory_checked_turns?: number;
+  memory_recalled_turns?: number;
 }
 
 export interface FailurePattern {
@@ -515,9 +518,14 @@ export interface MemoryMiss {
   asked_at: number;
   gap: number;
   score: number;
+  /** Why it was missed */
+  reason: MissReason;
+  expected?: string[];
   question: string;
   reply: string;
 }
+
+export type MissReason = "deflected" | "wrong_value" | "ignored";
 
 /** Memory stress results, read from the transcripts. */
 export interface MemoryResult {
@@ -535,6 +543,7 @@ export interface MemoryResult {
   by_fact: { fact_id: string; category: string; shared: number; asked: number; recalled: number }[];
   by_gap: { gap: string; asked: number; recalled: number }[];
   misses: MemoryMiss[];
+  by_reason?: { reason: MissReason; label: string; count: number }[];
   per_conversation: { conversation_id: string; persona: string; facts_asked: number; facts_recalled: number; contradictions: number; noticed: number }[];
 }
 

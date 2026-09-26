@@ -10,6 +10,12 @@ import { EmptyNote, Panel } from "./parts";
 
 const TARGET = 0.8;
 
+const MISS_LABELS: Record<string, string> = {
+  deflected: "Deflected",
+  wrong_value: "Wrong detail",
+  ignored: "Answered something else",
+};
+
 const humanise = (id: string) => {
   const text = id.replace(/_/g, " ");
   return text[0]?.toUpperCase() + text.slice(1);
@@ -124,7 +130,7 @@ export function MemoryPanel({ memory, onOpen }: { memory: MemoryResult; onOpen: 
   return (
     <Panel
       title="Memory & context"
-      description={`${plural(memory.conversations, "conversation")} of ${memory.turns} messages. Read from the transcripts: a detail counts as remembered when the bot repeats it back when asked.`}
+      description={`${plural(memory.conversations, "conversation")} of ${memory.turns} messages. Read from the transcripts: a detail counts as remembered when the bot repeats it back when asked. These replies are scored by exact match and kept out of the pass rate.`}
     >
       <div className="grid gap-3 sm:grid-cols-3">
         <Headline
@@ -175,6 +181,23 @@ export function MemoryPanel({ memory, onOpen }: { memory: MemoryResult; onOpen: 
         </div>
       )}
 
+      {!!memory.by_reason?.length && (
+        <div className="mt-5">
+          <h4 className="mb-1 text-sm font-semibold text-foreground">Why it forgot</h4>
+          <p className="mb-2 text-xs text-muted-foreground">
+            Different failures: not trying, remembering wrong and losing the thread need different fixes.
+          </p>
+          <ScoreBars
+            caption="Share of missed recall questions, by reason"
+            rows={memory.by_reason.map((r) => ({
+              label: MISS_LABELS[r.reason] ?? r.label,
+              value: r.count / memory.by_reason!.reduce((n, x) => n + x.count, 0),
+              hint: `${r.count} of ${memory.facts_asked - memory.facts_recalled} — ${r.label}`,
+            }))}
+          />
+        </div>
+      )}
+
       <div className="mt-5">
         <h4 className="mb-2 text-sm font-semibold text-foreground">What it forgot</h4>
         {memory.misses.length ? (
@@ -187,6 +210,11 @@ export function MemoryPanel({ memory, onOpen }: { memory: MemoryResult; onOpen: 
                     <span className="font-normal text-muted-foreground">
                       · shared at message {m.seeded_at}, asked at {m.asked_at} · {m.persona}
                     </span>
+                    {m.reason && (
+                      <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-[11px] font-medium text-foreground">
+                        {MISS_LABELS[m.reason] ?? m.reason}
+                      </span>
+                    )}
                   </span>
                   <Button variant="ghost" size="xs" onClick={() => onOpen(m.conversation_id)}>
                     View chat
@@ -198,6 +226,9 @@ export function MemoryPanel({ memory, onOpen }: { memory: MemoryResult; onOpen: 
                 <p className="text-muted-foreground">
                   <span className="font-medium text-foreground">Bot:</span> {m.reply || "(no reply)"}
                 </p>
+                {!!m.expected?.length && (
+                  <p className="text-xs text-muted-foreground">Expected: {m.expected.join(" or ")}</p>
+                )}
               </li>
             ))}
           </ul>
