@@ -34,6 +34,8 @@ const EXPORT_LABELS: Record<string, string> = {
   audit_trail: "Approval audit trail (JSON)",
   human_review: "Judge review labels (JSON)",
   golden_set: "Judge golden set (JSON)",
+  scenarios: "Scenario results (JSON)",
+  memory: "Memory & context results (JSON)",
 };
 
 const GOLDEN_JUDGES = new Set(["quality", "relevance", "grounding", "safety"]);

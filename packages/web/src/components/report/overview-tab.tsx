@@ -15,6 +15,7 @@ import {
 } from "@/lib/engine/report";
 import type { CoverageSummary, ReportResponse } from "@/lib/engine/types";
 import { ScoreBars, TurnLabelBar } from "./charts";
+import { MemoryPanel, ScenarioResultsPanel } from "./focus-panels";
 import { JudgeBreakdownPanel, LoopsPanel } from "./judge-breakdown";
 import { EmptyNote, Panel, SeverityBadge, StatTile, VerdictBanner } from "./parts";
 
@@ -123,6 +124,9 @@ export function OverviewTab({
             : `${builds.current_build || "not recorded"}${builds.previous_build === builds.current_build ? " (same as the previous run)" : ""}`}
         </p>
       )}
+
+      {!!analysis.scenarios?.length && <ScenarioResultsPanel scenarios={analysis.scenarios} onOpen={onOpenConversation} />}
+      {analysis.memory && <MemoryPanel memory={analysis.memory} onOpen={onOpenConversation} />}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Panel title="Judge scores" description="Average score per judge, weakest first.">

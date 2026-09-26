@@ -4,8 +4,10 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Check, CheckCircle2, Clock, Copy, Terminal } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { SetupForm } from "@/components/setup-form";
+import { SetupForm, type TestFocus } from "@/components/setup-form";
 import { TEST_TYPES, testType, type TestType } from "@/lib/test-types";
+
+const isFocus = (id: string): id is TestFocus => id === "simulation" || id === "scenarios" || id === "stress";
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -150,7 +152,11 @@ export function TestLauncher({ initialType }: { initialType?: string }) {
             <p className="text-sm text-muted-foreground">{type.tagline}</p>
           </div>
         </header>
-        {type.available ? <SetupForm embedded /> : <ComingSoon type={type} />}
+        {type.available ? (
+          <SetupForm key={type.id} embedded focus={isFocus(type.id) ? type.id : "simulation"} />
+        ) : (
+          <ComingSoon type={type} />
+        )}
       </section>
     </div>
   );

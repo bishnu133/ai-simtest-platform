@@ -24,6 +24,25 @@ export type GateDecision = "approved" | "modified" | "regenerate" | "rejected";
 
 export type RequestFormat = "openai" | "anthropic" | "custom";
 
+export type StressPatternId = "fact_seeding" | "contradiction" | "progressive_complexity";
+
+/** Long conversations that test what the bot remembers (the engine's --stress-memory). */
+export interface StressOptions {
+  turns: number;
+  patterns: StressPatternId[];
+  facts: number;
+  contradictions: number;
+}
+
+export interface ScenarioTemplate {
+  id: string;
+  name: string;
+  category: string;
+  difficulty: string;
+  description: string;
+  min_turns: number;
+}
+
 export interface CreateSimulationRequest {
   name: string;
   mode?: RunMode;
@@ -53,12 +72,17 @@ export interface CreateSimulationRequest {
   bot_version_header?: string | null;
   bot_info_url?: string | null;
   judge_weights?: Record<string, number> | null;
+  scenarios?: string[];
+  stress?: StressOptions | null;
 }
 
 export interface EngineOptions {
   workflows: { id: string; name: string; domain: string }[];
   policies: { id: string; name: string; description: string }[];
   request_formats: string[];
+  /** Engines before Phase 2 · Step 3 do not send these */
+  scenarios?: ScenarioTemplate[];
+  stress_patterns?: { id: StressPatternId; name: string; description: string }[];
 }
 
 /** Headline numbers for a finished run, without fetching its report. */
@@ -112,6 +136,8 @@ export interface SimulationStatus {
     bot_version_header?: string | null;
     bot_info_url?: string | null;
     judge_weights?: Record<string, number> | null;
+    scenarios?: string[];
+    stress?: StressOptions | null;
   };
 }
 
@@ -347,6 +373,55 @@ export interface RunAnalysis {
   bot_build?: { build: string; source: string };
   judge_breakdown?: JudgeBreakdown;
   loops?: LoopStats;
+  scenarios?: ScenarioResult[];
+  memory?: MemoryResult;
+}
+
+/** One scenario template's results, weakest first. */
+export interface ScenarioResult {
+  id: string;
+  name: string;
+  category: string;
+  difficulty: string;
+  description: string;
+  conversations: number;
+  /** Share of this scenario's replies judged PASS */
+  pass_rate: number;
+  average_score: number;
+  stuck: number;
+  conversation_ids: string[];
+}
+
+export interface MemoryMiss {
+  conversation_id: string;
+  persona: string;
+  fact_id: string;
+  category: string;
+  seeded_at: number;
+  asked_at: number;
+  gap: number;
+  score: number;
+  question: string;
+  reply: string;
+}
+
+/** Memory stress results, read from the transcripts. */
+export interface MemoryResult {
+  turns: number;
+  patterns: StressPatternId[];
+  conversations: number;
+  facts_shared: number;
+  facts_asked: number;
+  facts_recalled: number;
+  facts_not_asked: number;
+  recall_rate: number | null;
+  contradictions_injected: number;
+  contradictions_noticed: number;
+  noticed_rate: number | null;
+  by_fact: { fact_id: string; category: string; shared: number; asked: number; recalled: number }[];
+  by_gap: { gap: string; asked: number; recalled: number }[];
+  misses: MemoryMiss[];
+  per_conversation: { conversation_id: string; persona: string; facts_asked: number; facts_recalled: number; contradictions: number; noticed: number }[];
 }
 
 export interface ApprovedInput {

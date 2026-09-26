@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatDuration, pct, scoreTone } from "@/lib/engine/report";
-import { botHost, isActive, needsReview, relativeTime, runDuration, stuckShare } from "@/lib/engine/runs";
+import { botHost, isActive, needsReview, relativeTime, runDuration, stuckShare, runKind } from "@/lib/engine/runs";
 import type { SimulationStatus } from "@/lib/engine/types";
 import { StatusBadge } from "./status-badge";
 
@@ -148,6 +148,7 @@ export function RunsTable({
                       <div className="truncate text-xs text-muted-foreground">
                         {botHost(run.config.bot_endpoint)}
                         {run.bot_build && <span className="font-mono"> · build {run.bot_build.slice(0, 12)}</span>}
+                        {runKind(run) && <span> · {runKind(run)}</span>}
                       </div>
                     </TableCell>
                     <TableCell>

@@ -59,3 +59,11 @@ export function botHost(endpoint: string): string {
     return endpoint;
   }
 }
+
+/** Which kind of test a run was, for lists ("" for a plain persona simulation). */
+export function runKind(run: SimulationStatus): string {
+  if (run.config.stress) return `Memory stress · ${run.config.stress.turns} messages`;
+  const n = run.config.scenarios?.length ?? 0;
+  if (n) return `${n} scenario${n === 1 ? "" : "s"}`;
+  return "";
+}

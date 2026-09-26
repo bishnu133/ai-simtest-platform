@@ -59,17 +59,20 @@ export function ScoreBars({
           <span className="inline-block h-3 w-px bg-foreground/40" aria-hidden /> Target {pct(target)}
         </figcaption>
       )}
-      <table className="sr-only">
-        <caption>{caption}</caption>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.label}>
-              <th scope="row">{r.label}</th>
-              <td>{pct(r.value)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {/* A table ignores the 1px sr-only width; the wrapper keeps a long caption from widening the page */}
+      <div className="sr-only">
+        <table>
+          <caption>{caption}</caption>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.label}>
+                <th scope="row">{r.label}</th>
+                <td>{pct(r.value)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </figure>
   );
 }

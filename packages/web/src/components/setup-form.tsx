@@ -23,8 +23,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { readSuggestedQualityThreshold, subscribeCalibration } from "@/lib/calibration";
 import { engine, EngineError } from "@/lib/engine/client";
-import type { EngineOptions, RequestFormat, RunMode } from "@/lib/engine/types";
+import type { EngineOptions, RequestFormat, RunMode, StressOptions } from "@/lib/engine/types";
 import { ChoiceCards, ListEditor, Section, Segmented, lines } from "./setup/controls";
+import { DEFAULT_STRESS, ScenarioPicker, StressSettings } from "./setup/test-focus";
 import { MODES, REVIEW_STEPS, SIZES, STRICTNESS, estimate, money, type SizeId, type StrictnessId } from "./setup/presets";
 
 const PERSONA_OPTIONS = ["3", "5", "10", "20", "30", "40", "50", "75", "100"];
@@ -120,7 +121,10 @@ function Disclosure({ label, children }: { label: string; children: ReactNode })
   );
 }
 
-export function SetupForm({ embedded = false }: { embedded?: boolean }) {
+/** What the run concentrates on, on top of the persona simulation. */
+export type TestFocus = "simulation" | "scenarios" | "stress";
+
+export function SetupForm({ embedded = false, focus = "simulation" }: { embedded?: boolean; focus?: TestFocus }) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -143,7 +147,8 @@ export function SetupForm({ embedded = false }: { embedded?: boolean }) {
   const [rules, setRules] = useState("");
   const [topics, setTopics] = useState("");
   // 4. Size
-  const [size, setSize] = useState<SizeId>("quick");
+  // Scenario runs start at Standard so every scenario gets a customer
+  const [size, setSize] = useState<SizeId>(focus === "scenarios" ? "standard" : "quick");
   const [personas, setPersonas] = useState("20");
   const [minTurns, setMinTurns] = useState("3");
   const [maxTurns, setMaxTurns] = useState("10");
@@ -164,6 +169,10 @@ export function SetupForm({ embedded = false }: { embedded?: boolean }) {
   const [captureHeaders, setCaptureHeaders] = useState("");
   const suggested = useSyncExternalStore(subscribeCalibration, readSuggestedQualityThreshold, () => null);
 
+  // Scenario packs / memory stress (test types built on the simulation)
+  const [scenarioIds, setScenarioIds] = useState<string[] | null>(null);
+  const [stress, setStress] = useState<StressOptions>(DEFAULT_STRESS);
+
   const [dragActive, setDragActive] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -178,13 +187,27 @@ export function SetupForm({ embedded = false }: { embedded?: boolean }) {
     size === "custom"
       ? { personas: Number(personas), minTurns: Number(minTurns), maxTurns: Number(maxTurns), parallel: Number(parallel) }
       : { personas: preset.personas, minTurns: preset.minTurns, maxTurns: preset.maxTurns, parallel: Number(parallel) || preset.parallel };
+  // Every scenario is picked until the tester changes it
+  const chosenScenarios = scenarioIds ?? options?.scenarios?.map((s) => s.id) ?? [];
+  // The engine lengthens conversations to what the scenarios and stress test need
+  const scenarioTurns =
+    focus === "scenarios"
+      ? Math.max(0, ...(options?.scenarios ?? []).filter((s) => chosenScenarios.includes(s.id)).map((s) => s.min_turns))
+      : 0;
+  const lengths =
+    focus === "stress"
+      ? { min: stress.turns, max: Math.max(run.maxTurns, stress.turns) }
+      : { min: Math.max(run.minTurns, scenarioTurns), max: Math.max(run.maxTurns, scenarioTurns) };
   const strict = STRICTNESS.find((s) => s.id === strictness)!;
-  const cost = estimate(run.personas, run.minTurns, run.maxTurns, guardrailLlm, relevanceLlm);
+  const cost = estimate(run.personas, lengths.min, lengths.max, guardrailLlm, relevanceLlm);
   // Manual runs skip review of whatever the tester wrote themselves
   const reviewSteps =
     mode === "manual"
       ? REVIEW_STEPS.manual - [criteria, rules, topics].filter((t) => lines(t).length > 0).length
       : REVIEW_STEPS[mode];
+
+  // Scenario and stress runs get their own section after the mode
+  const step = focus === "simulation" ? 0 : 1;
 
   const handleFile = (file: File) => {
     if (!/\.(md|markdown|txt)$/i.test(file.name)) {
@@ -239,6 +262,14 @@ export function SetupForm({ embedded = false }: { embedded?: boolean }) {
       setError("Pick at least one workflow, or switch workflows to auto-detect.");
       return;
     }
+    if (focus === "scenarios" && chosenScenarios.length === 0) {
+      setError("Pick at least one scenario to run.");
+      return;
+    }
+    if (focus === "stress" && stress.patterns.length === 0) {
+      setError("Pick at least one thing for the memory test to check.");
+      return;
+    }
     if (mode === "partial" && !contextContent.trim()) {
       setError("Upload the Markdown your bot answers from — the test is built from it.");
       return;
@@ -289,6 +320,8 @@ export function SetupForm({ embedded = false }: { embedded?: boolean }) {
             .filter(([, v]) => v.trim() !== "")
             .map(([k, v]) => [k, Number(v)]),
         ),
+        scenarios: focus === "scenarios" ? chosenScenarios : [],
+        stress: focus === "stress" ? stress : null,
       });
       queryClient.invalidateQueries({ queryKey: ["runs"] });
       router.push(`/simulations/${sim.simulation_id}`);
@@ -395,7 +428,18 @@ export function SetupForm({ embedded = false }: { embedded?: boolean }) {
           </div>
         </Section>
 
-        <Section n={2} title="Your bot" description="Where to reach it. Only the endpoint is required.">
+        {focus === "scenarios" && (
+          <Section n={2} title="Which scenarios?" description="Structured situations every run puts your bot through, each scored on its own.">
+            <ScenarioPicker scenarios={options?.scenarios} selected={chosenScenarios} onChange={setScenarioIds} customers={run.personas} />
+          </Section>
+        )}
+        {focus === "stress" && (
+          <Section n={2} title="Memory stress" description="Long conversations that check whether your bot keeps track of what the customer told it.">
+            <StressSettings patterns={options?.stress_patterns} value={stress} onChange={setStress} />
+          </Section>
+        )}
+
+        <Section n={2 + step} title="Your bot" description="Where to reach it. Only the endpoint is required.">
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2 md:col-span-2">
               <Label htmlFor="endpoint" className="text-sm font-semibold">
@@ -488,7 +532,7 @@ export function SetupForm({ embedded = false }: { embedded?: boolean }) {
         </Section>
 
         <Section
-          n={3}
+          n={3 + step}
           title="What your bot knows"
           description={
             mode === "partial"
@@ -549,7 +593,7 @@ export function SetupForm({ embedded = false }: { embedded?: boolean }) {
           )}
         </Section>
 
-        <Section n={4} title="How big a test?" description="More simulated customers find rarer problems, and take longer.">
+        <Section n={4 + step} title="How big a test?" description="More simulated customers find rarer problems, and take longer.">
           <div className="space-y-4">
             <ChoiceCards
               label="Test size"
@@ -558,6 +602,13 @@ export function SetupForm({ embedded = false }: { embedded?: boolean }) {
               columns={4}
               options={SIZES.map((s) => ({ id: s.id, title: s.label, body: s.hint }))}
             />
+            {focus !== "simulation" && lengths.min > run.minTurns && (
+              <p role="note" className="text-sm text-muted-foreground">
+                {focus === "stress"
+                  ? `Each conversation runs ${stress.turns} messages, as set in Memory stress; the size sets how many customers.`
+                  : `The scenarios you picked need at least ${lengths.min} messages, so conversations run at least that long.`}
+              </p>
+            )}
             {size === "custom" && (
               <div className="grid gap-4 rounded-lg border p-4 sm:grid-cols-2 lg:grid-cols-4">
                 <SelectField id="personas" label="Simulated customers" value={personas} options={PERSONA_OPTIONS} onChange={setPersonas} />
@@ -576,7 +627,7 @@ export function SetupForm({ embedded = false }: { embedded?: boolean }) {
           </div>
         </Section>
 
-        <Section n={5} title="What to check" description="Every reply is judged for quality, grounding and safety. Add more here.">
+        <Section n={5 + step} title="What to check" description="Every reply is judged for quality, grounding and safety. Add more here.">
           <div className="space-y-5">
             <fieldset className="space-y-2">
               <legend className="text-sm font-semibold text-foreground">Business workflows</legend>
@@ -645,7 +696,7 @@ export function SetupForm({ embedded = false }: { embedded?: boolean }) {
           </div>
         </Section>
 
-        <Section n={6} title="How strict?" description="How good a reply has to be to count as a pass.">
+        <Section n={6 + step} title="How strict?" description="How good a reply has to be to count as a pass.">
           <div className="space-y-3">
             <Segmented
               label="Strictness"
@@ -768,7 +819,10 @@ export function SetupForm({ embedded = false }: { embedded?: boolean }) {
         <div className="sticky bottom-0 z-10 flex flex-col gap-3 rounded-b-xl border-t bg-card/95 px-6 py-4 backdrop-blur md:flex-row md:items-center md:justify-between md:px-8">
           <div className="text-sm">
             <p className="font-medium text-foreground">
-              {run.personas} customers · up to {run.maxTurns} messages · about {cost.replies.toLocaleString()} bot replies
+              {run.personas} customers ·{" "}
+              {focus === "stress" ? `${stress.turns} messages each` : `up to ${lengths.max} messages`}
+              {focus === "scenarios" && ` · ${chosenScenarios.length} scenario${chosenScenarios.length === 1 ? "" : "s"}`} · about{" "}
+              {cost.replies.toLocaleString()} bot replies
             </p>
             <p className="text-xs text-muted-foreground" title="Rough estimate from earlier runs; the report shows the actual cost.">
               Rough cost {money(cost.low)}–{money(cost.high)} · {handsOff ? "runs hands-off" : `${reviewSteps} review steps`}
