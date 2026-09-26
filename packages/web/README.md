@@ -54,8 +54,14 @@ engine calls never hit that proxy. Both proxies are server-only; see `.env.examp
 **Terminal A — engine** (in the `ai-simtest` repo, with an LLM key in `.env`):
 
 ```bash
+pip install -e .                # once
+simtest install-models          # once: spaCy model for finding/masking personal data
 API_HOST=127.0.0.1 API_PORT=8100 simtest serve
 ```
+
+Without `install-models`, personal data is found by pattern matching only: names are masked
+where people introduce themselves and places not at all. The replay setup screen warns when
+that is the case.
 
 **Terminal B — dashboard** (this folder):
 

@@ -186,8 +186,8 @@ export function ReplaySource({
         {piiEngine === "patterns" && value.privacy === "mask" && (
           <p role="note" className="rounded-md border border-warn/30 bg-warn/5 px-3 py-2 text-sm text-foreground">
             Your engine masks by pattern only: names are caught where people introduce themselves (&quot;my name is
-            …&quot;) and places are not caught. For full masking, install Presidio on the engine:{" "}
-            <code className="font-mono text-xs">pip install presidio-analyzer &amp;&amp; python -m spacy download en_core_web_lg</code>
+            …&quot;) and places are not caught. For full masking, run this once on the engine and restart it:{" "}
+            <code className="font-mono text-xs">simtest install-models</code>
           </p>
         )}
       </fieldset>
