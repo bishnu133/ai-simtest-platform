@@ -214,7 +214,11 @@ export function AppShell({ children }: { children: ReactNode }) {
             )}
           </div>
         </header>
-        <main className="flex-1 overflow-y-auto">{children}</main>
+        {/* relative: absolutely positioned bits inside a page (visually hidden
+            inputs, popovers) are placed within this scroll area, not the
+            document, so they can never make the whole window scroll and
+            carry the sidebar and header away. */}
+        <main className="relative flex-1 overflow-y-auto">{children}</main>
       </div>
     </div>
   );
