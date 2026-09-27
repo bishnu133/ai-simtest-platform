@@ -314,6 +314,8 @@ export interface SimulationStatus {
   stage_number: number;
   total_stages: number;
   engine_status: string | null;
+  /** While conversations run: who is talking, what has been judged, the latest exchanges */
+  live?: LiveProgress | null;
   pending_gate: { gate_key: string; gate_name: GateName; title: string } | null;
   error: string | null;
   created_at: string;
@@ -995,4 +997,37 @@ export interface CIInfo {
   engine_version: string;
   token_required: boolean;
   runs: CIRunRow[];
+}
+
+// ── Live progress while a run runs ──
+
+export interface LivePersona {
+  id: string;
+  name: string;
+  type: string;
+  state: "waiting" | "talking" | "judging" | "done" | "skipped";
+  exchanges: number;
+  verdict: "PASS" | "WARNING" | "FAIL" | null;
+}
+
+export interface LiveExchange {
+  seq: number;
+  persona: string;
+  persona_id: string;
+  customer: string;
+  bot: string;
+  label: "PASS" | "WARNING" | "FAIL" | null;
+  issue: string;
+}
+
+export interface LiveProgress {
+  elapsed_seconds: number;
+  conversations_total: number;
+  conversations_done: number;
+  talking: number;
+  exchanges: number;
+  replies_judged: number;
+  labels: { PASS: number; WARNING: number; FAIL: number };
+  personas: LivePersona[];
+  feed: LiveExchange[];
 }

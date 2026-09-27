@@ -5,6 +5,7 @@ import Link from "next/link";
 import { AlertOctagon, Ban, Loader2, RotateCcw, ServerCrash, StopCircle } from "lucide-react";
 import { ReportView } from "@/components/report/report-view";
 import { GeneratingPanel, SimulationLoader } from "@/components/loaders";
+import { LiveRun } from "@/components/live-run";
 import { ReviewGate } from "@/components/review-gate";
 import { Button } from "@/components/ui/button";
 import { WizardLayout } from "@/components/wizard-layout";
@@ -194,6 +195,8 @@ export function RunView({ id, detailed = false }: { id: string; detailed?: boole
         }}
       />
     );
+  } else if (status.live && status.live.conversations_total > 0) {
+    body = <LiveRun status={status} live={status.live} />;
   } else if (status.stage_number >= 6) {
     body = <SimulationLoader status={status} />;
   } else {
