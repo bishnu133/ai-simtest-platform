@@ -50,7 +50,7 @@ export const NAV: NavGroup[] = [
     items: [
       { label: "Personas", href: "/personas", icon: Users, status: "soon" },
       { label: "Policies & workflows", href: "/policies", icon: ScrollText, status: "soon" },
-      { label: "Integrations", href: "/integrations", icon: Plug, status: "soon" },
+      { label: "Integrations", href: "/integrations", icon: Plug, status: "active" },
       { label: "Settings", href: "/settings", icon: Settings, status: "soon" },
     ],
   },
@@ -64,6 +64,7 @@ export function titleFor(pathname: string): string {
   if (pathname.startsWith("/runs")) return "Runs";
   if (pathname.startsWith("/suites")) return "Regression suites";
   if (pathname.startsWith("/calibration")) return "Judge calibration";
+  if (pathname.startsWith("/integrations")) return "Integrations";
   if (pathname.startsWith("/simulations/")) return "Run";
   return "AI SimTest";
 }

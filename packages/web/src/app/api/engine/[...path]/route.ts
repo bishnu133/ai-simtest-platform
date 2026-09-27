@@ -3,17 +3,19 @@
  *
  * The browser never talks to the engine directly. This keeps the engine URL
  * (and anything sent to it, such as a bot API key) off the client bundle and
- * lets the engine stay bound to localhost. Only the /wizard simulations, options, regression suites
- * and run comparison surface is exposed.
+ * lets the engine stay bound to localhost. Only the /wizard simulations, options, regression suites,
+ * run comparison, calibration and notification settings surface is exposed.
  */
 import type { NextRequest } from "next/server";
 
 const ENGINE_API_URL = (process.env.ENGINE_API_URL ?? "http://127.0.0.1:8100").replace(/\/$/, "");
 
 // First path segment must be one of these — nothing else on the engine is reachable.
-const ALLOWED_ROOTS = new Set(["simulations", "options", "suites", "compare-runs", "calibration"]);
+const ALLOWED_ROOTS = new Set(["simulations", "options", "suites", "compare-runs", "calibration", "notifications"]);
 // DELETE is only for removing a saved regression suite
 const DELETABLE_ROOTS = new Set(["suites"]);
+// PUT is only for saving notification settings
+const PUTTABLE_ROOTS = new Set(["notifications"]);
 
 // Headers from the engine response that are safe and useful to pass through.
 const PASSTHROUGH_HEADERS = ["content-type", "content-disposition", "content-length"];
@@ -23,7 +25,10 @@ async function proxy(request: NextRequest, ctx: RouteContext<"/api/engine/[...pa
   if (!path.length || !ALLOWED_ROOTS.has(path[0]) || path.some((p) => p === ".." || p === ".")) {
     return Response.json({ detail: "Not found" }, { status: 404 });
   }
-  if (request.method === "DELETE" && !DELETABLE_ROOTS.has(path[0])) {
+  if (
+    (request.method === "DELETE" && !DELETABLE_ROOTS.has(path[0])) ||
+    (request.method === "PUT" && !PUTTABLE_ROOTS.has(path[0]))
+  ) {
     return Response.json({ detail: "Not allowed" }, { status: 405 });
   }
 
@@ -60,3 +65,4 @@ async function proxy(request: NextRequest, ctx: RouteContext<"/api/engine/[...pa
 export const GET = proxy;
 export const POST = proxy;
 export const DELETE = proxy;
+export const PUT = proxy;

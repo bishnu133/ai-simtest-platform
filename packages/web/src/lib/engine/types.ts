@@ -666,6 +666,7 @@ export interface ReportResponse {
   analysis?: RunAnalysis;
   inputs?: Record<string, ApprovedInput>;
   exports: string[];
+  notifications?: NotificationDelivery[];
 }
 
 // ── Judge review (label a sample of replies to calibrate a judge) ──
@@ -884,4 +885,60 @@ export interface RagEvalResult {
   failing_replies: RagFailingReply[];
   failing_total: number;
   errors: string[];
+}
+
+// ── Notifications ──
+
+export type ChannelType = "slack" | "teams" | "email" | "generic_webhook";
+
+/** A channel as the engine shows it: never its URL or password, only whether they are set. */
+export interface NotificationChannel {
+  id: string;
+  name: string;
+  type: ChannelType;
+  enabled: boolean;
+  events: string[];
+  url_hint: string;
+  url_set: boolean;
+  mention_on_critical: string;
+  smtp_host: string;
+  smtp_port: number;
+  use_tls: boolean;
+  username: string;
+  password_set: boolean;
+  password_hint: string;
+  sender: string;
+  recipients: string[];
+}
+
+/** A channel as the dashboard saves it: a blank url or password keeps the saved one. */
+export interface NotificationChannelInput extends Omit<NotificationChannel, "url_hint" | "url_set" | "password_set" | "password_hint"> {
+  url: string;
+  password: string;
+}
+
+export interface NotificationDelivery {
+  at: string;
+  run_id: string;
+  event_type: string;
+  channel: string;
+  channel_id: string;
+  status: "success" | "failed" | "dry_run" | "suppressed_rate_limit" | "suppressed_dedupe" | "circuit_open";
+  http_status: number | null;
+  attempts: number;
+  problem: string;
+}
+
+export interface NotificationSettings {
+  enabled: boolean;
+  dashboard_url: string;
+  environment: string;
+  channels: NotificationChannel[];
+  problems: string[];
+  events: { id: string; label: string }[];
+  deliveries: NotificationDelivery[];
+}
+
+export interface NotificationTestResult extends Partial<NotificationDelivery> {
+  delivered: boolean;
 }

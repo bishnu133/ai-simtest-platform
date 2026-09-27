@@ -18,6 +18,7 @@ import { ScoreBars, TurnLabelBar } from "./charts";
 import { ComparePanel } from "./compare-panel";
 import { RegressionPanel } from "./regression-panel";
 import { RagPanel } from "./rag-panel";
+import { RunNotifications } from "./run-notifications";
 import { MemoryPanel, ReplayPanel, ScenarioResultsPanel } from "./focus-panels";
 import { JudgeBreakdownPanel, LoopsPanel } from "./judge-breakdown";
 import { EmptyNote, Panel, SeverityBadge, StatTile, VerdictBanner } from "./parts";
@@ -246,6 +247,7 @@ export function OverviewTab({
           )}
         </div>
       )}
+      {!!data.notifications?.length && <RunNotifications rows={data.notifications} />}
     </div>
   );
 }

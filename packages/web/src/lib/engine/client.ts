@@ -5,6 +5,9 @@
 import type {
   CalibrationCheck,
   CalibrationOverview,
+  NotificationChannelInput,
+  NotificationSettings,
+  NotificationTestResult,
   JudgedConversation,
   RunDiff,
   SuiteDetail,
@@ -143,6 +146,18 @@ export const engine = {
     }),
 
   getCalibrationCheck: (id: string) => request<CalibrationCheck>(`/calibration/checks/${encodeURIComponent(id)}`),
+
+  getNotifications: () => request<NotificationSettings>("/notifications"),
+
+  saveNotifications: (body: {
+    enabled: boolean;
+    dashboard_url: string;
+    environment: string;
+    channels: NotificationChannelInput[];
+  }) => request<NotificationSettings>("/notifications", { method: "PUT", body: JSON.stringify(body) }),
+
+  testNotification: (channelId: string) =>
+    request<NotificationTestResult>(`/notifications/test/${encodeURIComponent(channelId)}`, { method: "POST" }),
 
   exportUrl: (id: string, format: string) =>
     `${BASE}/simulations/${encodeURIComponent(id)}/exports/${encodeURIComponent(format)}`,
