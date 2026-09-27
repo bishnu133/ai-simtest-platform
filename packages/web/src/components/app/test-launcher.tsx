@@ -9,7 +9,8 @@ import { SetupForm, type TestFocus } from "@/components/setup-form";
 import { RegressionForm } from "@/components/setup/regression-form";
 import { TEST_TYPES, testType, type TestType } from "@/lib/test-types";
 
-const isFocus = (id: string): id is TestFocus => ["simulation", "scenarios", "stress", "replay", "compare"].includes(id);
+const isFocus = (id: string): id is TestFocus =>
+  ["simulation", "scenarios", "stress", "replay", "compare", "rag"].includes(id);
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);

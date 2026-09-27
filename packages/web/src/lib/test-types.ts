@@ -110,13 +110,12 @@ export const TEST_TYPES: TestType[] = [
     id: "rag",
     name: "RAG & tool evaluation",
     icon: Database,
-    tagline: "Retrieval accuracy, citations and tool calls.",
+    tagline: "What the bot retrieved, what it cited, and the tools it called.",
     description:
-      "Checks whether the bot retrieved the right context, cited it, and called tools with the right parameters.",
-    checks: ["Retrieval accuracy", "Citation quality", "Tool-call correctness"],
-    needs: ["Bot endpoint", "Tool definitions (optional)"],
-    available: false,
-    roadmap: "Phase 2 · Step 8",
+      "Simulated customers talk to your bot while every reply is checked against the sources it retrieved and the tools it called: figures that are not in the sources, citations their source does not support, tool results that never reach the reply, errors left unexplained, and actions taken without a check.",
+    checks: ["Figures and claims backed by the retrieved sources", "Citations their source supports", "Tool results used, errors handled, retries", "Permissions and confirmations before changes"],
+    needs: ["Bot endpoint", "Documentation", "Sources or tool calls in the bot's JSON response (optional but recommended)"],
+    available: true,
     cli: "simtest run --bot-endpoint URL --doc-file kb.md --rag-eval --tool-defs tools.json",
   },
   {

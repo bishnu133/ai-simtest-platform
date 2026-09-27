@@ -73,6 +73,7 @@ export function runKind(run: SimulationStatus): string {
   }
   if (run.config.compare) return `Comparison · ${run.config.compare.targets.length + 1} bots`;
   if (run.config.stress) return `Memory stress · ${run.config.stress.turns} messages`;
+  if (run.config.rag) return `RAG & tools${run.config.rag.tools ? ` · ${run.config.rag.tools} tools` : ""}`;
   const n = run.config.scenarios?.length ?? 0;
   if (n) return `${n} scenario${n === 1 ? "" : "s"}`;
   return "";

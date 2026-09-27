@@ -28,6 +28,7 @@ import { ChoiceCards, ListEditor, Section, Segmented, lines } from "./setup/cont
 import { CompareTargets, DEFAULT_COMPARE } from "./setup/compare-targets";
 import { DEFAULT_REPLAY, ReplaySource, countConversations } from "./setup/replay-source";
 import { DEFAULT_STRESS, ScenarioPicker, StressSettings } from "./setup/test-focus";
+import { DEFAULT_RAG, RagSettings } from "./setup/rag-settings";
 import { MODES, REVIEW_STEPS, SIZES, STRICTNESS, estimate, money, type SizeId, type StrictnessId } from "./setup/presets";
 
 const PERSONA_OPTIONS = ["3", "5", "10", "20", "30", "40", "50", "75", "100"];
@@ -124,7 +125,7 @@ function Disclosure({ label, children }: { label: string; children: ReactNode })
 }
 
 /** What the run concentrates on, on top of the persona simulation. */
-export type TestFocus = "simulation" | "scenarios" | "stress" | "replay" | "compare";
+export type TestFocus = "simulation" | "scenarios" | "stress" | "replay" | "compare" | "rag";
 
 export function SetupForm({ embedded = false, focus = "simulation" }: { embedded?: boolean; focus?: TestFocus }) {
   const router = useRouter();
@@ -175,6 +176,9 @@ export function SetupForm({ embedded = false, focus = "simulation" }: { embedded
   // Scenario packs / memory stress (test types built on the simulation)
   const [scenarioIds, setScenarioIds] = useState<string[] | null>(null);
   const [stress, setStress] = useState<StressOptions>(DEFAULT_STRESS);
+  // RAG and tool evaluation: on for the RAG test, optional on a production replay
+  const [rag, setRag] = useState(DEFAULT_RAG);
+  const [replayRag, setReplayRag] = useState(false);
   const [replay, setReplay] = useState<ReplayOptions>(DEFAULT_REPLAY);
   const [compare, setCompare] = useState<CompareOptions>(DEFAULT_COMPARE);
   // Every bot in a comparison meets the same customers
@@ -350,6 +354,7 @@ export function SetupForm({ embedded = false, focus = "simulation" }: { embedded
         scenarios: focus === "scenarios" ? chosenScenarios : [],
         stress: focus === "stress" ? stress : null,
         replay: focus === "replay" ? replay : null,
+        rag: focus === "rag" || (focus === "replay" && replayRag) ? rag : null,
         bot_model: botModel.trim() || null,
         compare:
           focus === "compare"
@@ -477,6 +482,25 @@ export function SetupForm({ embedded = false, focus = "simulation" }: { embedded
         {focus === "replay" && (
           <Section n={2} title="Your conversations" description="Real conversations from production, judged the same way as a simulation.">
             <ReplaySource value={replay} onChange={setReplay} formats={options?.replay_formats} piiEngine={options?.pii_engine} onError={setError} />
+            <label className="mt-4 flex items-start gap-3 text-sm">
+              <Checkbox checked={replayRag} onCheckedChange={(c) => setReplayRag(c === true)} className="mt-0.5" />
+              <span>
+                <span className="font-medium text-foreground">Also check retrieval and tool calls</span>
+                <span className="block text-xs text-muted-foreground">
+                  When your logs keep the sources or tool calls beside each reply.
+                </span>
+              </span>
+            </label>
+            {replayRag && (
+              <div className="mt-4 border-t pt-4">
+                <RagSettings value={rag} onChange={setRag} onError={setError} />
+              </div>
+            )}
+          </Section>
+        )}
+        {focus === "rag" && (
+          <Section n={2} title="Retrieval and tools" description="What your bot looked up and which tools it called, checked reply by reply.">
+            <RagSettings value={rag} onChange={setRag} onError={setError} />
           </Section>
         )}
         {focus === "stress" && (

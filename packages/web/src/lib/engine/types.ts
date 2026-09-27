@@ -279,6 +279,7 @@ export interface CreateSimulationRequest {
   replay?: ReplayOptions | null;
   compare?: CompareOptions | null;
   regression?: { suite_id: string } | null;
+  rag?: RagOptions | null;
 }
 
 export interface EngineOptions {
@@ -321,6 +322,7 @@ export interface SimulationStatus {
   summary?: RunSummary | null;
   config: {
     bot_endpoint: string;
+    rag?: { speed: string; use_llm: boolean; require_citations: boolean; tools: number } | null;
     mode?: RunMode;
     auto_approve?: boolean;
     success_criteria?: string[];
@@ -594,6 +596,7 @@ export interface RunAnalysis {
   replay?: ReplayLoad;
   compare?: CompareResult;
   regression?: RegressionResult;
+  rag_eval?: RagEvalResult | { error: string };
 }
 
 /** One scenario template's results, weakest first. */
@@ -823,4 +826,62 @@ export interface CalibrationCheck {
   summary: { labelled: number; checked: number; errors: number; changed: number; judges: CalibrationCheckJudge[] } | null;
   error: string;
   fingerprints: Record<string, string>;
+}
+
+// ── RAG & tool evaluation ──
+
+export interface RagToolDefinition {
+  name: string;
+  description?: string;
+  required_params?: string[];
+  param_types?: Record<string, string>;
+  requires_permission?: boolean;
+  has_side_effects?: boolean;
+  expected_sequence_position?: number;
+  [key: string]: unknown;
+}
+
+export interface RagOptions {
+  speed: "deterministic" | "fast" | "standard";
+  use_llm: boolean;
+  tool_definitions: RagToolDefinition[];
+  require_citations: boolean;
+  threshold?: number;
+}
+
+export interface RagMetricSummary {
+  metric: string;
+  kind: "rag" | "tool";
+  checked: number;
+  passed: number;
+  pass_rate: number | null;
+  average: number | null;
+  reliability: "deterministic" | "hybrid" | "llm";
+  example_issue: string;
+}
+
+export interface RagFailingReply {
+  conversation_id: string;
+  turn_index: number;
+  user_message: string;
+  bot_reply: string;
+  evidence: "sources" | "tools" | "none";
+  failed: { metric: string; score: number; issue: string }[];
+}
+
+export interface RagEvalResult {
+  replies: number;
+  rag_score: number | null;
+  tool_score: number | null;
+  replies_with_sources: number;
+  replies_with_tools: number;
+  evidence_modes: Record<string, number>;
+  evidence_captured: boolean;
+  tool_definitions: number;
+  used_llm: boolean;
+  eval_speed: string;
+  metrics: RagMetricSummary[];
+  failing_replies: RagFailingReply[];
+  failing_total: number;
+  errors: string[];
 }
