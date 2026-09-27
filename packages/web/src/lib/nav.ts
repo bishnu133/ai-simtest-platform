@@ -1,27 +1,73 @@
+import {
+  BookOpenCheck,
+  FileClock,
+  GitCompareArrows,
+  GitPullRequest,
+  LayoutDashboard,
+  ListChecks,
+  ListRestart,
+  Plug,
+  PlusCircle,
+  ScrollText,
+  Settings,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
+
 export type NavStatus = "active" | "soon";
-export interface NavItem { label: string; href: string; status: NavStatus; }
-export interface NavGroup { heading: string; items: NavItem[]; }
+export interface NavItem {
+  label: string;
+  href: string;
+  icon: LucideIcon;
+  status: NavStatus;
+  /** Live count shown beside the item */
+  badge?: "runs";
+}
+export interface NavGroup {
+  heading: string;
+  items: NavItem[];
+}
 
 export const NAV: NavGroup[] = [
-  { heading: "Overview", items: [
-    { label: "Get started", href: "/overview", status: "active" },
-    { label: "Dashboard", href: "/dashboard", status: "active" },
-  ]},
-  { heading: "Evaluation", items: [
-    { label: "New simulation", href: "/", status: "active" },
-    { label: "Simulations", href: "/simulations", status: "active" },
-    { label: "Conversations", href: "/conversations", status: "active" },
-    { label: "Personas", href: "/personas", status: "soon" },
-    { label: "Judges & Metrics", href: "/judges", status: "soon" },
-    { label: "Policies", href: "/policies", status: "soon" },
-  ]},
-  { heading: "Output", items: [
-    { label: "Comparisons", href: "/comparisons", status: "active" },
-    { label: "Reports", href: "/reports", status: "soon" },
-    { label: "Datasets & Exports", href: "/datasets", status: "soon" },
-  ]},
-  { heading: "Setup", items: [
-    { label: "Integrations", href: "/integrations", status: "soon" },
-    { label: "Settings", href: "/settings", status: "soon" },
-  ]},
+  {
+    heading: "Workspace",
+    items: [
+      { label: "Home", href: "/", icon: LayoutDashboard, status: "active" },
+      { label: "New test", href: "/new", icon: PlusCircle, status: "active" },
+      { label: "Runs", href: "/runs", icon: ListChecks, status: "active", badge: "runs" },
+    ],
+  },
+  {
+    heading: "Test library",
+    items: [
+      { label: "Regression suites", href: "/suites", icon: ListRestart, status: "active" },
+      { label: "Model comparison", href: "/new?type=compare", icon: GitCompareArrows, status: "active" },
+      { label: "Production replay", href: "/new?type=replay", icon: FileClock, status: "active" },
+      { label: "Judge calibration", href: "/calibration", icon: BookOpenCheck, status: "active" },
+    ],
+  },
+  {
+    heading: "Configure",
+    items: [
+      { label: "Personas", href: "/personas", icon: Users, status: "soon" },
+      { label: "Policies & workflows", href: "/policies", icon: ScrollText, status: "soon" },
+      { label: "Integrations", href: "/integrations", icon: Plug, status: "active" },
+      { label: "CI pipelines", href: "/ci", icon: GitPullRequest, status: "active" },
+      { label: "Settings", href: "/settings", icon: Settings, status: "soon" },
+    ],
+  },
 ];
+
+/** Page title for the top bar. */
+export function titleFor(pathname: string): string {
+  if (pathname === "/") return "Home";
+  if (pathname.startsWith("/new")) return "New test";
+  if (pathname.startsWith("/runs/compare")) return "Compare runs";
+  if (pathname.startsWith("/runs")) return "Runs";
+  if (pathname.startsWith("/suites")) return "Regression suites";
+  if (pathname.startsWith("/calibration")) return "Judge calibration";
+  if (pathname.startsWith("/integrations")) return "Integrations";
+  if (pathname === "/ci" || pathname.startsWith("/ci/")) return "CI pipelines";
+  if (pathname.startsWith("/simulations/")) return "Run";
+  return "AI SimTest";
+}

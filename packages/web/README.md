@@ -54,8 +54,14 @@ engine calls never hit that proxy. Both proxies are server-only; see `.env.examp
 **Terminal A — engine** (in the `ai-simtest` repo, with an LLM key in `.env`):
 
 ```bash
+pip install -e .                # once
+simtest install-models          # once: spaCy model for finding/masking personal data
 API_HOST=127.0.0.1 API_PORT=8100 simtest serve
 ```
+
+Without `install-models`, personal data is found by pattern matching only: names are masked
+where people introduce themselves and places not at all. The replay setup screen warns when
+that is the case.
 
 **Terminal B — dashboard** (this folder):
 
@@ -64,6 +70,17 @@ cp .env.example .env.local      # ENGINE_API_URL=http://127.0.0.1:8100
 pnpm install
 pnpm dev                        # http://localhost:3000
 ```
+
+**Engine beyond this machine (CI pipelines).** Start the engine with a token and a reachable
+address, and give the dashboard the same token (server-side only, never `NEXT_PUBLIC_`):
+
+```bash
+SIMTEST_API_TOKEN=$(openssl rand -hex 24) API_HOST=0.0.0.0 API_PORT=8100 simtest serve   # engine
+ENGINE_API_TOKEN=<the same value>                                                          # .env.local
+```
+
+The engine refuses to listen beyond this machine without a token. The **CI pipelines** page then
+generates GitHub Actions, GitLab CI or shell steps that replay a regression suite on every build.
 
 Uses pnpm 11 (pinned in `package.json`). pnpm 11 refuses packages published in the last 24 h and
 only runs build scripts listed under `allowBuilds` in `pnpm-workspace.yaml`.

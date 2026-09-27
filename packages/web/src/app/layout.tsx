@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import { Providers } from "@/components/app/providers";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -9,7 +10,7 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: "AI SimTest",
-  description: "Set up, review and run persona-driven simulation tests against your AI bot.",
+  description: "Enterprise evaluation for AI assistants: persona simulations, judges and reports.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -17,7 +18,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     // Browser extensions (e.g. device emulators, password managers) add attributes
     // to <html> before React hydrates; ignore attribute mismatches on this element only.
     <html lang="en" className={`${inter.variable} h-full`} suppressHydrationWarning>
-      <body className="min-h-full">{children}</body>
+      <body className="min-h-full">
+        <Providers>{children}</Providers>
+      </body>
     </html>
   );
 }

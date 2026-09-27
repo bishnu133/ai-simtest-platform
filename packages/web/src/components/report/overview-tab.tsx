@@ -15,6 +15,12 @@ import {
 } from "@/lib/engine/report";
 import type { CoverageSummary, ReportResponse } from "@/lib/engine/types";
 import { ScoreBars, TurnLabelBar } from "./charts";
+import { ComparePanel } from "./compare-panel";
+import { RegressionPanel } from "./regression-panel";
+import { RagPanel } from "./rag-panel";
+import { CIPanel } from "./ci-panel";
+import { RunNotifications } from "./run-notifications";
+import { MemoryPanel, ReplayPanel, ScenarioResultsPanel } from "./focus-panels";
 import { JudgeBreakdownPanel, LoopsPanel } from "./judge-breakdown";
 import { EmptyNote, Panel, SeverityBadge, StatTile, VerdictBanner } from "./parts";
 
@@ -51,7 +57,11 @@ export function OverviewTab({
           label="Pass rate"
           value={pct(summary.pass_rate)}
           delta={delta("pass rate")}
-          sub="of judged turns"
+          sub={
+            summary.memory_checked_turns
+              ? `of judged turns, not counting ${plural(summary.memory_checked_turns, "recall question")}`
+              : "of judged turns"
+          }
           footer={
             scoredJudges.length ? (
               <span title="Pass rate per judge; the strictest one sets the headline">
@@ -71,6 +81,14 @@ export function OverviewTab({
             value={`${analysis.loops.stuck_conversations} / ${summary.total_conversations ?? 0}`}
             sub="bot repeated itself or user re-asked 2+ times"
             footer={`Bot repeated itself in ${analysis.loops.conversations_with_bot_repeats}; users re-asked in ${analysis.loops.conversations_with_user_reasks}`}
+          />
+        )}
+        {!!summary.memory_checked_turns && (
+          <StatTile
+            label="Memory recall"
+            value={`${summary.memory_recalled_turns ?? 0} / ${summary.memory_checked_turns}`}
+            sub="recall questions answered with the exact detail"
+            footer="Scored by exact match, separately from the pass rate"
           />
         )}
         <StatTile label="Average score" value={pct(summary.average_score)} delta={delta("average score")} sub="across all judges" />
@@ -123,6 +141,14 @@ export function OverviewTab({
             : `${builds.current_build || "not recorded"}${builds.previous_build === builds.current_build ? " (same as the previous run)" : ""}`}
         </p>
       )}
+
+      {analysis.ci && <CIPanel verdict={analysis.ci} trigger={data.ci} />}
+      {analysis.regression && <RegressionPanel result={analysis.regression} onOpen={onOpenConversation} />}
+      {analysis.compare && <ComparePanel simulationId={data.simulation_id} result={analysis.compare} />}
+      {analysis.replay && <ReplayPanel replay={analysis.replay} />}
+      {analysis.rag_eval && <RagPanel result={analysis.rag_eval} onOpen={onOpenConversation} />}
+      {!!analysis.scenarios?.length && <ScenarioResultsPanel scenarios={analysis.scenarios} onOpen={onOpenConversation} />}
+      {analysis.memory && <MemoryPanel memory={analysis.memory} onOpen={onOpenConversation} />}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Panel title="Judge scores" description="Average score per judge, weakest first.">
@@ -223,6 +249,7 @@ export function OverviewTab({
           )}
         </div>
       )}
+      {!!data.notifications?.length && <RunNotifications rows={data.notifications} />}
     </div>
   );
 }

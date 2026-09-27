@@ -3,6 +3,16 @@
  * Next.js proxy at /api/engine so the engine URL never reaches the client.
  */
 import type {
+  CalibrationCheck,
+  CalibrationOverview,
+  CIInfo,
+  NotificationChannelInput,
+  NotificationSettings,
+  NotificationTestResult,
+  JudgedConversation,
+  RunDiff,
+  SuiteDetail,
+  SuiteSummary,
   CreateSimulationRequest,
   EngineOptions,
   GateDecision,
@@ -66,6 +76,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     }
     throw new EngineError(res.status, describeDetail(body.detail) || res.statusText, body.code);
   }
+  // DELETE answers 204 with no body
+  if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
 
@@ -95,6 +107,12 @@ export const engine = {
 
   getReport: (id: string) => request<ReportResponse>(`/simulations/${encodeURIComponent(id)}/report`),
 
+  /** One conversation from any bot in a comparison (side-by-side reading). */
+  getComparedConversation: (id: string, conversationId: string) =>
+    request<{ bot: string; judged_conversation: JudgedConversation }>(
+      `/simulations/${encodeURIComponent(id)}/compare/conversations/${encodeURIComponent(conversationId)}`,
+    ),
+
   getReview: (id: string, judge: string, size = 20) =>
     request<ReviewResponse>(
       `/simulations/${encodeURIComponent(id)}/review?judge=${encodeURIComponent(judge)}&size=${size}`,
@@ -105,6 +123,47 @@ export const engine = {
       method: "POST",
       body: JSON.stringify({ note: "", ...body }),
     }),
+
+  saveSuite: (id: string, body: { name?: string; include_warnings?: boolean; include_passing?: number }) =>
+    request<SuiteSummary>(`/simulations/${encodeURIComponent(id)}/suite`, { method: "POST", body: JSON.stringify(body) }),
+
+  listSuites: () => request<{ suites: SuiteSummary[] }>("/suites"),
+
+  getSuite: (id: string) => request<SuiteDetail>(`/suites/${encodeURIComponent(id)}`),
+
+  deleteSuite: (id: string) => request<void>(`/suites/${encodeURIComponent(id)}`, { method: "DELETE" }),
+
+  compareRuns: (before: string, after: string) =>
+    request<RunDiff>(`/compare-runs?before=${encodeURIComponent(before)}&after=${encodeURIComponent(after)}`),
+
+  getCalibration: () => request<CalibrationOverview>("/calibration"),
+
+  getGoldenSet: () => request<{ examples: Record<string, unknown>[] }>("/calibration/golden-set"),
+
+  startCalibrationCheck: (judges: string[] = []) =>
+    request<Pick<CalibrationCheck, "id" | "status" | "created_at" | "judges" | "progress">>("/calibration/checks", {
+      method: "POST",
+      body: JSON.stringify({ judges }),
+    }),
+
+  getCalibrationCheck: (id: string) => request<CalibrationCheck>(`/calibration/checks/${encodeURIComponent(id)}`),
+
+  getCI: () => request<CIInfo>("/ci"),
+
+  /** A run's setup for `simtest ci --request`: no API keys, never replay logs. */
+  getRunSetup: (id: string) => request<Record<string, unknown>>(`/simulations/${encodeURIComponent(id)}/setup`),
+
+  getNotifications: () => request<NotificationSettings>("/notifications"),
+
+  saveNotifications: (body: {
+    enabled: boolean;
+    dashboard_url: string;
+    environment: string;
+    channels: NotificationChannelInput[];
+  }) => request<NotificationSettings>("/notifications", { method: "PUT", body: JSON.stringify(body) }),
+
+  testNotification: (channelId: string) =>
+    request<NotificationTestResult>(`/notifications/test/${encodeURIComponent(channelId)}`, { method: "POST" }),
 
   exportUrl: (id: string, format: string) =>
     `${BASE}/simulations/${encodeURIComponent(id)}/exports/${encodeURIComponent(format)}`,

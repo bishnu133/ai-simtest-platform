@@ -15,6 +15,7 @@ export function stepForStatus(status: SimulationStatus): number {
 /** What the engine is doing while no approval is pending (pipeline stages 0-5). */
 export const GENERATING_LABELS: Record<string, string> = {
   queued: "Starting the pipeline…",
+  discovering_bot: "Chatting with your bot to learn what it does…",
   loading_documents: "Reading your uploaded context…",
   analyzing_documents: "Inferring domain context from your documentation…",
   generating_criteria: "Drafting success criteria…",
@@ -37,6 +38,30 @@ export const SIMULATION_PHASES: { key: string; label: string }[] = [
   { key: "analyzing_results", label: "Scoring coverage, workflows, policy and cost…" },
 ];
 
+// A regression run replays a saved suite
+const REGRESSION_LABELS: Record<string, string> = {
+  running: "Sending the saved customer messages to your bot again…",
+  judging: "Judging the new replies the way the suite's run was judged…",
+};
+
+// A production replay has real customers, not personas
+const REPLAY_LABELS: Record<string, string> = {
+  running: "Sending the customers' messages to your bot again…",
+  judging: "Judging the real conversations for quality, safety and grounding…",
+};
+
+/** In a comparison, which bot is meeting the customers now. */
+function compareLabel(status: SimulationStatus, key: string): string | null {
+  const compare = status.config.compare;
+  if (!compare || !["running", "judging", "generating_personas"].includes(key)) return null;
+  const total = compare.targets.length + 1;
+  const progress = status.compare_progress;
+  const [name, number] = progress ? [progress.name, progress.index + 1] : [compare.baseline_name, 1];
+  return key === "judging"
+    ? `Judging ${name}'s replies (bot ${number} of ${total})…`
+    : `Running the customers against ${name} (bot ${number} of ${total})…`;
+}
+
 export function simulationPhase(status: SimulationStatus) {
   const key = ["exporting_results", "analyzing_results"].includes(status.stage)
     ? status.stage
@@ -44,7 +69,10 @@ export function simulationPhase(status: SimulationStatus) {
   const index = Math.max(0, SIMULATION_PHASES.findIndex((p) => p.key === key));
   return {
     index,
-    label: SIMULATION_PHASES[index].label,
+    label: compareLabel(status, SIMULATION_PHASES[index].key) ||
+      (status.config.regression && REGRESSION_LABELS[SIMULATION_PHASES[index].key]) ||
+      (status.config.replay && REPLAY_LABELS[SIMULATION_PHASES[index].key]) ||
+      SIMULATION_PHASES[index].label,
     percent: Math.round(((index + 0.5) / SIMULATION_PHASES.length) * 100),
   };
 }

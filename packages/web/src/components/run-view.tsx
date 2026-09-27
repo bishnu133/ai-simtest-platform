@@ -5,6 +5,7 @@ import Link from "next/link";
 import { AlertOctagon, Ban, Loader2, RotateCcw, ServerCrash, StopCircle } from "lucide-react";
 import { ReportView } from "@/components/report/report-view";
 import { GeneratingPanel, SimulationLoader } from "@/components/loaders";
+import { LiveRun } from "@/components/live-run";
 import { ReviewGate } from "@/components/review-gate";
 import { Button } from "@/components/ui/button";
 import { WizardLayout } from "@/components/wizard-layout";
@@ -38,7 +39,7 @@ function Notice({
       <div className="flex flex-wrap justify-center gap-3 pt-2">
         {actions}
         <Button asChild>
-          <Link href="/">
+          <Link href="/new">
             <RotateCcw /> Start New Test
           </Link>
         </Button>
@@ -194,6 +195,8 @@ export function RunView({ id, detailed = false }: { id: string; detailed?: boole
         }}
       />
     );
+  } else if (status.live && status.live.conversations_total > 0) {
+    body = <LiveRun status={status} live={status.live} />;
   } else if (status.stage_number >= 6) {
     body = <SimulationLoader status={status} />;
   } else {
@@ -201,7 +204,7 @@ export function RunView({ id, detailed = false }: { id: string; detailed?: boole
   }
 
   return (
-    <WizardLayout stepIndex={step}>
+    <WizardLayout stepIndex={step} skippedSteps={status?.config.regression ? [1, 2, 3, 4, 5] : status?.config.replay ? [4, 5] : undefined}>
       {status && status.status !== "completed" && (
         <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
           <span className="truncate">
