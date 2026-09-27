@@ -39,9 +39,9 @@ export const NAV: NavGroup[] = [
   {
     heading: "Test library",
     items: [
-      { label: "Model comparison", href: "/comparisons", icon: GitCompareArrows, status: "soon" },
-      { label: "Regression suites", href: "/suites", icon: ListRestart, status: "soon" },
-      { label: "Production replay", href: "/replay", icon: FileClock, status: "soon" },
+      { label: "Regression suites", href: "/suites", icon: ListRestart, status: "active" },
+      { label: "Model comparison", href: "/new?type=compare", icon: GitCompareArrows, status: "active" },
+      { label: "Production replay", href: "/new?type=replay", icon: FileClock, status: "active" },
       { label: "Judge calibration", href: "/calibration", icon: BookOpenCheck, status: "soon" },
     ],
   },
@@ -60,7 +60,9 @@ export const NAV: NavGroup[] = [
 export function titleFor(pathname: string): string {
   if (pathname === "/") return "Home";
   if (pathname.startsWith("/new")) return "New test";
+  if (pathname.startsWith("/runs/compare")) return "Compare runs";
   if (pathname.startsWith("/runs")) return "Runs";
+  if (pathname.startsWith("/suites")) return "Regression suites";
   if (pathname.startsWith("/simulations/")) return "Run";
   return "AI SimTest";
 }

@@ -67,6 +67,10 @@ export function runKind(run: SimulationStatus): string {
     const n = replay.conversations_judged;
     return `Replay${n != null ? ` · ${n} real conversation${n === 1 ? "" : "s"}` : ""}${replay.resend ? " · re-sent" : ""}`;
   }
+  if (run.config.regression) {
+    const r = run.config.regression;
+    return `Regression · ${r.suite_name || "suite"}${r.cases ? ` (${r.cases} cases)` : ""}`;
+  }
   if (run.config.compare) return `Comparison · ${run.config.compare.targets.length + 1} bots`;
   if (run.config.stress) return `Memory stress · ${run.config.stress.turns} messages`;
   const n = run.config.scenarios?.length ?? 0;

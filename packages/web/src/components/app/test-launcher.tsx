@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Check, CheckCircle2, Clock, Copy, Terminal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SetupForm, type TestFocus } from "@/components/setup-form";
+import { RegressionForm } from "@/components/setup/regression-form";
 import { TEST_TYPES, testType, type TestType } from "@/lib/test-types";
 
 const isFocus = (id: string): id is TestFocus => ["simulation", "scenarios", "stress", "replay", "compare"].includes(id);
@@ -74,7 +75,7 @@ function ComingSoon({ type }: { type: TestType }) {
   );
 }
 
-export function TestLauncher({ initialType }: { initialType?: string }) {
+export function TestLauncher({ initialType, initialSuite }: { initialType?: string; initialSuite?: string }) {
   const router = useRouter();
   const [selected, setSelected] = useState(() => testType(initialType).id);
   const type = testType(selected);
@@ -152,7 +153,9 @@ export function TestLauncher({ initialType }: { initialType?: string }) {
             <p className="text-sm text-muted-foreground">{type.tagline}</p>
           </div>
         </header>
-        {type.available ? (
+        {type.id === "regression" ? (
+          <RegressionForm initialSuite={initialSuite} />
+        ) : type.available ? (
           <SetupForm key={type.id} embedded focus={isFocus(type.id) ? type.id : "simulation"} />
         ) : (
           <ComingSoon type={type} />

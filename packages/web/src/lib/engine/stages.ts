@@ -38,6 +38,12 @@ export const SIMULATION_PHASES: { key: string; label: string }[] = [
   { key: "analyzing_results", label: "Scoring coverage, workflows, policy and cost…" },
 ];
 
+// A regression run replays a saved suite
+const REGRESSION_LABELS: Record<string, string> = {
+  running: "Sending the saved customer messages to your bot again…",
+  judging: "Judging the new replies the way the suite's run was judged…",
+};
+
 // A production replay has real customers, not personas
 const REPLAY_LABELS: Record<string, string> = {
   running: "Sending the customers' messages to your bot again…",
@@ -64,6 +70,7 @@ export function simulationPhase(status: SimulationStatus) {
   return {
     index,
     label: compareLabel(status, SIMULATION_PHASES[index].key) ||
+      (status.config.regression && REGRESSION_LABELS[SIMULATION_PHASES[index].key]) ||
       (status.config.replay && REPLAY_LABELS[SIMULATION_PHASES[index].key]) ||
       SIMULATION_PHASES[index].label,
     percent: Math.round(((index + 0.5) / SIMULATION_PHASES.length) * 100),

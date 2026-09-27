@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowUpDown, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatDuration, pct, scoreTone } from "@/lib/engine/report";
@@ -37,12 +38,18 @@ export function RunsTable({
   runs,
   compact = false,
   limit,
+  selected,
+  onToggleSelect,
 }: {
   runs: SimulationStatus[];
   /** Home-page variant: no filters, fewer columns */
   compact?: boolean;
   limit?: number;
+  /** Runs picked for comparison (finished runs, at most two) */
+  selected?: string[];
+  onToggleSelect?: (id: string) => void;
 }) {
+  const selectable = !!onToggleSelect;
   const router = useRouter();
   const now = useNow();
   const [query, setQuery] = useState("");
@@ -113,6 +120,11 @@ export function RunsTable({
         <Table className={compact ? "" : "min-w-[860px]"}>
           <TableHeader className="bg-muted/50">
             <TableRow>
+              {selectable && (
+                <TableHead className="w-10">
+                  <span className="sr-only">Compare</span>
+                </TableHead>
+              )}
               <TableHead className="font-semibold text-foreground">Run</TableHead>
               <TableHead className="font-semibold text-foreground">Status</TableHead>
               {sortHeader("pass", "Pass rate", "text-right")}
@@ -126,7 +138,7 @@ export function RunsTable({
           <TableBody>
             {visible.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={compact ? 5 : 8} className="py-10 text-center text-sm text-muted-foreground">
+                <TableCell colSpan={(compact ? 5 : 8) + (selectable ? 1 : 0)} className="py-10 text-center text-sm text-muted-foreground">
                   {runs.length ? "No runs match these filters." : "No runs yet."}
                 </TableCell>
               </TableRow>
@@ -141,6 +153,19 @@ export function RunsTable({
                     className="cursor-pointer"
                     onClick={() => router.push(href)}
                   >
+                    {selectable && (
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          aria-label={`Compare ${run.name}`}
+                          checked={selected?.includes(run.simulation_id) ?? false}
+                          disabled={
+                            run.status !== "completed" ||
+                            ((selected?.length ?? 0) >= 2 && !selected?.includes(run.simulation_id))
+                          }
+                          onCheckedChange={() => onToggleSelect?.(run.simulation_id)}
+                        />
+                      </TableCell>
+                    )}
                     <TableCell className="max-w-[320px]">
                       <Link href={href} className="font-medium text-foreground hover:text-primary hover:underline" onClick={(e) => e.stopPropagation()}>
                         {run.name}

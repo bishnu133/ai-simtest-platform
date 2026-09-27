@@ -103,6 +103,8 @@ export interface RunDiff {
   before: { id: string; name: string; created_at: string; bot_build: string };
   after: { id: string; name: string; created_at: string; bot_build: string };
   comparable: boolean;
+  /** Both runs cover the same saved conversations (a run and its suite replay, or two replays) */
+  same_cases?: boolean;
   settings_changed: { label: string; before: unknown; after: unknown }[];
   build_changed: boolean;
   difference: {

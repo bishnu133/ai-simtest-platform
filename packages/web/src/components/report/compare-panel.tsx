@@ -35,7 +35,13 @@ function Verdict({ verdict }: { verdict: CompareVersus["verdict"] }) {
  * rows are labelled. Hover shows the numbers; a table carries them for
  * screen readers.
  */
-function DifferenceChart({ rows, baseline }: { rows: CompareVersus[]; baseline: string }) {
+export function DifferenceChart({
+  rows,
+  baseline,
+}: {
+  rows: Pick<CompareVersus, "name" | "mean_difference" | "range_low" | "range_high" | "verdict" | "paired_personas">[];
+  baseline: string;
+}) {
   const measured = rows.filter((r) => r.mean_difference != null);
   if (!measured.length) return <EmptyNote>Not enough paired customers to measure a difference.</EmptyNote>;
   const extent = Math.max(0.1, ...measured.flatMap((r) => [Math.abs(r.range_low ?? 0), Math.abs(r.range_high ?? 0)]));
@@ -69,7 +75,7 @@ function DifferenceChart({ rows, baseline }: { rows: CompareVersus[]; baseline: 
               style={{ left: `min(${x(r.mean_difference ?? 0)}, calc(100% - 14rem))` }}
             >
               <span className="font-medium">{r.name}</span> {signedPct(r.mean_difference)} (range {signedPct(r.range_low)} to{" "}
-              {signedPct(r.range_high)}) · {r.paired_personas} customers
+              {signedPct(r.range_high)}){r.paired_personas ? ` · ${r.paired_personas} customers` : ""}
             </div>
           </div>
           <span className="flex flex-col items-end">
@@ -93,8 +99,8 @@ function DifferenceChart({ rows, baseline }: { rows: CompareVersus[]; baseline: 
         <span />
       </div>
       <figcaption className="text-xs text-muted-foreground">
-        Dot: average difference per customer in replies passed. Line: the 95% range. A range that crosses {baseline} is too
-        close to call.
+        Dot: average difference in replies passed. Line: the 95% range. A range that crosses {baseline} is too close to
+        call.
       </figcaption>
       <div className="sr-only">
         <table>

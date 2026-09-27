@@ -21,6 +21,7 @@ import { FailuresTab } from "./failures-tab";
 import { InputsTab } from "./inputs-tab";
 import { OverviewTab } from "./overview-tab";
 import { ReviewTab } from "./review-tab";
+import { SaveSuiteButton } from "./save-suite";
 import { TranscriptSheet } from "./transcript-sheet";
 
 const EXPORT_LABELS: Record<string, string> = {
@@ -34,6 +35,7 @@ const EXPORT_LABELS: Record<string, string> = {
   audit_trail: "Approval audit trail (JSON)",
   human_review: "Judge review labels (JSON)",
   golden_set: "Judge golden set (JSON)",
+  regression: "Regression results (JSON)",
   scenarios: "Scenario results (JSON)",
   memory: "Memory & context results (JSON)",
   replay: "Replay and personal data summary (JSON)",
@@ -104,6 +106,7 @@ export function ReportView({
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <SaveSuiteButton simulationId={data.simulation_id} runName={data.name} />
           {data.exports.includes("html") && (
             <Button asChild variant="outline">
               <a href={engine.exportUrl(data.simulation_id, "html")} download>

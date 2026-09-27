@@ -3,14 +3,17 @@
  *
  * The browser never talks to the engine directly. This keeps the engine URL
  * (and anything sent to it, such as a bot API key) off the client bundle and
- * lets the engine stay bound to localhost. Only the /wizard simulations + options surface is exposed.
+ * lets the engine stay bound to localhost. Only the /wizard simulations, options, regression suites
+ * and run comparison surface is exposed.
  */
 import type { NextRequest } from "next/server";
 
 const ENGINE_API_URL = (process.env.ENGINE_API_URL ?? "http://127.0.0.1:8100").replace(/\/$/, "");
 
 // First path segment must be one of these — nothing else on the engine is reachable.
-const ALLOWED_ROOTS = new Set(["simulations", "options"]);
+const ALLOWED_ROOTS = new Set(["simulations", "options", "suites", "compare-runs"]);
+// DELETE is only for removing a saved regression suite
+const DELETABLE_ROOTS = new Set(["suites"]);
 
 // Headers from the engine response that are safe and useful to pass through.
 const PASSTHROUGH_HEADERS = ["content-type", "content-disposition", "content-length"];
@@ -19,6 +22,9 @@ async function proxy(request: NextRequest, ctx: RouteContext<"/api/engine/[...pa
   const { path } = await ctx.params;
   if (!path.length || !ALLOWED_ROOTS.has(path[0]) || path.some((p) => p === ".." || p === ".")) {
     return Response.json({ detail: "Not found" }, { status: 404 });
+  }
+  if (request.method === "DELETE" && !DELETABLE_ROOTS.has(path[0])) {
+    return Response.json({ detail: "Not allowed" }, { status: 405 });
   }
 
   const target = `${ENGINE_API_URL}/wizard/${path.map(encodeURIComponent).join("/")}${request.nextUrl.search}`;
@@ -47,8 +53,10 @@ async function proxy(request: NextRequest, ctx: RouteContext<"/api/engine/[...pa
     const value = upstream.headers.get(name);
     if (value) headers.set(name, value);
   }
-  return new Response(upstream.body, { status: upstream.status, headers });
+  // A 204 must not carry a body
+  return new Response(upstream.status === 204 ? null : upstream.body, { status: upstream.status, headers });
 }
 
 export const GET = proxy;
 export const POST = proxy;
+export const DELETE = proxy;

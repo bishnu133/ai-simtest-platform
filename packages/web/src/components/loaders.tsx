@@ -63,7 +63,14 @@ export function SimulationLoader({ status }: { status: SimulationStatus }) {
       </div>
 
       <div className="space-y-4">
-        {status.config.replay ? (
+        {status.config.regression ? (
+          <>
+            <h2 className="text-3xl font-bold tracking-tight">Replaying Regression Suite</h2>
+            <p className="text-lg text-muted-foreground leading-relaxed">
+              {status.config.regression.suite_name || "The suite"}&apos;s saved customers are talking to your bot again.
+            </p>
+          </>
+        ) : status.config.replay ? (
           <>
             <h2 className="text-3xl font-bold tracking-tight">Replay in Progress</h2>
             <p className="text-lg text-muted-foreground leading-relaxed">
