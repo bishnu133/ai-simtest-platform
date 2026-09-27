@@ -18,6 +18,7 @@ import { ScoreBars, TurnLabelBar } from "./charts";
 import { ComparePanel } from "./compare-panel";
 import { RegressionPanel } from "./regression-panel";
 import { RagPanel } from "./rag-panel";
+import { CIPanel } from "./ci-panel";
 import { RunNotifications } from "./run-notifications";
 import { MemoryPanel, ReplayPanel, ScenarioResultsPanel } from "./focus-panels";
 import { JudgeBreakdownPanel, LoopsPanel } from "./judge-breakdown";
@@ -141,6 +142,7 @@ export function OverviewTab({
         </p>
       )}
 
+      {analysis.ci && <CIPanel verdict={analysis.ci} trigger={data.ci} />}
       {analysis.regression && <RegressionPanel result={analysis.regression} onOpen={onOpenConversation} />}
       {analysis.compare && <ComparePanel simulationId={data.simulation_id} result={analysis.compare} />}
       {analysis.replay && <ReplayPanel replay={analysis.replay} />}

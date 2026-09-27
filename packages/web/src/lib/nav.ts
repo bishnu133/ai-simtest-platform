@@ -2,6 +2,7 @@ import {
   BookOpenCheck,
   FileClock,
   GitCompareArrows,
+  GitPullRequest,
   LayoutDashboard,
   ListChecks,
   ListRestart,
@@ -51,6 +52,7 @@ export const NAV: NavGroup[] = [
       { label: "Personas", href: "/personas", icon: Users, status: "soon" },
       { label: "Policies & workflows", href: "/policies", icon: ScrollText, status: "soon" },
       { label: "Integrations", href: "/integrations", icon: Plug, status: "active" },
+      { label: "CI pipelines", href: "/ci", icon: GitPullRequest, status: "active" },
       { label: "Settings", href: "/settings", icon: Settings, status: "soon" },
     ],
   },
@@ -65,6 +67,7 @@ export function titleFor(pathname: string): string {
   if (pathname.startsWith("/suites")) return "Regression suites";
   if (pathname.startsWith("/calibration")) return "Judge calibration";
   if (pathname.startsWith("/integrations")) return "Integrations";
+  if (pathname === "/ci" || pathname.startsWith("/ci/")) return "CI pipelines";
   if (pathname.startsWith("/simulations/")) return "Run";
   return "AI SimTest";
 }

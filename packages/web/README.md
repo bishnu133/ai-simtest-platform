@@ -71,6 +71,17 @@ pnpm install
 pnpm dev                        # http://localhost:3000
 ```
 
+**Engine beyond this machine (CI pipelines).** Start the engine with a token and a reachable
+address, and give the dashboard the same token (server-side only, never `NEXT_PUBLIC_`):
+
+```bash
+SIMTEST_API_TOKEN=$(openssl rand -hex 24) API_HOST=0.0.0.0 API_PORT=8100 simtest serve   # engine
+ENGINE_API_TOKEN=<the same value>                                                          # .env.local
+```
+
+The engine refuses to listen beyond this machine without a token. The **CI pipelines** page then
+generates GitHub Actions, GitLab CI or shell steps that replay a regression suite on every build.
+
 Uses pnpm 11 (pinned in `package.json`). pnpm 11 refuses packages published in the last 24 h and
 only runs build scripts listed under `allowBuilds` in `pnpm-workspace.yaml`.
 

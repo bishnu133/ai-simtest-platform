@@ -323,6 +323,7 @@ export interface SimulationStatus {
   config: {
     bot_endpoint: string;
     rag?: { speed: string; use_llm: boolean; require_citations: boolean; tools: number } | null;
+    ci?: (CITrigger & { gates: CIGates }) | null;
     mode?: RunMode;
     auto_approve?: boolean;
     success_criteria?: string[];
@@ -597,6 +598,7 @@ export interface RunAnalysis {
   compare?: CompareResult;
   regression?: RegressionResult;
   rag_eval?: RagEvalResult | { error: string };
+  ci?: CIVerdict;
 }
 
 /** One scenario template's results, weakest first. */
@@ -667,6 +669,7 @@ export interface ReportResponse {
   inputs?: Record<string, ApprovedInput>;
   exports: string[];
   notifications?: NotificationDelivery[];
+  ci?: CITrigger | null;
 }
 
 // ── Judge review (label a sample of replies to calibrate a judge) ──
@@ -941,4 +944,55 @@ export interface NotificationSettings {
 
 export interface NotificationTestResult extends Partial<NotificationDelivery> {
   delivered: boolean;
+}
+
+// ── CI ──
+
+export interface CICheck {
+  name: string;
+  passed: boolean;
+  actual: string;
+  limit: string;
+  detail?: string;
+}
+
+export interface CIVerdict {
+  passed: boolean;
+  exit_code: number;
+  checks: CICheck[];
+  headline: string;
+}
+
+export interface CITrigger {
+  source: string;
+  repository: string;
+  commit: string;
+  branch: string;
+  pull_request: string;
+  build_url: string;
+}
+
+export interface CIGates {
+  min_pass_rate: number | null;
+  max_critical_failures: number | null;
+  fail_on_regression: boolean;
+  max_regressed: number;
+  fail_on_quality_gates: boolean;
+}
+
+export interface CIRunRow {
+  id: string;
+  name: string;
+  status: SessionStatus;
+  created_at: string;
+  ci: CITrigger;
+  gates: CIGates;
+  regression: string | null;
+  verdict: CIVerdict | null;
+}
+
+export interface CIInfo {
+  engine_version: string;
+  token_required: boolean;
+  runs: CIRunRow[];
 }

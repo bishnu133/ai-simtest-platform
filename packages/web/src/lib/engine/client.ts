@@ -5,6 +5,7 @@
 import type {
   CalibrationCheck,
   CalibrationOverview,
+  CIInfo,
   NotificationChannelInput,
   NotificationSettings,
   NotificationTestResult,
@@ -146,6 +147,11 @@ export const engine = {
     }),
 
   getCalibrationCheck: (id: string) => request<CalibrationCheck>(`/calibration/checks/${encodeURIComponent(id)}`),
+
+  getCI: () => request<CIInfo>("/ci"),
+
+  /** A run's setup for `simtest ci --request`: no API keys, never replay logs. */
+  getRunSetup: (id: string) => request<Record<string, unknown>>(`/simulations/${encodeURIComponent(id)}/setup`),
 
   getNotifications: () => request<NotificationSettings>("/notifications"),
 
