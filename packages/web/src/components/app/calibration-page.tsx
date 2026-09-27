@@ -48,7 +48,7 @@ const LEANS: Record<CalibrationLean, { label: string; tone: string; Icon: typeof
 
 /** Landis & Koch's reading of kappa, in words. */
 function kappaWords(k: number | null): string {
-  if (k === null) return "not measurable: every label was the same";
+  if (k === null) return "not measurable: one side gave the same verdict every time";
   if (k < 0) return "worse than chance";
   if (k < 0.2) return "slight";
   if (k < 0.4) return "fair";
@@ -213,6 +213,12 @@ function JudgeCard({ judge }: { judge: CalibrationJudge }) {
         </div>
         <Lean lean={judge.lean} />
       </div>
+      {judge.caveat && (
+        <p className="flex items-start gap-2 rounded-lg border border-warn/30 bg-warn/5 p-3 text-sm text-foreground">
+          <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-warn" aria-hidden />
+          {judge.caveat}
+        </p>
+      )}
 
       <dl className="grid gap-3 sm:grid-cols-4">
         <div>
@@ -298,9 +304,15 @@ function JudgeCard({ judge }: { judge: CalibrationJudge }) {
         <div className="space-y-2">
           <h4 className="text-sm font-semibold text-foreground">
             Where it disagrees ({judge.disagreements.length}
-            {judge.labelled - judge.agree > judge.disagreements.length ? ` of ${judge.labelled - judge.agree}` : ""}), nearest
-            the pass mark first
+            {judge.labelled - judge.agree > judge.disagreements.length ? ` of ${judge.labelled - judge.agree}` : ""})
+            {judge.score_decided ? ", nearest the pass mark first" : ""}
           </h4>
+          {judge.score_decided === false && (
+            <p className="text-xs text-muted-foreground">
+              This judge fails a reply on what it finds (an unsupported claim, personal data, a broken rule) whatever its
+              score, so read its reason rather than the score.
+            </p>
+          )}
           <ul className="divide-y rounded-lg border">
             {shown.map((d) => (
               <li key={`${d.run_id}:${d.key}`} className="space-y-2 p-3">
@@ -312,7 +324,8 @@ function JudgeCard({ judge }: { judge: CalibrationJudge }) {
                     {d.run_name || "Run"} · {d.persona}, reply {d.turn_index + 1}
                   </Link>
                 </div>
-                {d.note && <p className="text-xs italic text-muted-foreground">“{d.note}”</p>}
+                {d.judge_message && <p className="text-xs text-muted-foreground">Judge: {d.judge_message}</p>}
+                {d.note && <p className="text-xs italic text-muted-foreground">You: “{d.note}”</p>}
               </li>
             ))}
           </ul>
@@ -558,6 +571,7 @@ function Rechecks({ overview }: { overview: CalibrationOverview }) {
                           onClick={() => setPicked(c.id)}
                           aria-current={c.id === selected}
                           className="font-medium text-primary hover:underline"
+                          title={new Date(c.created_at).toLocaleString()}
                         >
                           {relativeTime(c.created_at, now)}
                         </button>

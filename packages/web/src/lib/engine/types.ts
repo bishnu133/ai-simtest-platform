@@ -746,6 +746,10 @@ export interface CalibrationJudge {
   too_lenient: number;
   lean: CalibrationLean;
   verdict: string;
+  /** Set when every label went one way: what the agreement can and cannot show */
+  caveat?: string;
+  /** Quality and relevance: the verdict is the score against a pass mark */
+  score_decided?: boolean;
   suggested_threshold: { threshold: number; agreement: number } | null;
   pass_marks_used: number[];
   runs: CalibrationRunAgreement[];
