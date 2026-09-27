@@ -4,6 +4,9 @@
  */
 import type {
   JudgedConversation,
+  RunDiff,
+  SuiteDetail,
+  SuiteSummary,
   CreateSimulationRequest,
   EngineOptions,
   GateDecision,
@@ -67,6 +70,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     }
     throw new EngineError(res.status, describeDetail(body.detail) || res.statusText, body.code);
   }
+  // DELETE answers 204 with no body
+  if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
 
@@ -112,6 +117,18 @@ export const engine = {
       method: "POST",
       body: JSON.stringify({ note: "", ...body }),
     }),
+
+  saveSuite: (id: string, body: { name?: string; include_warnings?: boolean; include_passing?: number }) =>
+    request<SuiteSummary>(`/simulations/${encodeURIComponent(id)}/suite`, { method: "POST", body: JSON.stringify(body) }),
+
+  listSuites: () => request<{ suites: SuiteSummary[] }>("/suites"),
+
+  getSuite: (id: string) => request<SuiteDetail>(`/suites/${encodeURIComponent(id)}`),
+
+  deleteSuite: (id: string) => request<void>(`/suites/${encodeURIComponent(id)}`, { method: "DELETE" }),
+
+  compareRuns: (before: string, after: string) =>
+    request<RunDiff>(`/compare-runs?before=${encodeURIComponent(before)}&after=${encodeURIComponent(after)}`),
 
   exportUrl: (id: string, format: string) =>
     `${BASE}/simulations/${encodeURIComponent(id)}/exports/${encodeURIComponent(format)}`,

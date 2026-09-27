@@ -34,6 +34,103 @@ export interface StressOptions {
   contradictions: number;
 }
 
+// ── Regression suites (Phase 2 · Step 6) ──
+
+export type CaseStatus = "regressed" | "still_failing" | "partly_fixed" | "error" | "fixed" | "still_passing";
+
+export interface SuiteRun {
+  run_id: string;
+  at: string;
+  bot_endpoint: string;
+  bot_build: string;
+  counts: Partial<Record<CaseStatus, number>>;
+  verdict: RegressionResult["verdict"];
+}
+
+export interface SuiteSummary {
+  id: string;
+  name: string;
+  created_at: string;
+  source: { run_id?: string; run_name?: string; bot_endpoint?: string; bot_build?: string; run_at?: string };
+  cases: number;
+  failing_cases: number;
+  warning_cases: number;
+  guard_cases: number;
+  guardrails: number;
+  criteria: number;
+  runs: SuiteRun[];
+  last_run: SuiteRun | null;
+}
+
+export interface SuiteDetail extends SuiteSummary {
+  cases_detail: { id: string; persona: string; original_label: string; tags: string[]; messages: number; first_issue: string }[];
+}
+
+export interface ReplyVerdict {
+  reply: string;
+  label: string;
+  issue: string;
+}
+
+export interface RegressionCase {
+  id: string;
+  persona: string;
+  status: CaseStatus;
+  original_label: string;
+  failing_before: number;
+  failing_now: number;
+  replies_fixed: number;
+  replies_broken: number;
+  conversation_id: string;
+  error: string;
+  changes: { index: number; customer: string; before: ReplyVerdict | null; after: ReplyVerdict | null }[];
+}
+
+export interface RegressionResult {
+  suite_id: string;
+  suite_name: string;
+  source: SuiteSummary["source"];
+  total_cases: number;
+  counts: Record<CaseStatus, number>;
+  replies_fixed: number;
+  replies_broken: number;
+  verdict: "regressions" | "all_fixed" | "progress" | "no_change";
+  cases: RegressionCase[];
+}
+
+/** Two finished runs compared (GET /compare-runs). */
+export interface RunDiff {
+  before: { id: string; name: string; created_at: string; bot_build: string };
+  after: { id: string; name: string; created_at: string; bot_build: string };
+  comparable: boolean;
+  settings_changed: { label: string; before: unknown; after: unknown }[];
+  build_changed: boolean;
+  difference: {
+    method: "paired" | "independent";
+    mean: number | null;
+    low: number | null;
+    high: number | null;
+    verdict: "better" | "worse" | "too close to call" | "not enough data";
+  };
+  metrics: {
+    key: string;
+    label: string;
+    before: number | null;
+    after: number | null;
+    delta: number | null;
+    higher_is_better: boolean;
+    percentage: boolean;
+    better: boolean | null;
+  }[];
+  judges: { judge: string; before: number | null; after: number | null; delta: number | null }[];
+  failures: {
+    new: { title: string; after: number }[];
+    resolved: { title: string; before: number }[];
+    persistent: { title: string; before: number; after: number }[];
+  };
+  note: string;
+}
+
 /** Another bot run against the same personas (model comparison). */
 export interface CompareTarget {
   name: string;
@@ -179,6 +276,7 @@ export interface CreateSimulationRequest {
   stress?: StressOptions | null;
   replay?: ReplayOptions | null;
   compare?: CompareOptions | null;
+  regression?: { suite_id: string } | null;
 }
 
 export interface EngineOptions {
@@ -248,6 +346,7 @@ export interface SimulationStatus {
     stress?: StressOptions | null;
     replay?: (Omit<ReplayOptions, "conversations"> & { conversations_loaded?: number; conversations_judged?: number }) | null;
     compare?: { baseline_name: string; targets: Omit<CompareTarget, "bot_api_key">[] } | null;
+    regression?: { suite_id: string; suite_name?: string; cases?: number } | null;
   };
   /** While a comparison runs: which bot, of how many */
   compare_progress?: { index: number; total: number; name: string } | null;
@@ -492,6 +591,7 @@ export interface RunAnalysis {
   memory?: MemoryResult;
   replay?: ReplayLoad;
   compare?: CompareResult;
+  regression?: RegressionResult;
 }
 
 /** One scenario template's results, weakest first. */
