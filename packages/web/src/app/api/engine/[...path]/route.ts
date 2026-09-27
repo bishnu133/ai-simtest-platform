@@ -11,7 +11,7 @@ import type { NextRequest } from "next/server";
 const ENGINE_API_URL = (process.env.ENGINE_API_URL ?? "http://127.0.0.1:8100").replace(/\/$/, "");
 
 // First path segment must be one of these — nothing else on the engine is reachable.
-const ALLOWED_ROOTS = new Set(["simulations", "options", "suites", "compare-runs"]);
+const ALLOWED_ROOTS = new Set(["simulations", "options", "suites", "compare-runs", "calibration"]);
 // DELETE is only for removing a saved regression suite
 const DELETABLE_ROOTS = new Set(["suites"]);
 

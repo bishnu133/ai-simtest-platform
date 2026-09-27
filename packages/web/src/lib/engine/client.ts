@@ -3,6 +3,8 @@
  * Next.js proxy at /api/engine so the engine URL never reaches the client.
  */
 import type {
+  CalibrationCheck,
+  CalibrationOverview,
   JudgedConversation,
   RunDiff,
   SuiteDetail,
@@ -129,6 +131,18 @@ export const engine = {
 
   compareRuns: (before: string, after: string) =>
     request<RunDiff>(`/compare-runs?before=${encodeURIComponent(before)}&after=${encodeURIComponent(after)}`),
+
+  getCalibration: () => request<CalibrationOverview>("/calibration"),
+
+  getGoldenSet: () => request<{ examples: Record<string, unknown>[] }>("/calibration/golden-set"),
+
+  startCalibrationCheck: (judges: string[] = []) =>
+    request<Pick<CalibrationCheck, "id" | "status" | "created_at" | "judges" | "progress">>("/calibration/checks", {
+      method: "POST",
+      body: JSON.stringify({ judges }),
+    }),
+
+  getCalibrationCheck: (id: string) => request<CalibrationCheck>(`/calibration/checks/${encodeURIComponent(id)}`),
 
   exportUrl: (id: string, format: string) =>
     `${BASE}/simulations/${encodeURIComponent(id)}/exports/${encodeURIComponent(format)}`,

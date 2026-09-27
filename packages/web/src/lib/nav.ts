@@ -42,7 +42,7 @@ export const NAV: NavGroup[] = [
       { label: "Regression suites", href: "/suites", icon: ListRestart, status: "active" },
       { label: "Model comparison", href: "/new?type=compare", icon: GitCompareArrows, status: "active" },
       { label: "Production replay", href: "/new?type=replay", icon: FileClock, status: "active" },
-      { label: "Judge calibration", href: "/calibration", icon: BookOpenCheck, status: "soon" },
+      { label: "Judge calibration", href: "/calibration", icon: BookOpenCheck, status: "active" },
     ],
   },
   {
@@ -63,6 +63,7 @@ export function titleFor(pathname: string): string {
   if (pathname.startsWith("/runs/compare")) return "Compare runs";
   if (pathname.startsWith("/runs")) return "Runs";
   if (pathname.startsWith("/suites")) return "Regression suites";
+  if (pathname.startsWith("/calibration")) return "Judge calibration";
   if (pathname.startsWith("/simulations/")) return "Run";
   return "AI SimTest";
 }

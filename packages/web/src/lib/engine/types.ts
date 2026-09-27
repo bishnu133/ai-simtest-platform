@@ -699,3 +699,124 @@ export interface ReviewResponse {
   items: ReviewItem[];
   summary: ReviewSummary;
 }
+
+// ── Calibration centre (every human label, pooled across runs) ──
+
+export type CalibrationLean = "too_strict" | "too_lenient" | "balanced" | "not_enough";
+
+export interface CalibrationDisagreement {
+  run_id: string;
+  run_name: string;
+  key: string;
+  conversation_id: string;
+  persona: string;
+  turn_index: number;
+  user_message: string;
+  bot_reply: string;
+  judge_score: number;
+  judge_passed: boolean;
+  judge_message: string;
+  human_pass: boolean;
+  note: string;
+}
+
+export interface CalibrationRunAgreement {
+  run_id: string;
+  run_name: string;
+  run_at: string;
+  labelled: number;
+  agree: number;
+  agreement_rate: number;
+  low: number | null;
+  high: number | null;
+  pass_mark: number | null;
+}
+
+export interface CalibrationJudge {
+  judge: string;
+  labelled: number;
+  agree: number;
+  agreement_rate: number | null;
+  low: number | null;
+  high: number | null;
+  kappa: number | null;
+  human_pass_rate: number | null;
+  judge_pass_rate: number | null;
+  too_strict: number;
+  too_lenient: number;
+  lean: CalibrationLean;
+  verdict: string;
+  suggested_threshold: { threshold: number; agreement: number } | null;
+  pass_marks_used: number[];
+  runs: CalibrationRunAgreement[];
+  disagreements: CalibrationDisagreement[];
+}
+
+export interface CalibrationCheckBrief {
+  id: string;
+  status: "running" | "completed" | "failed";
+  created_at: string;
+  finished_at: string | null;
+  engine_version: string | null;
+  labelled: number | null;
+  checked: number | null;
+  changed: number | null;
+  errors: number | null;
+  judges: {
+    judge: string;
+    agreement_then: number | null;
+    agreement_now: number | null;
+    changed: number;
+    fingerprint: string | null;
+  }[];
+}
+
+export interface CalibrationOverview {
+  total_labels: number;
+  runs_with_labels: number;
+  min_labels: number;
+  golden_examples: number;
+  judges: CalibrationJudge[];
+  checks: CalibrationCheckBrief[];
+}
+
+export interface CalibrationChange {
+  run_id: string;
+  run_name: string;
+  key: string;
+  persona: string;
+  user_message: string;
+  bot_reply: string;
+  human_pass: boolean;
+  note: string;
+  before: { score: number; passed: boolean };
+  after: { score: number | null; passed: boolean; message: string };
+  effect: "now_agrees" | "now_disagrees";
+}
+
+export interface CalibrationCheckJudge {
+  judge: string;
+  labelled: number;
+  checked: number;
+  errors: number;
+  agreement_then: number | null;
+  agreement_now: number | null;
+  changed: number;
+  now_agree: number;
+  now_disagree: number;
+  verdict: string;
+  changes: CalibrationChange[];
+}
+
+export interface CalibrationCheck {
+  id: string;
+  status: "running" | "completed" | "failed";
+  created_at: string;
+  finished_at: string | null;
+  engine_version: string | null;
+  judges: string[];
+  progress: { total: number; done: number };
+  summary: { labelled: number; checked: number; errors: number; changed: number; judges: CalibrationCheckJudge[] } | null;
+  error: string;
+  fingerprints: Record<string, string>;
+}

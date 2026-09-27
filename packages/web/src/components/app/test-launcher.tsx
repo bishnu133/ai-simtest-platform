@@ -1,8 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Check, CheckCircle2, Clock, Copy, Terminal } from "lucide-react";
+import { ArrowRight, Check, CheckCircle2, Clock, Copy, Terminal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SetupForm, type TestFocus } from "@/components/setup-form";
 import { RegressionForm } from "@/components/setup/regression-form";
@@ -155,12 +156,36 @@ export function TestLauncher({ initialType, initialSuite }: { initialType?: stri
         </header>
         {type.id === "regression" ? (
           <RegressionForm initialSuite={initialSuite} />
+        ) : type.id === "calibration" ? (
+          <CalibrationIntro />
         ) : type.available ? (
           <SetupForm key={type.id} embedded focus={isFocus(type.id) ? type.id : "simulation"} />
         ) : (
           <ComingSoon type={type} />
         )}
       </section>
+    </div>
+  );
+}
+
+/** Calibration is not a run: it reads the labels already given, so it has its own page. */
+function CalibrationIntro() {
+  return (
+    <div className="max-w-3xl space-y-4 rounded-xl border bg-card p-6 text-sm shadow-xs">
+      <p className="text-muted-foreground">
+        Nothing to set up. Label replies in the <span className="font-medium text-foreground">Judge review</span> tab of any
+        finished run; the calibration page pools every label and compares each judge with them.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <Button asChild>
+          <Link href="/calibration">
+            Open judge calibration <ArrowRight />
+          </Link>
+        </Button>
+        <Button asChild variant="outline">
+          <Link href="/runs">Label replies in a run</Link>
+        </Button>
+      </div>
     </div>
   );
 }

@@ -123,13 +123,12 @@ export const TEST_TYPES: TestType[] = [
     id: "calibration",
     name: "Judge calibration",
     icon: BookOpenCheck,
-    tagline: "Check the judges against human-labelled examples.",
+    tagline: "Check the judges against people's labels.",
     description:
-      "Runs the judges on a golden set built from your Judge review labels and reports how often each agrees with a person.",
-    checks: ["Agreement with human labels", "Judges too strict or too lenient", "Drift across rubric versions"],
-    needs: ["A golden set (exported from Judge review)"],
-    available: false,
-    roadmap: "Phase 2 · Step 7",
+      "Pools every reply you labelled in Judge review, across all runs, and shows how often each judge agrees with a person, which way it leans, and the pass mark that would agree most. A re-check puts the same replies to today's judges and lists every verdict that changed.",
+    checks: ["Agreement with human labels", "Judges too strict or too lenient", "Drift across judge versions"],
+    needs: ["Replies labelled in Judge review (any finished run)"],
+    available: true,
     cli: "simtest calibrate --golden-file golden_set.json",
   },
 ];
