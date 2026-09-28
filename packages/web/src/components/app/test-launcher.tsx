@@ -81,10 +81,12 @@ export function TestLauncher({
   initialType,
   initialSuite,
   initialBot,
+  initialPersona,
 }: {
   initialType?: string;
   initialSuite?: string;
   initialBot?: string;
+  initialPersona?: string;
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState(() => testType(initialType).id);
@@ -168,7 +170,7 @@ export function TestLauncher({
         ) : type.id === "calibration" ? (
           <CalibrationIntro />
         ) : type.available ? (
-          <SetupForm key={type.id} embedded focus={isFocus(type.id) ? type.id : "simulation"} initialBotId={initialBot} />
+          <SetupForm key={type.id} embedded focus={isFocus(type.id) ? type.id : "simulation"} initialBotId={initialBot} initialPersonaId={initialPersona} />
         ) : (
           <ComingSoon type={type} />
         )}

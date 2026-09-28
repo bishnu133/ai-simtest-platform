@@ -14,9 +14,9 @@ const ENGINE_API_URL = (process.env.ENGINE_API_URL ?? "http://127.0.0.1:8100").r
 const ENGINE_API_TOKEN = process.env.ENGINE_API_TOKEN?.trim() || "";
 
 // First path segment must be one of these — nothing else on the engine is reachable.
-const ALLOWED_ROOTS = new Set(["simulations", "options", "suites", "compare-runs", "calibration", "notifications", "ci", "ai-settings", "bot-check", "bots"]);
-// DELETE is only for removing a saved regression suite or bot
-const DELETABLE_ROOTS = new Set(["suites", "bots"]);
+const ALLOWED_ROOTS = new Set(["simulations", "options", "suites", "compare-runs", "calibration", "notifications", "ci", "ai-settings", "bot-check", "bots", "personas"]);
+// DELETE is only for removing a saved regression suite, bot or persona
+const DELETABLE_ROOTS = new Set(["suites", "bots", "personas"]);
 // PUT is only for saving notification and AI settings, and editing a saved bot
 const PUTTABLE_ROOTS = new Set(["notifications", "ai-settings", "bots"]);
 

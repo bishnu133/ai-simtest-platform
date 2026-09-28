@@ -258,6 +258,8 @@ export interface CreateSimulationRequest {
   bot_model?: string | null;
   /** The saved bot this run uses */
   bot_id?: string | null;
+  /** Your own personas, added to the drafted ones */
+  extra_personas?: PersonaInput[];
   documentation: string;
   documentation_filename: string;
   num_personas: number;
@@ -1134,4 +1136,37 @@ export interface SavedBot extends SavedBotInput {
   last_check: { ok: boolean; at: string; latency_ms?: number; problem?: string; kind?: string } | null;
   runs: number;
   latest_run: { id: string; status: string; created_at: string; headline: RunSummary | null } | null;
+}
+
+// ── Personas ──
+
+export type PersonaKind = "standard" | "edge_case" | "adversarial";
+
+export interface PersonaInput {
+  name: string;
+  role: string;
+  goals: string[];
+  tone: string;
+  persona_type: PersonaKind;
+  technical_level?: "novice" | "intermediate" | "expert";
+  special_characteristics?: string[];
+  adversarial_tactics?: string[] | null;
+  topics?: string[];
+  system_prompt?: string;
+}
+
+export interface SavedPersona extends PersonaInput {
+  id: string;
+  created_at: string;
+  from_run: string | null;
+}
+
+export interface SeenPersona extends PersonaInput {
+  runs: number;
+  pass: number;
+  warning: number;
+  fail: number;
+  last_run_id: string | null;
+  last_run_at: string | null;
+  bots: string[];
 }

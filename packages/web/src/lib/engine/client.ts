@@ -8,8 +8,11 @@ import type {
   AISettingsView,
   BotCheckRequest,
   BotCheckResult,
+  PersonaInput,
   SavedBot,
   SavedBotInput,
+  SavedPersona,
+  SeenPersona,
   CalibrationCheck,
   CalibrationOverview,
   CIInfo,
@@ -191,6 +194,14 @@ export const engine = {
     request<SavedBot>(`/bots/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify(body) }),
 
   deleteBot: (id: string) => request<{ deleted: string }>(`/bots/${encodeURIComponent(id)}`, { method: "DELETE" }),
+
+  listPersonas: () => request<{ library: SavedPersona[]; seen: SeenPersona[] }>("/personas"),
+
+  savePersona: (body: PersonaInput & { from_run?: string | null }) =>
+    request<SavedPersona>("/personas", { method: "POST", body: JSON.stringify(body) }),
+
+  deletePersona: (id: string) =>
+    request<{ deleted: string }>(`/personas/${encodeURIComponent(id)}`, { method: "DELETE" }),
 
   exportUrl: (id: string, format: string) =>
     `${BASE}/simulations/${encodeURIComponent(id)}/exports/${encodeURIComponent(format)}`,

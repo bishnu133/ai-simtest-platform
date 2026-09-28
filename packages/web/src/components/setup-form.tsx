@@ -142,11 +142,14 @@ export function SetupForm({
   embedded = false,
   focus = "simulation",
   initialBotId,
+  initialPersonaId,
 }: {
   embedded?: boolean;
   focus?: TestFocus;
   /** A saved bot to start from (/new?bot=...) */
   initialBotId?: string;
+  /** A saved persona to include (/new?persona=...) */
+  initialPersonaId?: string;
 }) {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -200,6 +203,11 @@ export function SetupForm({
   const [minTurns, setMinTurns] = useState("3");
   const [maxTurns, setMaxTurns] = useState("10");
   const [parallel, setParallel] = useState("5");
+  // Your own personas, on top of the ones the AI drafts
+  const { data: personaData } = useQuery({ queryKey: ["personas"], queryFn: engine.listPersonas, retry: false });
+  const libraryPersonas = personaData?.library ?? [];
+  const [ownPersonaIds, setOwnPersonaIds] = useState<string[]>(initialPersonaId ? [initialPersonaId] : []);
+  const ownPersonas = libraryPersonas.filter((p) => ownPersonaIds.includes(p.id));
   // 5. What to check
   const [options, setOptions] = useState<EngineOptions | null>(null);
   const [workflowMode, setWorkflowMode] = useState<"auto" | "choose" | "off">("auto");
@@ -262,7 +270,9 @@ export function SetupForm({
       ? { min: stress.turns, max: Math.max(run.maxTurns, stress.turns) }
       : { min: Math.max(run.minTurns, scenarioTurns), max: Math.max(run.maxTurns, scenarioTurns) };
   const strict = STRICTNESS.find((s) => s.id === strictness)!;
-  const single = estimate(run.personas, lengths.min, lengths.max, guardrailLlm, relevanceLlm);
+  const usesOwnPersonas = focus !== "replay" && ownPersonas.length > 0;
+  const customers = run.personas + (usesOwnPersonas ? ownPersonas.length : 0);
+  const single = estimate(customers, lengths.min, lengths.max, guardrailLlm, relevanceLlm);
   const cost = { replies: single.replies * bots, low: single.low * bots, high: single.high * bots };
   // Manual runs skip review of whatever the tester wrote themselves; a
   // replay has real customers, so no test plan or personas to review
@@ -456,6 +466,8 @@ export function SetupForm({
         rag: focus === "rag" || (focus === "replay" && replayRag) ? rag : null,
         bot_model: botModel.trim() || null,
         bot_id: activeBot?.id ?? null,
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        extra_personas: usesOwnPersonas ? ownPersonas.map(({ id, created_at, from_run, ...p }) => p) : [],
         compare:
           focus === "compare"
             ? {
@@ -913,6 +925,46 @@ export function SetupForm({
                   : `The scenarios you picked need at least ${lengths.min} messages, so conversations run at least that long.`}
               </p>
             )}
+            {libraryPersonas.length > 0 && (
+              <fieldset className="space-y-2">
+                <legend className="text-sm font-semibold text-foreground">
+                  Also include your personas <span className="font-normal text-muted-foreground">(optional)</span>
+                </legend>
+                <div className="flex flex-wrap gap-2">
+                  {libraryPersonas.map((p) => {
+                    const on = ownPersonaIds.includes(p.id);
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() => setOwnPersonaIds((ids) => (on ? ids.filter((x) => x !== p.id) : [...ids, p.id]))}
+                        className={`inline-flex items-center gap-2 rounded-full border py-1 pl-1 pr-3 text-sm transition-colors ${
+                          on ? "border-primary bg-primary/10 text-foreground" : "bg-card text-muted-foreground hover:border-primary/50"
+                        }`}
+                        title={p.goals[0]}
+                      >
+                        <span
+                          className={`flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold ${
+                            on ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                          }`}
+                          aria-hidden
+                        >
+                          {on ? "✓" : p.name.slice(0, 1).toUpperCase()}
+                        </span>
+                        {p.name}
+                      </button>
+                    );
+                  })}
+                </div>
+                {ownPersonas.length > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {ownPersonas.length === 1 ? "1 of your personas joins" : `${ownPersonas.length} of your personas join`} the{" "}
+                    {run.personas} the AI drafts.
+                  </p>
+                )}
+              </fieldset>
+            )}
             {size === "custom" && (
               <div className="grid gap-4 rounded-lg border p-4 sm:grid-cols-2 lg:grid-cols-4">
                 <SelectField id="personas" label="Simulated customers" value={personas} options={PERSONA_OPTIONS} onChange={setPersonas} />
@@ -1139,7 +1191,7 @@ export function SetupForm({
             ) : (
               <>
                 <p className="font-medium text-foreground">
-                  {run.personas} customers{bots > 1 ? ` × ${bots} bots` : ""} ·{" "}
+                  {customers} customers{bots > 1 ? ` × ${bots} bots` : ""} ·{" "}
                   {focus === "stress" ? `${stress.turns} messages each` : `up to ${lengths.max} messages`}
                   {focus === "scenarios" && ` · ${chosenScenarios.length} scenario${chosenScenarios.length === 1 ? "" : "s"}`} · about{" "}
                   {cost.replies.toLocaleString()} bot replies

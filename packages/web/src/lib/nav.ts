@@ -51,7 +51,7 @@ export const NAV: NavGroup[] = [
   {
     heading: "Configure",
     items: [
-      { label: "Personas", href: "/personas", icon: Users, status: "soon" },
+      { label: "Personas", href: "/personas", icon: Users, status: "active" },
       { label: "Policies & workflows", href: "/policies", icon: ScrollText, status: "soon" },
       { label: "Integrations", href: "/integrations", icon: Plug, status: "active" },
       { label: "CI pipelines", href: "/ci", icon: GitPullRequest, status: "active" },
@@ -72,6 +72,7 @@ export function titleFor(pathname: string): string {
   if (pathname === "/ci" || pathname.startsWith("/ci/")) return "CI pipelines";
   if (pathname.startsWith("/settings")) return "Settings";
   if (pathname.startsWith("/bots")) return "Bots";
+  if (pathname.startsWith("/personas")) return "Personas";
   if (pathname.startsWith("/simulations/")) return "Run";
   return "AI SimTest";
 }
