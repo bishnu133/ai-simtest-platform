@@ -8,6 +8,8 @@ import type {
   AISettingsView,
   BotCheckRequest,
   BotCheckResult,
+  SavedBot,
+  SavedBotInput,
   CalibrationCheck,
   CalibrationOverview,
   CIInfo,
@@ -180,6 +182,15 @@ export const engine = {
   /** One message to the bot, sent as a run would send it. */
   checkBot: (body: BotCheckRequest) =>
     request<BotCheckResult>("/bot-check", { method: "POST", body: JSON.stringify(body) }),
+
+  listBots: () => request<{ bots: SavedBot[] }>("/bots"),
+
+  createBot: (body: SavedBotInput) => request<SavedBot>("/bots", { method: "POST", body: JSON.stringify(body) }),
+
+  updateBot: (id: string, body: SavedBotInput) =>
+    request<SavedBot>(`/bots/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify(body) }),
+
+  deleteBot: (id: string) => request<{ deleted: string }>(`/bots/${encodeURIComponent(id)}`, { method: "DELETE" }),
 
   exportUrl: (id: string, format: string) =>
     `${BASE}/simulations/${encodeURIComponent(id)}/exports/${encodeURIComponent(format)}`,

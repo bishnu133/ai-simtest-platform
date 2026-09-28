@@ -256,6 +256,8 @@ export interface CreateSimulationRequest {
   bot_response_path: string;
   /** Sent as "model" in the request body */
   bot_model?: string | null;
+  /** The saved bot this run uses */
+  bot_id?: string | null;
   documentation: string;
   documentation_filename: string;
   num_personas: number;
@@ -1085,6 +1087,8 @@ export interface AIModelCheck {
 // ── Bot health check ──
 
 export interface BotCheckRequest {
+  /** A saved bot: its key is read on the engine when none is typed */
+  bot_id?: string | null;
   bot_endpoint: string;
   bot_api_key?: string;
   bot_format: string;
@@ -1104,4 +1108,30 @@ export interface BotCheckResult {
   status?: number;
   body?: string;
   suggestions?: string[];
+}
+
+// ── Saved bots ──
+
+export interface SavedBotInput {
+  name: string;
+  bot_endpoint: string;
+  bot_request_format: RequestFormat;
+  bot_response_path: string;
+  bot_model?: string | null;
+  bot_version_header?: string | null;
+  bot_info_url?: string | null;
+  /** Engine environment variable holding the bot's key; blank: typed on each test */
+  key_env: string;
+}
+
+export interface SavedBot extends SavedBotInput {
+  id: string;
+  host: string;
+  created_at: string;
+  updated_at: string;
+  last_used_at: string | null;
+  key_env_set: boolean;
+  last_check: { ok: boolean; at: string; latency_ms?: number; problem?: string; kind?: string } | null;
+  runs: number;
+  latest_run: { id: string; status: string; created_at: string; headline: RunSummary | null } | null;
 }

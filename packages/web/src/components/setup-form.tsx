@@ -138,7 +138,16 @@ function Disclosure({ label, children }: { label: string; children: ReactNode })
 /** What the run concentrates on, on top of the persona simulation. */
 export type TestFocus = "simulation" | "scenarios" | "stress" | "replay" | "compare" | "rag";
 
-export function SetupForm({ embedded = false, focus = "simulation" }: { embedded?: boolean; focus?: TestFocus }) {
+export function SetupForm({
+  embedded = false,
+  focus = "simulation",
+  initialBotId,
+}: {
+  embedded?: boolean;
+  focus?: TestFocus;
+  /** A saved bot to start from (/new?bot=...) */
+  initialBotId?: string;
+}) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -157,6 +166,27 @@ export function SetupForm({ embedded = false, focus = "simulation" }: { embedded
   const [responsePath, setResponsePath] = useState("choices.0.message.content");
   const [versionHeader, setVersionHeader] = useState("");
   const [botModel, setBotModel] = useState("");
+  // Saved bot connections: picking one fills the fields below
+  const { data: botsData } = useQuery({ queryKey: ["bots"], queryFn: engine.listBots, retry: false });
+  const savedBots = botsData?.bots ?? [];
+  const [botId, setBotId] = useState<string | null>(initialBotId ?? null);
+  const [appliedBot, setAppliedBot] = useState<string | null>(null);
+  const [savingBot, setSavingBot] = useState(false);
+  const [botSaved, setBotSaved] = useState("");
+  const pickedBot = savedBots.find((b) => b.id === botId) ?? null;
+  // Fill the connection once the chosen bot has loaded (state adjusted while rendering)
+  if (pickedBot && appliedBot !== pickedBot.id) {
+    setAppliedBot(pickedBot.id);
+    setEndpoint(pickedBot.bot_endpoint);
+    setFormat(pickedBot.bot_request_format);
+    setResponsePath(pickedBot.bot_response_path);
+    setBotModel(pickedBot.bot_model ?? "");
+    setVersionHeader(pickedBot.bot_version_header ?? "");
+    setInfoUrl(pickedBot.bot_info_url ?? "");
+    if (!name) setName(pickedBot.name);
+  }
+  // Still that bot only while its endpoint is the one being tested
+  const activeBot = pickedBot && endpoint.trim() === pickedBot.bot_endpoint ? pickedBot : null;
   // 3. What it knows
   const [contextFilename, setContextFilename] = useState("");
   const [contextContent, setContextContent] = useState("");
@@ -286,6 +316,7 @@ export function SetupForm({ embedded = false, focus = "simulation" }: { embedded
   };
 
   const botRequest = () => ({
+    bot_id: activeBot?.id ?? null,
     bot_endpoint: endpoint.trim(),
     bot_api_key: apiKey.trim() || undefined,
     bot_format: format,
@@ -424,6 +455,7 @@ export function SetupForm({ embedded = false, focus = "simulation" }: { embedded
         replay: focus === "replay" ? replay : null,
         rag: focus === "rag" || (focus === "replay" && replayRag) ? rag : null,
         bot_model: botModel.trim() || null,
+        bot_id: activeBot?.id ?? null,
         compare:
           focus === "compare"
             ? {
@@ -595,6 +627,45 @@ export function SetupForm({ embedded = false, focus = "simulation" }: { embedded
 
         <Section n={focus === "compare" ? 2 : 2 + step} title="Your bot" description="Where to reach it. Only the endpoint is required.">
           <div className="grid gap-4 md:grid-cols-2">
+            {savedBots.length > 0 && (
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="saved-bot" className="text-sm font-semibold">
+                  Saved bot
+                </Label>
+                <Select
+                  value={pickedBot ? pickedBot.id : "manual"}
+                  onValueChange={(v) => {
+                    setBotSaved("");
+                    if (v === "manual") {
+                      setBotId(null);
+                      setAppliedBot(null);
+                    } else {
+                      setBotId(v);
+                      setAppliedBot(null);
+                    }
+                  }}
+                >
+                  <SelectTrigger id="saved-bot" className="h-11 w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {savedBots.map((b) => (
+                      <SelectItem key={b.id} value={b.id}>
+                        <span className="flex items-center gap-2">
+                          <span
+                            className={`h-2 w-2 rounded-full ${b.last_check ? (b.last_check.ok ? "bg-pass" : "bg-fail") : "bg-muted-foreground/50"}`}
+                            aria-hidden
+                          />
+                          {b.name}
+                          <span className="text-xs text-muted-foreground">{b.host}</span>
+                        </span>
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="manual">Enter the details yourself</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div ref={botRef} className="space-y-2 md:col-span-2">
               <Label htmlFor="endpoint" className="text-sm font-semibold">
                 Bot Endpoint
@@ -616,6 +687,48 @@ export function SetupForm({ embedded = false, focus = "simulation" }: { embedded
               {talksToBot && shownCheck && (
                 <BotCheckResultPanel result={shownCheck} onUsePath={(p) => setResponsePath(p)} />
               )}
+              {shownCheck?.ok && !activeBot && (
+                <p className="text-xs text-muted-foreground">
+                  {botSaved ? (
+                    <span className="font-medium text-pass">{botSaved}</span>
+                  ) : (
+                    <>
+                      Testing this bot again?{" "}
+                      <button
+                        type="button"
+                        className="font-semibold text-primary underline-offset-2 hover:underline disabled:opacity-60"
+                        disabled={savingBot}
+                        onClick={async () => {
+                          setSavingBot(true);
+                          try {
+                            const saved = await engine.createBot({
+                              name: name.trim() || botHostName(endpoint),
+                              bot_endpoint: endpoint.trim(),
+                              bot_request_format: format,
+                              bot_response_path: responsePath.trim() || "choices.0.message.content",
+                              bot_model: botModel.trim() || null,
+                              bot_version_header: versionHeader.trim() || null,
+                              bot_info_url: infoUrl.trim() || null,
+                              key_env: "",
+                            });
+                            await queryClient.invalidateQueries({ queryKey: ["bots"] });
+                            setBotId(saved.id);
+                            setAppliedBot(saved.id);
+                            setBotSaved(`Saved as “${saved.name}” in Bots. Its key isn't saved.`);
+                          } catch (err) {
+                            setBotSaved(err instanceof EngineError ? err.message : "Could not save the bot.");
+                          } finally {
+                            setSavingBot(false);
+                          }
+                        }}
+                      >
+                        Save it to Bots
+                      </button>{" "}
+                      and pick it next time.
+                    </>
+                  )}
+                </p>
+              )}
               {focus === "replay" && (
                 <p className="text-xs text-muted-foreground">
                   The bot these conversations came from: runs of the same bot are compared over time.
@@ -632,7 +745,11 @@ export function SetupForm({ embedded = false, focus = "simulation" }: { embedded
                 type="password"
                 autoComplete="off"
                 className="h-10"
-                placeholder="Sent only to the engine, never stored"
+                placeholder={
+                  activeBot?.key_env
+                    ? `Read from ${activeBot.key_env} on the engine`
+                    : "Sent only to the engine, never stored"
+                }
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
               />
@@ -1061,4 +1178,12 @@ export function SetupForm({ embedded = false, focus = "simulation" }: { embedded
       </form>
     </div>
   );
+}
+
+function botHostName(endpoint: string) {
+  try {
+    return new URL(endpoint.trim()).host;
+  } catch {
+    return "My bot";
+  }
 }
