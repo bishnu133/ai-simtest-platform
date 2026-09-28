@@ -216,6 +216,7 @@ export function SetupForm({
   const [guardrailLlm, setGuardrailLlm] = useState(false);
   const [relevanceLlm, setRelevanceLlm] = useState(false);
   const [trackCost, setTrackCost] = useState(true);
+  const [recheck, setRecheck] = useState(true);
   // 6. Strictness (+ expert overrides)
   const [strictness, setStrictness] = useState<StrictnessId>("standard");
   const [qualityThreshold, setQualityThreshold] = useState("");
@@ -453,6 +454,7 @@ export function SetupForm({
         relevance_llm: relevanceLlm,
         quality_threshold: quality,
         turn_pass_threshold: reply,
+        recheck_borderline: recheck,
         bot_version_header: versionHeader.trim() || null,
         bot_info_url: infoUrl.trim() || null,
         judge_weights: Object.fromEntries(
@@ -1165,6 +1167,15 @@ export function SetupForm({
                   <SelectField id="parallel-expert" label="Conversations at the same time" value={parallel} options={PARALLEL_OPTIONS} onChange={setParallel} />
                 )}
               </div>
+              <label className="flex items-start gap-2 text-sm">
+                <Checkbox checked={recheck} onCheckedChange={(on) => setRecheck(on === true)} className="mt-0.5" />
+                <span>
+                  Re-check borderline replies
+                  <span className="block text-xs text-muted-foreground">
+                    A reply scored close to the pass mark is judged twice more and the majority kept; ones that differ are marked unsure.
+                  </span>
+                </span>
+              </label>
               <label className="flex items-center gap-2 text-sm">
                 <Checkbox checked={trackCost} onCheckedChange={(on) => setTrackCost(on === true)} />
                 Track estimated LLM cost for this run

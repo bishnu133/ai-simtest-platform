@@ -258,6 +258,8 @@ export interface CreateSimulationRequest {
   bot_model?: string | null;
   /** The saved bot this run uses */
   bot_id?: string | null;
+  /** Judge replies near the pass mark twice more and keep the majority (default on) */
+  recheck_borderline?: boolean;
   /** Your own personas, added to the drafted ones */
   extra_personas?: PersonaInput[];
   documentation: string;
@@ -443,6 +445,8 @@ export interface JudgedTurn {
   overall_label?: string;
   issues?: string[];
   judgments?: JudgeResult[];
+  /** A borderline reply judged more than once; the label is the majority. Not stable: unsure. */
+  recheck?: { labels: string[]; scores: number[]; stable: boolean } | null;
 }
 
 export interface ReportPersona {

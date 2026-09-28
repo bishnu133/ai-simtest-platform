@@ -2,6 +2,7 @@
 
 import { ArrowRight } from "lucide-react";
 import type { RiskId } from "@/lib/engine/risks";
+import { JudgeTrust } from "./judge-trust";
 import { RiskOverview } from "./risk-overview";
 import { Button } from "@/components/ui/button";
 import {
@@ -57,6 +58,8 @@ export function OverviewTab({
       <VerdictBanner verdict={verdict} />
 
       {onPickRisk && <RiskOverview conversations={report.judged_conversations ?? []} onPick={onPickRisk} />}
+
+      <JudgeTrust report={report} />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <StatTile
