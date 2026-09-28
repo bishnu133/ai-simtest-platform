@@ -1,10 +1,25 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowDownRight, ArrowRight, ArrowUpRight, Hand, Loader2, Plug, Plus, Sparkles } from "lucide-react";
+import { useSyncExternalStore } from "react";
+import { useQuery } from "@tanstack/react-query";
+import {
+  ArrowDownRight,
+  ArrowRight,
+  ArrowUpRight,
+  Bot,
+  Check,
+  Hand,
+  KeyRound,
+  Loader2,
+  Plug,
+  Plus,
+  Sparkles,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { RunsTable, useNow } from "@/components/app/runs-table";
 import { StatusBadge } from "@/components/app/status-badge";
+import { engine } from "@/lib/engine/client";
 import { pct, scoreTone } from "@/lib/engine/report";
 import { useRuns } from "@/lib/engine/queries";
 import { botHost, isActive, isCompleted, needsReview, relativeTime, stuckShare } from "@/lib/engine/runs";
@@ -168,40 +183,123 @@ function EngineDown() {
   );
 }
 
-function Welcome() {
+const HIDE_KEY = "simtest.gettingStartedHidden";
+const HIDE_EVENT = "simtest-getting-started";
+
+function readHidden(): boolean {
+  try {
+    return localStorage.getItem(HIDE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function subscribeHidden(onChange: () => void) {
+  window.addEventListener(HIDE_EVENT, onChange);
+  return () => window.removeEventListener(HIDE_EVENT, onChange);
+}
+
+function hide() {
+  try {
+    localStorage.setItem(HIDE_KEY, "1");
+  } catch {
+    /* hidden for this visit only */
+  }
+  window.dispatchEvent(new Event(HIDE_EVENT));
+}
+
+/** Three steps from nothing to a first report, each ticked off as it happens. */
+function GettingStarted({ hasCompletedRun }: { hasCompletedRun: boolean }) {
+  const hidden = useSyncExternalStore(subscribeHidden, readHidden, () => true);
+  const ai = useQuery({ queryKey: ["ai-settings"], queryFn: engine.getAISettings, retry: false });
+  const bots = useQuery({ queryKey: ["bots"], queryFn: engine.listBots, retry: false });
+  if (hidden || ai.isPending || bots.isPending) return null;
+
   const steps = [
-    { title: "Connect your bot", body: "Paste its chat endpoint and, if it needs one, an API key." },
-    { title: "Add its knowledge", body: "Upload the Markdown the bot answers from. AI drafts criteria, guardrails and personas." },
-    { title: "Review and run", body: "Approve or edit each proposal, then watch realistic customers talk to your bot." },
+    {
+      title: "Add an AI key",
+      body: "The models that play your customers and judge the replies need a provider key.",
+      done: !!ai.data && ai.data.problems.length === 0,
+      href: "/settings",
+      action: "Open Settings",
+      icon: KeyRound,
+    },
+    {
+      title: "Connect your bot",
+      body: "Tell us where your chatbot is, and check it answers.",
+      done: !!bots.data?.bots.some((b) => b.last_check?.ok),
+      href: "/bots",
+      action: "Connect a bot",
+      icon: Bot,
+    },
+    {
+      title: "Run your first test",
+      body: "Realistic customers talk to your bot, and every reply is judged.",
+      done: hasCompletedRun,
+      href: "/new",
+      action: "Start a test",
+      icon: Plus,
+    },
   ];
+  const done = steps.filter((s) => s.done).length;
+  if (done === steps.length) return null;
+  const next = steps.findIndex((s) => !s.done);
+
   return (
-    <section className="overflow-hidden rounded-xl border bg-card shadow-xs">
-      <div className="grid gap-6 p-6 md:grid-cols-[1fr_auto] md:items-center md:p-8">
+    <section className="overflow-hidden rounded-xl border bg-card shadow-xs" aria-labelledby="getting-started">
+      <div className="flex flex-wrap items-start justify-between gap-4 p-6 md:p-8">
         <div className="space-y-2">
           <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-primary">
             <Sparkles className="h-3.5 w-3.5" aria-hidden /> Get started
           </p>
-          <h2 className="text-2xl font-bold tracking-tight text-foreground">Test your AI assistant before your customers do</h2>
+          <h2 id="getting-started" className="text-2xl font-bold tracking-tight text-foreground">
+            Test your AI assistant before your customers do
+          </h2>
           <p className="max-w-2xl text-sm text-muted-foreground">
-            AI SimTest runs persona-driven conversations against your bot and judges every reply for quality, grounding, safety
-            and your own rules.
+            {done} of {steps.length} done. Three steps to your first report.
           </p>
+          <div className="h-1.5 w-56 overflow-hidden rounded-full bg-muted" aria-hidden>
+            <div
+              className="h-full rounded-full bg-primary transition-[width] duration-500"
+              style={{ width: `${(done / steps.length) * 100}%` }}
+            />
+          </div>
         </div>
-        <Button asChild size="lg">
-          <Link href="/new">
-            <Plus /> Start your first test
-          </Link>
+        <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={hide}>
+          Hide
         </Button>
       </div>
       <ol className="grid border-t bg-muted/30 md:grid-cols-3">
         {steps.map((s, i) => (
-          <li key={s.title} className="flex gap-3 border-b p-5 last:border-b-0 md:border-b-0 md:border-r md:last:border-r-0">
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
-              {i + 1}
+          <li
+            key={s.title}
+            className={`flex gap-3 border-b p-5 last:border-b-0 md:border-b-0 md:border-r md:last:border-r-0 ${
+              i === next ? "bg-card" : ""
+            }`}
+          >
+            <span
+              className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
+                s.done
+                  ? "bg-pass/15 text-pass"
+                  : i === next
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground"
+              }`}
+            >
+              {s.done ? <Check className="h-4 w-4" aria-label="Done" /> : i + 1}
             </span>
-            <span>
-              <span className="block text-sm font-medium text-foreground">{s.title}</span>
-              <span className="mt-0.5 block text-sm text-muted-foreground">{s.body}</span>
+            <span className="min-w-0 space-y-2">
+              <span className={`block text-sm font-medium ${s.done ? "text-muted-foreground line-through" : "text-foreground"}`}>
+                {s.title}
+              </span>
+              {!s.done && <span className="block text-sm text-muted-foreground">{s.body}</span>}
+              {!s.done && (
+                <Button asChild size="sm" variant={i === next ? "default" : "outline"}>
+                  <Link href={s.href}>
+                    <s.icon /> {s.action}
+                  </Link>
+                </Button>
+              )}
             </span>
           </li>
         ))}
@@ -252,7 +350,7 @@ export function HomeDashboard() {
 
       {isError && <EngineDown />}
 
-      {!isError && all.length === 0 && <Welcome />}
+      {!isError && <GettingStarted hasCompletedRun={completed.length > 0} />}
 
       <Attention runs={inProgress} now={now} />
 
@@ -372,7 +470,7 @@ export function HomeDashboard() {
       <section className="space-y-3">
         <div>
           <h2 className="text-base font-semibold text-foreground">Start a test</h2>
-          <p className="text-sm text-muted-foreground">Everything the engine can evaluate. More types arrive through Phase 2.</p>
+          <p className="text-sm text-muted-foreground">Pick what you want to find out about your bot.</p>
         </div>
         <TestTypeGrid />
       </section>
