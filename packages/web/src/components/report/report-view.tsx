@@ -16,6 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { engine } from "@/lib/engine/client";
 import { formatDuration, plural } from "@/lib/engine/report";
 import type { ReportResponse, SimulationStatus } from "@/lib/engine/types";
+import { download, failedReplies, toCsv, toJsonl } from "@/lib/engine/failure-export";
 import type { RiskId } from "@/lib/engine/risks";
 import { ConversationsTab } from "./conversations-tab";
 import { FailuresTab } from "./failures-tab";
@@ -68,6 +69,7 @@ export function ReportView({
   // Judge review writes its label files after the report was loaded
   const [reviewExports, setReviewExports] = useState<string[]>([]);
   const exportsList = [...new Set([...data.exports, ...reviewExports])];
+  const failed = useMemo(() => failedReplies(data), [data]);
   // A comparison's other bots: compare_<n>_<jsonl|csv>, named from the comparison
   const comparedBots = (data.analysis?.compare?.bots ?? []).filter((b) => !b.baseline).map((b) => b.name);
   const labelFor = (fmt: string) => {
@@ -116,7 +118,7 @@ export function ReportView({
               </a>
             </Button>
           )}
-          {downloads.length > 0 && (
+          {(downloads.length > 0 || failed.length > 0) && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline">
@@ -124,8 +126,30 @@ export function ReportView({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-64">
-                <DropdownMenuLabel>Download run artefacts</DropdownMenuLabel>
-                <DropdownMenuSeparator />
+                {failed.length > 0 && (
+                  <>
+                    <DropdownMenuLabel>Failed replies · {failed.length}</DropdownMenuLabel>
+                    <DropdownMenuItem
+                      onSelect={() => download(`simtest-${data.simulation_id}-failures.csv`, toCsv(failed), "text/csv;charset=utf-8")}
+                    >
+                      CSV, for a spreadsheet or bug tickets
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onSelect={() =>
+                        download(`simtest-${data.simulation_id}-failures.jsonl`, toJsonl(failed), "application/x-ndjson")
+                      }
+                    >
+                      JSONL, for a dataset
+                    </DropdownMenuItem>
+                    {downloads.length > 0 && <DropdownMenuSeparator />}
+                  </>
+                )}
+                {downloads.length > 0 && (
+                  <>
+                    <DropdownMenuLabel>Download run artefacts</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
                 {downloads.map((fmt) => (
                   <DropdownMenuItem key={fmt} asChild>
                     <a href={engine.exportUrl(data.simulation_id, fmt)} download>
