@@ -12,6 +12,8 @@ import type {
   SavedBot,
   SavedBotInput,
   SavedPersona,
+  TemplateSchedule,
+  TestTemplate,
   SeenPersona,
   CalibrationCheck,
   CalibrationOverview,
@@ -202,6 +204,30 @@ export const engine = {
 
   deletePersona: (id: string) =>
     request<{ deleted: string }>(`/personas/${encodeURIComponent(id)}`, { method: "DELETE" }),
+
+  /** The same test again: same bot, documents, personas and settings. Keys are never kept. */
+  rerun: (id: string, botApiKey?: string) =>
+    request<SimulationStatus>(`/simulations/${encodeURIComponent(id)}/rerun`, {
+      method: "POST",
+      body: JSON.stringify(botApiKey ? { bot_api_key: botApiKey } : {}),
+    }),
+
+  listTemplates: () => request<{ templates: TestTemplate[] }>("/templates"),
+
+  createTemplate: (name: string, fromRun: string) =>
+    request<TestTemplate>("/templates", { method: "POST", body: JSON.stringify({ name, from_run: fromRun }) }),
+
+  updateTemplate: (id: string, body: { name?: string; schedule?: TemplateSchedule }) =>
+    request<TestTemplate>(`/templates/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify(body) }),
+
+  deleteTemplate: (id: string) =>
+    request<{ deleted: string }>(`/templates/${encodeURIComponent(id)}`, { method: "DELETE" }),
+
+  runTemplate: (id: string, botApiKey?: string) =>
+    request<SimulationStatus>(`/templates/${encodeURIComponent(id)}/run`, {
+      method: "POST",
+      body: JSON.stringify(botApiKey ? { bot_api_key: botApiKey } : {}),
+    }),
 
   exportUrl: (id: string, format: string) =>
     `${BASE}/simulations/${encodeURIComponent(id)}/exports/${encodeURIComponent(format)}`,

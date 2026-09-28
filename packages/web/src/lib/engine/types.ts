@@ -328,6 +328,11 @@ export interface SimulationStatus {
   summary?: RunSummary | null;
   config: {
     bot_endpoint: string;
+    /** The saved bot this run used */
+    bot_id?: string | null;
+    /** The template it was started from */
+    template_id?: string | null;
+    extra_personas?: string[];
     rag?: { speed: string; use_llm: boolean; require_citations: boolean; tools: number } | null;
     ci?: (CITrigger & { gates: CIGates }) | null;
     mode?: RunMode;
@@ -1169,4 +1174,43 @@ export interface SeenPersona extends PersonaInput {
   last_run_id: string | null;
   last_run_at: string | null;
   bots: string[];
+}
+
+// ── Test templates and schedules ──
+
+export interface TemplateSchedule {
+  enabled: boolean;
+  cadence: "daily" | "weekdays" | "weekly";
+  /** HH:MM in the engine's local time */
+  time: string;
+  /** Monday = 0, for weekly */
+  weekday: number;
+}
+
+export interface TestTemplate {
+  id: string;
+  name: string;
+  source_run: string | null;
+  created_at: string;
+  updated_at: string;
+  schedule: TemplateSchedule;
+  schedule_text: string;
+  schedule_warning: string;
+  next_run_at: string | null;
+  last_run_id: string | null;
+  last_run_at: string | null;
+  last_problem: string;
+  bot_name: string | null;
+  key_from_env: boolean;
+  summary: {
+    bot_endpoint: string;
+    bot_id: string | null;
+    mode: string;
+    num_personas: number;
+    max_turns: number;
+    auto_approve: boolean;
+    kind: string;
+    documentation_filename: string | null;
+  };
+  last_run: { id: string; status: string; headline: RunSummary | null } | null;
 }
