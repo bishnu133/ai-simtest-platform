@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, ChevronDown, KeyRound, Loader2, Pencil, PlugZap, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Bot, ChevronDown, KeyRound, Loader2, Pencil, PlugZap, Plus, RefreshCw, Trash2, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -137,7 +137,11 @@ function BotCard({ bot, onEdit }: { bot: SavedBot; onEdit: () => void }) {
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="truncate font-semibold text-foreground">{bot.name}</h3>
+            <h3 className="truncate font-semibold text-foreground">
+              <Link href={`/bots/${encodeURIComponent(bot.id)}`} className="hover:text-primary hover:underline">
+                {bot.name}
+              </Link>
+            </h3>
             <HealthPill bot={bot} now={now} />
           </div>
           <p className="truncate font-mono text-xs text-muted-foreground" title={bot.bot_endpoint}>
@@ -183,6 +187,11 @@ function BotCard({ bot, onEdit }: { bot: SavedBot; onEdit: () => void }) {
         </Button>
         <Button size="sm" variant="outline" onClick={check} disabled={checking}>
           {checking ? <Loader2 className="animate-spin" /> : <RefreshCw />} Check
+        </Button>
+        <Button asChild size="sm" variant="ghost">
+          <Link href={`/bots/${encodeURIComponent(bot.id)}`}>
+            <TrendingUp /> Trend
+          </Link>
         </Button>
         <Button size="sm" variant="ghost" onClick={onEdit}>
           <Pencil /> Edit

@@ -1214,3 +1214,20 @@ export interface TestTemplate {
   };
   last_run: { id: string; status: string; headline: RunSummary | null } | null;
 }
+
+// ── Bot history (trend) ──
+
+export type RiskCounts = Record<"grounding" | "safety" | "quality" | "relevance" | "workflow" | "stuck", number>;
+
+export interface BotHistoryRun {
+  id: string;
+  name: string;
+  created_at: string;
+  template_id: string | null;
+  pass_rate: number | null;
+  average_score: number | null;
+  critical_failures: number;
+  conversations: number;
+  build: string;
+  risks: RiskCounts;
+}

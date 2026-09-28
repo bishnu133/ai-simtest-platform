@@ -9,6 +9,7 @@ import type {
   BotCheckRequest,
   BotCheckResult,
   PersonaInput,
+  BotHistoryRun,
   SavedBot,
   SavedBotInput,
   SavedPersona,
@@ -194,6 +195,9 @@ export const engine = {
 
   updateBot: (id: string, body: SavedBotInput) =>
     request<SavedBot>(`/bots/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify(body) }),
+
+  botHistory: (id: string) =>
+    request<{ bot: SavedBot; runs: BotHistoryRun[] }>(`/bots/${encodeURIComponent(id)}/history`),
 
   deleteBot: (id: string) => request<{ deleted: string }>(`/bots/${encodeURIComponent(id)}`, { method: "DELETE" }),
 
