@@ -16,6 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { engine } from "@/lib/engine/client";
 import { formatDuration, plural } from "@/lib/engine/report";
 import type { ReportResponse, SimulationStatus } from "@/lib/engine/types";
+import type { RiskId } from "@/lib/engine/risks";
 import { ConversationsTab } from "./conversations-tab";
 import { FailuresTab } from "./failures-tab";
 import { InputsTab } from "./inputs-tab";
@@ -56,6 +57,7 @@ export function ReportView({
   initialTab?: ReportTab;
 }) {
   const [tab, setTab] = useState<ReportTab>(initialTab);
+  const [risk, setRisk] = useState<RiskId | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const { report } = data;
   const summary = report.summary ?? {};
@@ -155,13 +157,21 @@ export function ReportView({
           <TabsTrigger value="inputs" className="px-4">Inputs</TabsTrigger>
         </TabsList>
         <TabsContent value="overview" className="mt-6">
-          <OverviewTab data={data} onGoToFailures={() => setTab("failures")} onOpenConversation={setOpenId} />
+          <OverviewTab
+            data={data}
+            onGoToFailures={() => setTab("failures")}
+            onOpenConversation={setOpenId}
+            onPickRisk={(r) => {
+              setRisk(r);
+              setTab("conversations");
+            }}
+          />
         </TabsContent>
         <TabsContent value="failures" className="mt-6">
           <FailuresTab data={data} onOpenConversation={setOpenId} />
         </TabsContent>
         <TabsContent value="conversations" className="mt-6">
-          <ConversationsTab data={data} onOpen={setOpenId} />
+          <ConversationsTab data={data} onOpen={setOpenId} risk={risk} onClearRisk={() => setRisk(null)} />
         </TabsContent>
         <TabsContent value="review" className="mt-6">
           <ReviewTab simulationId={data.simulation_id} onLabelled={(judge) =>
