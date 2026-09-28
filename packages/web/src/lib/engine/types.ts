@@ -1031,3 +1031,77 @@ export interface LiveProgress {
   personas: LivePersona[];
   feed: LiveExchange[];
 }
+
+// ── AI models and keys (Settings) ──
+
+export type AIRoleId = "simulator" | "setup" | "judge";
+export type AIProviderId = "openai" | "anthropic" | "google";
+
+export interface AIProvider {
+  id: AIProviderId;
+  label: string;
+  env_var: string;
+  /** Where the key in use comes from: saved here, the engine's .env, or nowhere */
+  source: "dashboard" | "env" | "none";
+  set: boolean;
+  /** Last four characters, or the ${ENV_VAR} it is read from; never the key */
+  hint: string;
+}
+
+export interface AIRole {
+  id: AIRoleId;
+  label: string;
+  about: string;
+  model: string;
+  source: "dashboard" | "env";
+  default: string;
+  provider: AIProviderId | "ollama" | "other";
+}
+
+export interface AISettingsView {
+  providers: AIProvider[];
+  roles: AIRole[];
+  ollama_base_url: string;
+  ollama_default: string;
+  suggestions: Record<string, string[]>;
+  problems: string[];
+}
+
+export interface AISettingsInput {
+  keys: Partial<Record<AIProviderId, string>>;
+  models: Partial<Record<AIRoleId, string>>;
+  ollama_base_url: string;
+  clear?: AIProviderId[];
+}
+
+export interface AIModelCheck {
+  role: AIRoleId;
+  model: string;
+  ok: boolean;
+  latency_ms?: number;
+  problem?: string;
+}
+
+// ── Bot health check ──
+
+export interface BotCheckRequest {
+  bot_endpoint: string;
+  bot_api_key?: string;
+  bot_format: string;
+  bot_response_path: string;
+  bot_model?: string | null;
+}
+
+export interface BotCheckResult {
+  ok: boolean;
+  latency_ms?: number;
+  sent?: string;
+  reply?: string;
+  slow?: boolean;
+  kind?: string;
+  problem?: string;
+  fix?: string;
+  status?: number;
+  body?: string;
+  suggestions?: string[];
+}

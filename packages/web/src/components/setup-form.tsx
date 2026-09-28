@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore, type DragEvent, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowRight,
   ChevronDown,
@@ -12,6 +13,7 @@ import {
   Loader2,
   Radar,
   Sparkles,
+  TriangleAlert,
   UploadCloud,
   X,
   Zap,
@@ -23,7 +25,16 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { readSuggestedQualityThreshold, subscribeCalibration } from "@/lib/calibration";
 import { engine, EngineError } from "@/lib/engine/client";
-import type { CompareOptions, EngineOptions, ReplayOptions, RequestFormat, RunMode, StressOptions } from "@/lib/engine/types";
+import type {
+  BotCheckResult,
+  CompareOptions,
+  EngineOptions,
+  ReplayOptions,
+  RequestFormat,
+  RunMode,
+  StressOptions,
+} from "@/lib/engine/types";
+import { BotCheckButton, BotCheckResultPanel } from "./setup/bot-check";
 import { ChoiceCards, ListEditor, Section, Segmented, lines } from "./setup/controls";
 import { CompareTargets, DEFAULT_COMPARE } from "./setup/compare-targets";
 import { DEFAULT_REPLAY, ReplaySource, countConversations } from "./setup/replay-source";
@@ -131,6 +142,8 @@ export function SetupForm({ embedded = false, focus = "simulation" }: { embedded
   const router = useRouter();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const botRef = useRef<HTMLDivElement>(null);
 
   // 1. How the test is built
   const [mode, setMode] = useState<RunMode>("partial");
@@ -184,6 +197,14 @@ export function SetupForm({ embedded = false, focus = "simulation" }: { embedded
   // Every bot in a comparison meets the same customers
   const bots = focus === "compare" ? 1 + compare.targets.length : 1;
   const replayCount = focus === "replay" ? countConversations(replay) : null;
+
+  // Bot health check: a result only counts for the connection it was made with
+  const [botCheck, setBotCheck] = useState<{ sig: string; result: BotCheckResult } | null>(null);
+  const [checkingBot, setCheckingBot] = useState(false);
+  const [startAnyway, setStartAnyway] = useState(false);
+
+  // Models without a key fail at the first step: say so before the form is filled in
+  const { data: ai } = useQuery({ queryKey: ["ai-settings"], queryFn: engine.getAISettings, retry: false });
 
   const [dragActive, setDragActive] = useState(false);
   const [error, setError] = useState("");
@@ -264,6 +285,43 @@ export function SetupForm({ embedded = false, focus = "simulation" }: { embedded
     if (id !== "custom") setParallel(String(p.parallel));
   };
 
+  const botRequest = () => ({
+    bot_endpoint: endpoint.trim(),
+    bot_api_key: apiKey.trim() || undefined,
+    bot_format: format,
+    bot_response_path: responsePath.trim() || "choices.0.message.content",
+    bot_model: botModel.trim() || null,
+  });
+  const botSig = JSON.stringify(botRequest());
+  const shownCheck = botCheck?.sig === botSig ? botCheck.result : null;
+  // A replay that doesn't re-send never talks to the bot
+  const talksToBot = focus !== "replay" || replay.resend;
+
+  const checkBot = async (): Promise<BotCheckResult | null> => {
+    const req = botRequest();
+    if (!/^https?:\/\/\S+$/.test(req.bot_endpoint)) {
+      setError("Enter your bot's endpoint: an http(s) URL.");
+      return null;
+    }
+    setCheckingBot(true);
+    setStartAnyway(false);
+    try {
+      const result = await engine.checkBot(req);
+      setBotCheck({ sig: JSON.stringify(req), result });
+      return result;
+    } catch (err) {
+      const result: BotCheckResult = {
+        ok: false,
+        problem: "The connection check couldn't run.",
+        fix: err instanceof EngineError ? err.message : "Is the engine running?",
+      };
+      setBotCheck({ sig: JSON.stringify(req), result });
+      return result;
+    } finally {
+      setCheckingBot(false);
+    }
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!/^https?:\/\/\S+$/.test(endpoint.trim())) {
@@ -312,6 +370,16 @@ export function SetupForm({ embedded = false, focus = "simulation" }: { embedded
 
     setError("");
     setSubmitting(true);
+    // One message to the bot before anything is spent on building the test
+    if (talksToBot && !startAnyway && !shownCheck?.ok) {
+      const result = await checkBot();
+      if (!result?.ok) {
+        setSubmitting(false);
+        setError("Your bot didn't pass the connection check. See “Your bot” above.");
+        botRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        return;
+      }
+    }
     const quality = qualityThreshold.trim() !== "" ? Number(qualityThreshold) : strict.quality;
     const reply = turnThreshold.trim() !== "" ? Number(turnThreshold) : strict.reply;
     try {
@@ -438,7 +506,23 @@ export function SetupForm({ embedded = false, focus = "simulation" }: { embedded
 
   return (
     <div className={embedded ? "max-w-4xl" : "mx-auto max-w-3xl py-8"}>
-      <form onSubmit={handleSubmit} noValidate className="rounded-xl border bg-card shadow-xs">
+      {!!ai?.problems.length && (
+        <div role="alert" className="mb-4 flex gap-3 rounded-xl border border-warn/40 bg-warn/10 p-4 text-sm">
+          <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-warn" aria-hidden />
+          <div className="space-y-1">
+            <p className="font-semibold text-foreground">Add an AI key before you start</p>
+            {ai.problems.map((p) => (
+              <p key={p} className="text-muted-foreground">
+                {p}
+              </p>
+            ))}
+            <Link href="/settings" className="inline-block font-semibold text-primary underline-offset-2 hover:underline">
+              Open Settings
+            </Link>
+          </div>
+        </div>
+      )}
+      <form ref={formRef} onSubmit={handleSubmit} noValidate className="rounded-xl border bg-card shadow-xs">
         <Section n={1} title="How should we build the test?" description="Where the test plan comes from, and whether you review it.">
           <div className="space-y-4">
             <ChoiceCards
@@ -511,19 +595,27 @@ export function SetupForm({ embedded = false, focus = "simulation" }: { embedded
 
         <Section n={focus === "compare" ? 2 : 2 + step} title="Your bot" description="Where to reach it. Only the endpoint is required.">
           <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2 md:col-span-2">
+            <div ref={botRef} className="space-y-2 md:col-span-2">
               <Label htmlFor="endpoint" className="text-sm font-semibold">
                 Bot Endpoint
               </Label>
-              <Input
-                id="endpoint"
-                type="url"
-                placeholder="https://your-bot.com/v1/chat/completions"
-                className="h-11"
-                value={endpoint}
-                onChange={(e) => setEndpoint(e.target.value)}
-                required
-              />
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Input
+                  id="endpoint"
+                  type="url"
+                  placeholder="https://your-bot.com/v1/chat/completions"
+                  className="h-11"
+                  value={endpoint}
+                  onChange={(e) => setEndpoint(e.target.value)}
+                  required
+                />
+                {talksToBot && (
+                  <BotCheckButton checking={checkingBot} disabled={!endpoint.trim()} onCheck={() => void checkBot()} />
+                )}
+              </div>
+              {talksToBot && shownCheck && (
+                <BotCheckResultPanel result={shownCheck} onUsePath={(p) => setResponsePath(p)} />
+              )}
               {focus === "replay" && (
                 <p className="text-xs text-muted-foreground">
                   The bot these conversations came from: runs of the same bot are compared over time.
@@ -943,12 +1035,26 @@ export function SetupForm({ embedded = false, focus = "simulation" }: { embedded
             {error && (
               <p role="alert" className="mt-1 text-sm font-medium text-destructive">
                 {error}
+                {talksToBot && shownCheck && !shownCheck.ok && (
+                  <button
+                    type="button"
+                    className="ml-2 font-semibold text-primary underline-offset-2 hover:underline"
+                    onClick={() => {
+                      setStartAnyway(true);
+                      setError("");
+                      // After the state lands, so the submit sees it
+                      setTimeout(() => formRef.current?.requestSubmit(), 0);
+                    }}
+                  >
+                    Start anyway
+                  </button>
+                )}
               </p>
             )}
           </div>
           <Button type="submit" size="lg" className="h-11 px-6" disabled={submitting}>
             {submitting ? <Loader2 className="h-5 w-5 animate-spin" /> : null}
-            Start test
+            {submitting && checkingBot ? "Checking your bot…" : "Start test"}
             {!submitting && <ArrowRight className="h-5 w-5" />}
           </Button>
         </div>

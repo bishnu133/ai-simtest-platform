@@ -3,6 +3,11 @@
  * Next.js proxy at /api/engine so the engine URL never reaches the client.
  */
 import type {
+  AIModelCheck,
+  AISettingsInput,
+  AISettingsView,
+  BotCheckRequest,
+  BotCheckResult,
   CalibrationCheck,
   CalibrationOverview,
   CIInfo,
@@ -164,6 +169,17 @@ export const engine = {
 
   testNotification: (channelId: string) =>
     request<NotificationTestResult>(`/notifications/test/${encodeURIComponent(channelId)}`, { method: "POST" }),
+
+  getAISettings: () => request<AISettingsView>("/ai-settings"),
+
+  saveAISettings: (body: AISettingsInput) =>
+    request<AISettingsView>("/ai-settings", { method: "PUT", body: JSON.stringify(body) }),
+
+  checkAIModels: () => request<{ results: AIModelCheck[] }>("/ai-settings/check", { method: "POST" }),
+
+  /** One message to the bot, sent as a run would send it. */
+  checkBot: (body: BotCheckRequest) =>
+    request<BotCheckResult>("/bot-check", { method: "POST", body: JSON.stringify(body) }),
 
   exportUrl: (id: string, format: string) =>
     `${BASE}/simulations/${encodeURIComponent(id)}/exports/${encodeURIComponent(format)}`,
