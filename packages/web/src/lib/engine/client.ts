@@ -3,6 +3,16 @@
  * Next.js proxy at /api/engine so the engine URL never reaches the client.
  */
 import type {
+  AIModelCheck,
+  AISettingsInput,
+  AISettingsView,
+  BotCheckRequest,
+  BotCheckResult,
+  PersonaInput,
+  SavedBot,
+  SavedBotInput,
+  SavedPersona,
+  SeenPersona,
   CalibrationCheck,
   CalibrationOverview,
   CIInfo,
@@ -164,6 +174,34 @@ export const engine = {
 
   testNotification: (channelId: string) =>
     request<NotificationTestResult>(`/notifications/test/${encodeURIComponent(channelId)}`, { method: "POST" }),
+
+  getAISettings: () => request<AISettingsView>("/ai-settings"),
+
+  saveAISettings: (body: AISettingsInput) =>
+    request<AISettingsView>("/ai-settings", { method: "PUT", body: JSON.stringify(body) }),
+
+  checkAIModels: () => request<{ results: AIModelCheck[] }>("/ai-settings/check", { method: "POST" }),
+
+  /** One message to the bot, sent as a run would send it. */
+  checkBot: (body: BotCheckRequest) =>
+    request<BotCheckResult>("/bot-check", { method: "POST", body: JSON.stringify(body) }),
+
+  listBots: () => request<{ bots: SavedBot[] }>("/bots"),
+
+  createBot: (body: SavedBotInput) => request<SavedBot>("/bots", { method: "POST", body: JSON.stringify(body) }),
+
+  updateBot: (id: string, body: SavedBotInput) =>
+    request<SavedBot>(`/bots/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify(body) }),
+
+  deleteBot: (id: string) => request<{ deleted: string }>(`/bots/${encodeURIComponent(id)}`, { method: "DELETE" }),
+
+  listPersonas: () => request<{ library: SavedPersona[]; seen: SeenPersona[] }>("/personas"),
+
+  savePersona: (body: PersonaInput & { from_run?: string | null }) =>
+    request<SavedPersona>("/personas", { method: "POST", body: JSON.stringify(body) }),
+
+  deletePersona: (id: string) =>
+    request<{ deleted: string }>(`/personas/${encodeURIComponent(id)}`, { method: "DELETE" }),
 
   exportUrl: (id: string, format: string) =>
     `${BASE}/simulations/${encodeURIComponent(id)}/exports/${encodeURIComponent(format)}`,

@@ -1,5 +1,6 @@
 "use client";
 
+import { LoadingBlocks } from "@/components/ui/skeleton";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -674,9 +675,7 @@ export function CalibrationPage() {
         </p>
       )}
       {isPending ? (
-        <div className="flex justify-center py-16">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" aria-label="Loading" />
-        </div>
+        <LoadingBlocks />
       ) : data && data.total_labels === 0 ? (
         <div className="space-y-3 rounded-xl border bg-card p-6 text-sm shadow-xs">
           <p className="flex items-center gap-2 font-semibold text-foreground">

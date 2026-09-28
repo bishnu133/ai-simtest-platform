@@ -9,6 +9,7 @@ import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { useEngineHealth, useRuns } from "@/lib/engine/queries";
 import { isActive, needsReview } from "@/lib/engine/runs";
 import { NAV, titleFor, type NavItem } from "@/lib/nav";
+import { CommandPalette, ThemeMenu } from "./command-palette";
 
 // Sidebar collapsed state, per browser. A convenience only: unreadable
 // storage just means the sidebar starts expanded.
@@ -202,9 +203,8 @@ export function AppShell({ children }: { children: ReactNode }) {
             <h1 className="truncate text-base font-semibold text-foreground">{titleFor(pathname)}</h1>
           </div>
           <div className="flex items-center gap-3">
-            <span className="hidden rounded-md bg-muted px-2 py-1 text-xs font-medium text-muted-foreground md:inline">
-              QA Automation Workspace
-            </span>
+            <CommandPalette />
+            <ThemeMenu />
             {!pathname.startsWith("/new") && (
               <Button asChild size="sm">
                 <Link href="/new">

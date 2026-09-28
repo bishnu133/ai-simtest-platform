@@ -26,6 +26,8 @@ Browser ──/api/engine/*──▶ Next.js route handler ──/wizard/*──
 | Context / Criteria / Guardrails / Test Plan / Personas | `GET /wizard/simulations/{id}/gate` → `POST .../gate/{key}/decision` |
 | Loader | polls `GET /wizard/simulations/{id}` every 1.5 s |
 | Setup evaluation options | `GET /wizard/options` (built-in workflows and policies) |
+| Setup: Test connection (and automatically on Start test) | `POST /wizard/bot-check`: one message to the bot, with the fix when it fails |
+| Settings: AI models and keys | `GET` / `PUT /wizard/ai-settings`, `POST /wizard/ai-settings/check` (keys are write-only: only their source and last four characters come back) |
 | Report | `GET /wizard/simulations/{id}/report` (report + `analysis` + approved `inputs`), downloads via `.../exports/{fmt}` |
 
 The report page has four tabs:

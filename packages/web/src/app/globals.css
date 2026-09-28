@@ -149,9 +149,9 @@
   --accent-foreground: 173 58% 85%;
   --accent-border: 173 58% 25%;
   
-  --destructive: 0 62.8% 30.6%;
+  --destructive: 0 72% 60%;
   --destructive-foreground: 210 40% 98%;
-  --destructive-border: 0 62.8% 20%;
+  --destructive-border: 0 72% 45%;
   
   --chart-1: 173 58% 39%;
   --chart-2: 210 40% 98%;
@@ -159,7 +159,7 @@
   --chart-4: 215 20% 65%;
   --chart-5: 222 47% 30%;
 
-  --sidebar: 222 47% 11%;
+  --sidebar: 222 47% 9%;
   --sidebar-foreground: 210 40% 98%;
   --sidebar-border: 217.2 32.6% 17.5%;
   --sidebar-primary: 173 58% 39%;
@@ -196,6 +196,12 @@
   --pass: 152 60% 36%;
   --warn: 32 95% 44%;
   --fail: 0 72% 51%;
+}
+/* Brighter on dark surfaces, so verdicts stay readable */
+.dark {
+  --pass: 152 55% 50%;
+  --warn: 38 92% 58%;
+  --fail: 0 85% 66%;
 }
 @theme inline {
   --color-pass: hsl(var(--pass));

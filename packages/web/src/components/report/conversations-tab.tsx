@@ -1,11 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ArrowUpDown, Search } from "lucide-react";
+import { ArrowUpDown, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { conversationVerdict, judgeLabel, pct, scoreTone } from "@/lib/engine/report";
+import { RISKS, hasRisk, isStuck, type RiskId } from "@/lib/engine/risks";
 import type { JudgedConversation, ReportResponse } from "@/lib/engine/types";
 
 export const VERDICT_STYLES = {
@@ -18,16 +19,25 @@ const VERDICT_LABELS = { pass: "Pass", warn: "Warning", fail: "Fail" } as const;
 
 type SortKey = "score" | "persona" | "turns" | "loops";
 
-// Same rule as the engine (conversation_loops.STUCK_AT)
-const STUCK_AT = 2;
-
 function failedJudges(jc: JudgedConversation): string[] {
   const names = new Set<string>();
   for (const jt of jc.judged_turns ?? []) for (const j of jt.judgments ?? []) if (j.passed === false && j.judge_name) names.add(j.judge_name);
   return [...names];
 }
 
-export function ConversationsTab({ data, onOpen }: { data: ReportResponse; onOpen: (id: string) => void }) {
+export function ConversationsTab({
+  data,
+  onOpen,
+  risk = null,
+  onClearRisk,
+}: {
+  data: ReportResponse;
+  onOpen: (id: string) => void;
+  /** Only conversations showing this risk (picked on the Overview) */
+  risk?: RiskId | null;
+  onClearRisk?: () => void;
+}) {
+  const riskInfo = RISKS.find((r) => r.id === risk) ?? null;
   const conversations = data.report.judged_conversations;
   const [query, setQuery] = useState("");
   const [verdict, setVerdict] = useState<"all" | "pass" | "warn" | "fail">("all");
@@ -49,7 +59,7 @@ export function ConversationsTab({ data, onOpen }: { data: ReportResponse; onOpe
         repeats: jc.bot_repeats ?? 0,
         reasks: jc.user_reasks ?? 0,
         loops: (jc.bot_repeats ?? 0) + (jc.user_reasks ?? 0),
-        stuck: (jc.bot_repeats ?? 0) >= STUCK_AT || (jc.user_reasks ?? 0) >= STUCK_AT,
+        stuck: isStuck(jc),
         text: (jc.conversation?.turns ?? []).map((t) => t.message ?? "").join(" ").toLowerCase(),
       })),
     [conversations],
@@ -66,6 +76,7 @@ export function ConversationsTab({ data, onOpen }: { data: ReportResponse; onOpe
     .filter((r) => verdict === "all" || r.verdict === verdict)
     .filter((r) => personaType === "all" || r.personaType === personaType)
     .filter((r) => !stuckOnly || r.stuck)
+    .filter((r) => !riskInfo || hasRisk(r.jc, riskInfo))
     .filter((r) => !q || r.persona.toLowerCase().includes(q) || r.text.includes(q))
     .sort((a, b) => {
       const dir = sort.asc ? 1 : -1;
@@ -86,6 +97,17 @@ export function ConversationsTab({ data, onOpen }: { data: ReportResponse; onOpe
 
   return (
     <div className="space-y-4">
+      {riskInfo && (
+        <div className="flex items-center gap-2 text-sm">
+          <span className="text-muted-foreground">Showing conversations with</span>
+          <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 py-0.5 pl-2.5 pr-1 font-medium text-primary">
+            {riskInfo.label}
+            <button type="button" className="rounded-full p-0.5 hover:bg-primary/15" aria-label="Show all conversations" onClick={onClearRisk}>
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </span>
+        </div>
+      )}
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="relative w-full lg:max-w-sm">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />

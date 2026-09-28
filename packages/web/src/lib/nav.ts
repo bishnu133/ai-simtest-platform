@@ -1,4 +1,5 @@
 import {
+  Bot,
   BookOpenCheck,
   FileClock,
   GitCompareArrows,
@@ -35,6 +36,7 @@ export const NAV: NavGroup[] = [
       { label: "Home", href: "/", icon: LayoutDashboard, status: "active" },
       { label: "New test", href: "/new", icon: PlusCircle, status: "active" },
       { label: "Runs", href: "/runs", icon: ListChecks, status: "active", badge: "runs" },
+      { label: "Bots", href: "/bots", icon: Bot, status: "active" },
     ],
   },
   {
@@ -49,11 +51,11 @@ export const NAV: NavGroup[] = [
   {
     heading: "Configure",
     items: [
-      { label: "Personas", href: "/personas", icon: Users, status: "soon" },
+      { label: "Personas", href: "/personas", icon: Users, status: "active" },
       { label: "Policies & workflows", href: "/policies", icon: ScrollText, status: "soon" },
       { label: "Integrations", href: "/integrations", icon: Plug, status: "active" },
       { label: "CI pipelines", href: "/ci", icon: GitPullRequest, status: "active" },
-      { label: "Settings", href: "/settings", icon: Settings, status: "soon" },
+      { label: "Settings", href: "/settings", icon: Settings, status: "active" },
     ],
   },
 ];
@@ -68,6 +70,9 @@ export function titleFor(pathname: string): string {
   if (pathname.startsWith("/calibration")) return "Judge calibration";
   if (pathname.startsWith("/integrations")) return "Integrations";
   if (pathname === "/ci" || pathname.startsWith("/ci/")) return "CI pipelines";
+  if (pathname.startsWith("/settings")) return "Settings";
+  if (pathname.startsWith("/bots")) return "Bots";
+  if (pathname.startsWith("/personas")) return "Personas";
   if (pathname.startsWith("/simulations/")) return "Run";
   return "AI SimTest";
 }

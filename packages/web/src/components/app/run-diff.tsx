@@ -1,8 +1,9 @@
 "use client";
 
+import { LoadingBlocks } from "@/components/ui/skeleton";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowDownRight, ArrowLeftRight, ArrowUpRight, CheckCircle2, CircleMinus, Loader2, TriangleAlert, XCircle } from "lucide-react";
+import { ArrowDownRight, ArrowLeftRight, ArrowUpRight, CheckCircle2, CircleMinus, TriangleAlert, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DifferenceChart } from "@/components/report/compare-panel";
 import { EmptyNote, Panel } from "@/components/report/parts";
@@ -62,9 +63,7 @@ export function RunDiffView({ before, after }: { before: string; after: string }
   }
   if (isPending) {
     return (
-      <div className="flex justify-center py-24">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" aria-label="Loading" />
-      </div>
+      <LoadingBlocks />
     );
   }
   if (isError || !data) {

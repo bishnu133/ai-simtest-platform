@@ -256,6 +256,10 @@ export interface CreateSimulationRequest {
   bot_response_path: string;
   /** Sent as "model" in the request body */
   bot_model?: string | null;
+  /** The saved bot this run uses */
+  bot_id?: string | null;
+  /** Your own personas, added to the drafted ones */
+  extra_personas?: PersonaInput[];
   documentation: string;
   documentation_filename: string;
   num_personas: number;
@@ -1030,4 +1034,139 @@ export interface LiveProgress {
   labels: { PASS: number; WARNING: number; FAIL: number };
   personas: LivePersona[];
   feed: LiveExchange[];
+}
+
+// ── AI models and keys (Settings) ──
+
+export type AIRoleId = "simulator" | "setup" | "judge";
+export type AIProviderId = "openai" | "anthropic" | "google";
+
+export interface AIProvider {
+  id: AIProviderId;
+  label: string;
+  env_var: string;
+  /** Where the key in use comes from: saved here, the engine's .env, or nowhere */
+  source: "dashboard" | "env" | "none";
+  set: boolean;
+  /** Last four characters, or the ${ENV_VAR} it is read from; never the key */
+  hint: string;
+}
+
+export interface AIRole {
+  id: AIRoleId;
+  label: string;
+  about: string;
+  model: string;
+  source: "dashboard" | "env";
+  default: string;
+  provider: AIProviderId | "ollama" | "other";
+}
+
+export interface AISettingsView {
+  providers: AIProvider[];
+  roles: AIRole[];
+  ollama_base_url: string;
+  ollama_default: string;
+  suggestions: Record<string, string[]>;
+  problems: string[];
+}
+
+export interface AISettingsInput {
+  keys: Partial<Record<AIProviderId, string>>;
+  models: Partial<Record<AIRoleId, string>>;
+  ollama_base_url: string;
+  clear?: AIProviderId[];
+}
+
+export interface AIModelCheck {
+  role: AIRoleId;
+  model: string;
+  ok: boolean;
+  latency_ms?: number;
+  problem?: string;
+}
+
+// ── Bot health check ──
+
+export interface BotCheckRequest {
+  /** A saved bot: its key is read on the engine when none is typed */
+  bot_id?: string | null;
+  bot_endpoint: string;
+  bot_api_key?: string;
+  bot_format: string;
+  bot_response_path: string;
+  bot_model?: string | null;
+}
+
+export interface BotCheckResult {
+  ok: boolean;
+  latency_ms?: number;
+  sent?: string;
+  reply?: string;
+  slow?: boolean;
+  kind?: string;
+  problem?: string;
+  fix?: string;
+  status?: number;
+  body?: string;
+  suggestions?: string[];
+}
+
+// ── Saved bots ──
+
+export interface SavedBotInput {
+  name: string;
+  bot_endpoint: string;
+  bot_request_format: RequestFormat;
+  bot_response_path: string;
+  bot_model?: string | null;
+  bot_version_header?: string | null;
+  bot_info_url?: string | null;
+  /** Engine environment variable holding the bot's key; blank: typed on each test */
+  key_env: string;
+}
+
+export interface SavedBot extends SavedBotInput {
+  id: string;
+  host: string;
+  created_at: string;
+  updated_at: string;
+  last_used_at: string | null;
+  key_env_set: boolean;
+  last_check: { ok: boolean; at: string; latency_ms?: number; problem?: string; kind?: string } | null;
+  runs: number;
+  latest_run: { id: string; status: string; created_at: string; headline: RunSummary | null } | null;
+}
+
+// ── Personas ──
+
+export type PersonaKind = "standard" | "edge_case" | "adversarial";
+
+export interface PersonaInput {
+  name: string;
+  role: string;
+  goals: string[];
+  tone: string;
+  persona_type: PersonaKind;
+  technical_level?: "novice" | "intermediate" | "expert";
+  special_characteristics?: string[];
+  adversarial_tactics?: string[] | null;
+  topics?: string[];
+  system_prompt?: string;
+}
+
+export interface SavedPersona extends PersonaInput {
+  id: string;
+  created_at: string;
+  from_run: string | null;
+}
+
+export interface SeenPersona extends PersonaInput {
+  runs: number;
+  pass: number;
+  warning: number;
+  fail: number;
+  last_run_id: string | null;
+  last_run_at: string | null;
+  bots: string[];
 }

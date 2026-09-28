@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore, type DragEvent, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowRight,
   ChevronDown,
@@ -12,6 +13,7 @@ import {
   Loader2,
   Radar,
   Sparkles,
+  TriangleAlert,
   UploadCloud,
   X,
   Zap,
@@ -23,7 +25,16 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { readSuggestedQualityThreshold, subscribeCalibration } from "@/lib/calibration";
 import { engine, EngineError } from "@/lib/engine/client";
-import type { CompareOptions, EngineOptions, ReplayOptions, RequestFormat, RunMode, StressOptions } from "@/lib/engine/types";
+import type {
+  BotCheckResult,
+  CompareOptions,
+  EngineOptions,
+  ReplayOptions,
+  RequestFormat,
+  RunMode,
+  StressOptions,
+} from "@/lib/engine/types";
+import { BotCheckButton, BotCheckResultPanel } from "./setup/bot-check";
 import { ChoiceCards, ListEditor, Section, Segmented, lines } from "./setup/controls";
 import { CompareTargets, DEFAULT_COMPARE } from "./setup/compare-targets";
 import { DEFAULT_REPLAY, ReplaySource, countConversations } from "./setup/replay-source";
@@ -127,10 +138,24 @@ function Disclosure({ label, children }: { label: string; children: ReactNode })
 /** What the run concentrates on, on top of the persona simulation. */
 export type TestFocus = "simulation" | "scenarios" | "stress" | "replay" | "compare" | "rag";
 
-export function SetupForm({ embedded = false, focus = "simulation" }: { embedded?: boolean; focus?: TestFocus }) {
+export function SetupForm({
+  embedded = false,
+  focus = "simulation",
+  initialBotId,
+  initialPersonaId,
+}: {
+  embedded?: boolean;
+  focus?: TestFocus;
+  /** A saved bot to start from (/new?bot=...) */
+  initialBotId?: string;
+  /** A saved persona to include (/new?persona=...) */
+  initialPersonaId?: string;
+}) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const botRef = useRef<HTMLDivElement>(null);
 
   // 1. How the test is built
   const [mode, setMode] = useState<RunMode>("partial");
@@ -144,6 +169,27 @@ export function SetupForm({ embedded = false, focus = "simulation" }: { embedded
   const [responsePath, setResponsePath] = useState("choices.0.message.content");
   const [versionHeader, setVersionHeader] = useState("");
   const [botModel, setBotModel] = useState("");
+  // Saved bot connections: picking one fills the fields below
+  const { data: botsData } = useQuery({ queryKey: ["bots"], queryFn: engine.listBots, retry: false });
+  const savedBots = botsData?.bots ?? [];
+  const [botId, setBotId] = useState<string | null>(initialBotId ?? null);
+  const [appliedBot, setAppliedBot] = useState<string | null>(null);
+  const [savingBot, setSavingBot] = useState(false);
+  const [botSaved, setBotSaved] = useState("");
+  const pickedBot = savedBots.find((b) => b.id === botId) ?? null;
+  // Fill the connection once the chosen bot has loaded (state adjusted while rendering)
+  if (pickedBot && appliedBot !== pickedBot.id) {
+    setAppliedBot(pickedBot.id);
+    setEndpoint(pickedBot.bot_endpoint);
+    setFormat(pickedBot.bot_request_format);
+    setResponsePath(pickedBot.bot_response_path);
+    setBotModel(pickedBot.bot_model ?? "");
+    setVersionHeader(pickedBot.bot_version_header ?? "");
+    setInfoUrl(pickedBot.bot_info_url ?? "");
+    if (!name) setName(pickedBot.name);
+  }
+  // Still that bot only while its endpoint is the one being tested
+  const activeBot = pickedBot && endpoint.trim() === pickedBot.bot_endpoint ? pickedBot : null;
   // 3. What it knows
   const [contextFilename, setContextFilename] = useState("");
   const [contextContent, setContextContent] = useState("");
@@ -157,6 +203,11 @@ export function SetupForm({ embedded = false, focus = "simulation" }: { embedded
   const [minTurns, setMinTurns] = useState("3");
   const [maxTurns, setMaxTurns] = useState("10");
   const [parallel, setParallel] = useState("5");
+  // Your own personas, on top of the ones the AI drafts
+  const { data: personaData } = useQuery({ queryKey: ["personas"], queryFn: engine.listPersonas, retry: false });
+  const libraryPersonas = personaData?.library ?? [];
+  const [ownPersonaIds, setOwnPersonaIds] = useState<string[]>(initialPersonaId ? [initialPersonaId] : []);
+  const ownPersonas = libraryPersonas.filter((p) => ownPersonaIds.includes(p.id));
   // 5. What to check
   const [options, setOptions] = useState<EngineOptions | null>(null);
   const [workflowMode, setWorkflowMode] = useState<"auto" | "choose" | "off">("auto");
@@ -185,6 +236,14 @@ export function SetupForm({ embedded = false, focus = "simulation" }: { embedded
   const bots = focus === "compare" ? 1 + compare.targets.length : 1;
   const replayCount = focus === "replay" ? countConversations(replay) : null;
 
+  // Bot health check: a result only counts for the connection it was made with
+  const [botCheck, setBotCheck] = useState<{ sig: string; result: BotCheckResult } | null>(null);
+  const [checkingBot, setCheckingBot] = useState(false);
+  const [startAnyway, setStartAnyway] = useState(false);
+
+  // Models without a key fail at the first step: say so before the form is filled in
+  const { data: ai } = useQuery({ queryKey: ["ai-settings"], queryFn: engine.getAISettings, retry: false });
+
   const [dragActive, setDragActive] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -211,7 +270,9 @@ export function SetupForm({ embedded = false, focus = "simulation" }: { embedded
       ? { min: stress.turns, max: Math.max(run.maxTurns, stress.turns) }
       : { min: Math.max(run.minTurns, scenarioTurns), max: Math.max(run.maxTurns, scenarioTurns) };
   const strict = STRICTNESS.find((s) => s.id === strictness)!;
-  const single = estimate(run.personas, lengths.min, lengths.max, guardrailLlm, relevanceLlm);
+  const usesOwnPersonas = focus !== "replay" && ownPersonas.length > 0;
+  const customers = run.personas + (usesOwnPersonas ? ownPersonas.length : 0);
+  const single = estimate(customers, lengths.min, lengths.max, guardrailLlm, relevanceLlm);
   const cost = { replies: single.replies * bots, low: single.low * bots, high: single.high * bots };
   // Manual runs skip review of whatever the tester wrote themselves; a
   // replay has real customers, so no test plan or personas to review
@@ -264,6 +325,44 @@ export function SetupForm({ embedded = false, focus = "simulation" }: { embedded
     if (id !== "custom") setParallel(String(p.parallel));
   };
 
+  const botRequest = () => ({
+    bot_id: activeBot?.id ?? null,
+    bot_endpoint: endpoint.trim(),
+    bot_api_key: apiKey.trim() || undefined,
+    bot_format: format,
+    bot_response_path: responsePath.trim() || "choices.0.message.content",
+    bot_model: botModel.trim() || null,
+  });
+  const botSig = JSON.stringify(botRequest());
+  const shownCheck = botCheck?.sig === botSig ? botCheck.result : null;
+  // A replay that doesn't re-send never talks to the bot
+  const talksToBot = focus !== "replay" || replay.resend;
+
+  const checkBot = async (): Promise<BotCheckResult | null> => {
+    const req = botRequest();
+    if (!/^https?:\/\/\S+$/.test(req.bot_endpoint)) {
+      setError("Enter your bot's endpoint: an http(s) URL.");
+      return null;
+    }
+    setCheckingBot(true);
+    setStartAnyway(false);
+    try {
+      const result = await engine.checkBot(req);
+      setBotCheck({ sig: JSON.stringify(req), result });
+      return result;
+    } catch (err) {
+      const result: BotCheckResult = {
+        ok: false,
+        problem: "The connection check couldn't run.",
+        fix: err instanceof EngineError ? err.message : "Is the engine running?",
+      };
+      setBotCheck({ sig: JSON.stringify(req), result });
+      return result;
+    } finally {
+      setCheckingBot(false);
+    }
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!/^https?:\/\/\S+$/.test(endpoint.trim())) {
@@ -312,6 +411,16 @@ export function SetupForm({ embedded = false, focus = "simulation" }: { embedded
 
     setError("");
     setSubmitting(true);
+    // One message to the bot before anything is spent on building the test
+    if (talksToBot && !startAnyway && !shownCheck?.ok) {
+      const result = await checkBot();
+      if (!result?.ok) {
+        setSubmitting(false);
+        setError("Your bot didn't pass the connection check. See “Your bot” above.");
+        botRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        return;
+      }
+    }
     const quality = qualityThreshold.trim() !== "" ? Number(qualityThreshold) : strict.quality;
     const reply = turnThreshold.trim() !== "" ? Number(turnThreshold) : strict.reply;
     try {
@@ -356,6 +465,9 @@ export function SetupForm({ embedded = false, focus = "simulation" }: { embedded
         replay: focus === "replay" ? replay : null,
         rag: focus === "rag" || (focus === "replay" && replayRag) ? rag : null,
         bot_model: botModel.trim() || null,
+        bot_id: activeBot?.id ?? null,
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        extra_personas: usesOwnPersonas ? ownPersonas.map(({ id, created_at, from_run, ...p }) => p) : [],
         compare:
           focus === "compare"
             ? {
@@ -438,7 +550,23 @@ export function SetupForm({ embedded = false, focus = "simulation" }: { embedded
 
   return (
     <div className={embedded ? "max-w-4xl" : "mx-auto max-w-3xl py-8"}>
-      <form onSubmit={handleSubmit} noValidate className="rounded-xl border bg-card shadow-xs">
+      {!!ai?.problems.length && (
+        <div role="alert" className="mb-4 flex gap-3 rounded-xl border border-warn/40 bg-warn/10 p-4 text-sm">
+          <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-warn" aria-hidden />
+          <div className="space-y-1">
+            <p className="font-semibold text-foreground">Add an AI key before you start</p>
+            {ai.problems.map((p) => (
+              <p key={p} className="text-muted-foreground">
+                {p}
+              </p>
+            ))}
+            <Link href="/settings" className="inline-block font-semibold text-primary underline-offset-2 hover:underline">
+              Open Settings
+            </Link>
+          </div>
+        </div>
+      )}
+      <form ref={formRef} onSubmit={handleSubmit} noValidate className="rounded-xl border bg-card shadow-xs">
         <Section n={1} title="How should we build the test?" description="Where the test plan comes from, and whether you review it.">
           <div className="space-y-4">
             <ChoiceCards
@@ -511,19 +639,108 @@ export function SetupForm({ embedded = false, focus = "simulation" }: { embedded
 
         <Section n={focus === "compare" ? 2 : 2 + step} title="Your bot" description="Where to reach it. Only the endpoint is required.">
           <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2 md:col-span-2">
+            {savedBots.length > 0 && (
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="saved-bot" className="text-sm font-semibold">
+                  Saved bot
+                </Label>
+                <Select
+                  value={pickedBot ? pickedBot.id : "manual"}
+                  onValueChange={(v) => {
+                    setBotSaved("");
+                    if (v === "manual") {
+                      setBotId(null);
+                      setAppliedBot(null);
+                    } else {
+                      setBotId(v);
+                      setAppliedBot(null);
+                    }
+                  }}
+                >
+                  <SelectTrigger id="saved-bot" className="h-11 w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {savedBots.map((b) => (
+                      <SelectItem key={b.id} value={b.id}>
+                        <span className="flex items-center gap-2">
+                          <span
+                            className={`h-2 w-2 rounded-full ${b.last_check ? (b.last_check.ok ? "bg-pass" : "bg-fail") : "bg-muted-foreground/50"}`}
+                            aria-hidden
+                          />
+                          {b.name}
+                          <span className="text-xs text-muted-foreground">{b.host}</span>
+                        </span>
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="manual">Enter the details yourself</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <div ref={botRef} className="space-y-2 md:col-span-2">
               <Label htmlFor="endpoint" className="text-sm font-semibold">
                 Bot Endpoint
               </Label>
-              <Input
-                id="endpoint"
-                type="url"
-                placeholder="https://your-bot.com/v1/chat/completions"
-                className="h-11"
-                value={endpoint}
-                onChange={(e) => setEndpoint(e.target.value)}
-                required
-              />
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Input
+                  id="endpoint"
+                  type="url"
+                  placeholder="https://your-bot.com/v1/chat/completions"
+                  className="h-11"
+                  value={endpoint}
+                  onChange={(e) => setEndpoint(e.target.value)}
+                  required
+                />
+                {talksToBot && (
+                  <BotCheckButton checking={checkingBot} disabled={!endpoint.trim()} onCheck={() => void checkBot()} />
+                )}
+              </div>
+              {talksToBot && shownCheck && (
+                <BotCheckResultPanel result={shownCheck} onUsePath={(p) => setResponsePath(p)} />
+              )}
+              {shownCheck?.ok && !activeBot && (
+                <p className="text-xs text-muted-foreground">
+                  {botSaved ? (
+                    <span className="font-medium text-pass">{botSaved}</span>
+                  ) : (
+                    <>
+                      Testing this bot again?{" "}
+                      <button
+                        type="button"
+                        className="font-semibold text-primary underline-offset-2 hover:underline disabled:opacity-60"
+                        disabled={savingBot}
+                        onClick={async () => {
+                          setSavingBot(true);
+                          try {
+                            const saved = await engine.createBot({
+                              name: name.trim() || botHostName(endpoint),
+                              bot_endpoint: endpoint.trim(),
+                              bot_request_format: format,
+                              bot_response_path: responsePath.trim() || "choices.0.message.content",
+                              bot_model: botModel.trim() || null,
+                              bot_version_header: versionHeader.trim() || null,
+                              bot_info_url: infoUrl.trim() || null,
+                              key_env: "",
+                            });
+                            await queryClient.invalidateQueries({ queryKey: ["bots"] });
+                            setBotId(saved.id);
+                            setAppliedBot(saved.id);
+                            setBotSaved(`Saved as “${saved.name}” in Bots. Its key isn't saved.`);
+                          } catch (err) {
+                            setBotSaved(err instanceof EngineError ? err.message : "Could not save the bot.");
+                          } finally {
+                            setSavingBot(false);
+                          }
+                        }}
+                      >
+                        Save it to Bots
+                      </button>{" "}
+                      and pick it next time.
+                    </>
+                  )}
+                </p>
+              )}
               {focus === "replay" && (
                 <p className="text-xs text-muted-foreground">
                   The bot these conversations came from: runs of the same bot are compared over time.
@@ -540,7 +757,11 @@ export function SetupForm({ embedded = false, focus = "simulation" }: { embedded
                 type="password"
                 autoComplete="off"
                 className="h-10"
-                placeholder="Sent only to the engine, never stored"
+                placeholder={
+                  activeBot?.key_env
+                    ? `Read from ${activeBot.key_env} on the engine`
+                    : "Sent only to the engine, never stored"
+                }
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
               />
@@ -703,6 +924,46 @@ export function SetupForm({ embedded = false, focus = "simulation" }: { embedded
                   ? `Each conversation runs ${stress.turns} messages, as set in Memory stress; the size sets how many customers.`
                   : `The scenarios you picked need at least ${lengths.min} messages, so conversations run at least that long.`}
               </p>
+            )}
+            {libraryPersonas.length > 0 && (
+              <fieldset className="space-y-2">
+                <legend className="text-sm font-semibold text-foreground">
+                  Also include your personas <span className="font-normal text-muted-foreground">(optional)</span>
+                </legend>
+                <div className="flex flex-wrap gap-2">
+                  {libraryPersonas.map((p) => {
+                    const on = ownPersonaIds.includes(p.id);
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() => setOwnPersonaIds((ids) => (on ? ids.filter((x) => x !== p.id) : [...ids, p.id]))}
+                        className={`inline-flex items-center gap-2 rounded-full border py-1 pl-1 pr-3 text-sm transition-colors ${
+                          on ? "border-primary bg-primary/10 text-foreground" : "bg-card text-muted-foreground hover:border-primary/50"
+                        }`}
+                        title={p.goals[0]}
+                      >
+                        <span
+                          className={`flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold ${
+                            on ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                          }`}
+                          aria-hidden
+                        >
+                          {on ? "✓" : p.name.slice(0, 1).toUpperCase()}
+                        </span>
+                        {p.name}
+                      </button>
+                    );
+                  })}
+                </div>
+                {ownPersonas.length > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {ownPersonas.length === 1 ? "1 of your personas joins" : `${ownPersonas.length} of your personas join`} the{" "}
+                    {run.personas} the AI drafts.
+                  </p>
+                )}
+              </fieldset>
             )}
             {size === "custom" && (
               <div className="grid gap-4 rounded-lg border p-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -930,7 +1191,7 @@ export function SetupForm({ embedded = false, focus = "simulation" }: { embedded
             ) : (
               <>
                 <p className="font-medium text-foreground">
-                  {run.personas} customers{bots > 1 ? ` × ${bots} bots` : ""} ·{" "}
+                  {customers} customers{bots > 1 ? ` × ${bots} bots` : ""} ·{" "}
                   {focus === "stress" ? `${stress.turns} messages each` : `up to ${lengths.max} messages`}
                   {focus === "scenarios" && ` · ${chosenScenarios.length} scenario${chosenScenarios.length === 1 ? "" : "s"}`} · about{" "}
                   {cost.replies.toLocaleString()} bot replies
@@ -943,16 +1204,38 @@ export function SetupForm({ embedded = false, focus = "simulation" }: { embedded
             {error && (
               <p role="alert" className="mt-1 text-sm font-medium text-destructive">
                 {error}
+                {talksToBot && shownCheck && !shownCheck.ok && (
+                  <button
+                    type="button"
+                    className="ml-2 font-semibold text-primary underline-offset-2 hover:underline"
+                    onClick={() => {
+                      setStartAnyway(true);
+                      setError("");
+                      // After the state lands, so the submit sees it
+                      setTimeout(() => formRef.current?.requestSubmit(), 0);
+                    }}
+                  >
+                    Start anyway
+                  </button>
+                )}
               </p>
             )}
           </div>
           <Button type="submit" size="lg" className="h-11 px-6" disabled={submitting}>
             {submitting ? <Loader2 className="h-5 w-5 animate-spin" /> : null}
-            Start test
+            {submitting && checkingBot ? "Checking your bot…" : "Start test"}
             {!submitting && <ArrowRight className="h-5 w-5" />}
           </Button>
         </div>
       </form>
     </div>
   );
+}
+
+function botHostName(endpoint: string) {
+  try {
+    return new URL(endpoint.trim()).host;
+  } catch {
+    return "My bot";
+  }
 }
