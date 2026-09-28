@@ -1,5 +1,6 @@
 "use client";
 
+import { LoadingBlocks } from "@/components/ui/skeleton";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -256,9 +257,7 @@ export function CIPage() {
         </p>
       )}
       {isPending ? (
-        <div className="flex justify-center py-16">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" aria-label="Loading" />
-        </div>
+        <LoadingBlocks />
       ) : data ? (
         <>
           {data.token_required ? (

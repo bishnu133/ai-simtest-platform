@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
+import { toast } from "@/lib/toast";
 import { engine, EngineError } from "@/lib/engine/client";
 import { relativeTime } from "@/lib/engine/runs";
 import type { BotCheckResult, RequestFormat, SavedBot, SavedBotInput } from "@/lib/engine/types";
@@ -125,6 +126,7 @@ function BotCard({ bot, onEdit }: { bot: SavedBot; onEdit: () => void }) {
   const remove = async () => {
     await engine.deleteBot(bot.id);
     queryClient.invalidateQueries({ queryKey: ["bots"] });
+    toast(`Deleted ${bot.name}. Its runs are kept.`, "info");
   };
 
   return (
@@ -277,6 +279,7 @@ export function BotForm({ bot, onDone }: { bot: SavedBot | null; onDone: (saved?
     try {
       const saved = bot ? await engine.updateBot(bot.id, body) : await engine.createBot(body);
       await queryClient.invalidateQueries({ queryKey: ["bots"] });
+      toast(bot ? `Saved changes to ${saved.name}` : `${saved.name} is connected`);
       onDone(saved);
     } catch (e) {
       setError(e instanceof EngineError ? e.message : "Could not save the bot.");

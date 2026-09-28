@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { toast } from "@/lib/toast";
 import { engine } from "@/lib/engine/client";
 import { formatDuration, plural } from "@/lib/engine/report";
 import type { ReportResponse, SimulationStatus } from "@/lib/engine/types";
@@ -130,14 +131,18 @@ export function ReportView({
                   <>
                     <DropdownMenuLabel>Failed replies · {failed.length}</DropdownMenuLabel>
                     <DropdownMenuItem
-                      onSelect={() => download(`simtest-${data.simulation_id}-failures.csv`, toCsv(failed), "text/csv;charset=utf-8")}
+                      onSelect={() => {
+                        download(`simtest-${data.simulation_id}-failures.csv`, toCsv(failed), "text/csv;charset=utf-8");
+                        toast(`Downloaded ${failed.length} failed replies`);
+                      }}
                     >
                       CSV, for a spreadsheet or bug tickets
                     </DropdownMenuItem>
                     <DropdownMenuItem
-                      onSelect={() =>
-                        download(`simtest-${data.simulation_id}-failures.jsonl`, toJsonl(failed), "application/x-ndjson")
-                      }
+                      onSelect={() => {
+                        download(`simtest-${data.simulation_id}-failures.jsonl`, toJsonl(failed), "application/x-ndjson");
+                        toast(`Downloaded ${failed.length} failed replies`);
+                      }}
                     >
                       JSONL, for a dataset
                     </DropdownMenuItem>

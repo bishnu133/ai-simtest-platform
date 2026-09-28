@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
+import { toast } from "@/lib/toast";
 import { engine, EngineError } from "@/lib/engine/client";
 import type { PersonaInput, PersonaKind, SavedPersona, SeenPersona } from "@/lib/engine/types";
 import { Segmented } from "@/components/setup/controls";
@@ -112,6 +113,7 @@ export function PersonasPage() {
     try {
       await engine.savePersona({ ...toInput(s), from_run: s.last_run_id });
       await queryClient.invalidateQueries({ queryKey: ["personas"] });
+      toast(`${s.name} saved to your personas`);
     } catch (e) {
       setMessage(e instanceof EngineError ? e.message : "Could not save the persona.");
     } finally {
@@ -123,6 +125,7 @@ export function PersonasPage() {
     try {
       await engine.deletePersona(p.id);
       await queryClient.invalidateQueries({ queryKey: ["personas"] });
+      toast(`Deleted ${p.name}`, "info");
     } finally {
       setBusy(null);
     }
@@ -298,6 +301,7 @@ function PersonaForm({ onDone }: { onDone: () => void }) {
         adversarial_tactics: kind === "adversarial" ? lines(traits) : null,
       });
       await queryClient.invalidateQueries({ queryKey: ["personas"] });
+      toast(`${name.trim()} saved`);
       onDone();
     } catch (e) {
       setError(e instanceof EngineError ? e.message : "Could not save the persona.");

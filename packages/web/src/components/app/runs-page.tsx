@@ -1,8 +1,9 @@
 "use client";
 
+import { LoadingBlocks } from "@/components/ui/skeleton";
 import Link from "next/link";
 import { useState } from "react";
-import { GitCompareArrows, Loader2, Plus } from "lucide-react";
+import { GitCompareArrows, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useRuns } from "@/lib/engine/queries";
 import { RunsTable } from "./runs-table";
@@ -48,9 +49,7 @@ export function RunsPage() {
         </p>
       )}
       {isPending ? (
-        <div className="flex justify-center py-16">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" aria-label="Loading" />
-        </div>
+        <LoadingBlocks />
       ) : (
         <RunsTable runs={runs ?? []} selected={selected} onToggleSelect={toggle} />
       )}

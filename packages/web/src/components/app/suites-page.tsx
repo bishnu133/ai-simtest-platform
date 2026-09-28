@@ -1,9 +1,10 @@
 "use client";
 
+import { LoadingBlocks } from "@/components/ui/skeleton";
 import Link from "next/link";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { ListRestart, Loader2, Play, Trash2 } from "lucide-react";
+import { ListRestart, Play, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useSuites } from "@/components/setup/regression-form";
 import { SuiteVerdict } from "@/components/setup/suite-verdict";
@@ -133,9 +134,7 @@ export function SuitesPage() {
         </p>
       )}
       {isPending ? (
-        <div className="flex justify-center py-16">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" aria-label="Loading" />
-        </div>
+        <LoadingBlocks />
       ) : suites?.length ? (
         <ul className="space-y-4">
           {suites.map((s) => (

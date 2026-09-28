@@ -1,11 +1,13 @@
 "use client";
 
+import { LoadingBlocks } from "@/components/ui/skeleton";
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bot, CheckCircle2, Cpu, Gavel, KeyRound, Loader2, PlugZap, TriangleAlert, Users, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { toast } from "@/lib/toast";
 import { engine, EngineError } from "@/lib/engine/client";
 import type { AIModelCheck, AIProvider, AIProviderId, AIRole, AIRoleId, AISettingsView } from "@/lib/engine/types";
 
@@ -52,9 +54,7 @@ export function SettingsPage() {
         </p>
       )}
       {isPending ? (
-        <div className="flex justify-center py-16">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" aria-label="Loading" />
-        </div>
+        <LoadingBlocks />
       ) : data ? (
         // A fresh form for each version of the saved settings
         <AIForm
@@ -216,6 +216,7 @@ function AIForm({
       });
       // Remounts this form with the saved values, then checks them
       queryClient.setQueryData(["ai-settings"], fresh);
+      toast("Settings saved. Checking each model…", "info");
       onCheck();
     } catch (e) {
       setMessage(e instanceof EngineError ? e.message : "Could not save.");

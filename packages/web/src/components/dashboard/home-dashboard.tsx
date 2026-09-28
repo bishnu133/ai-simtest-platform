@@ -1,5 +1,6 @@
 "use client";
 
+import { LoadingBlocks } from "@/components/ui/skeleton";
 import Link from "next/link";
 import { useSyncExternalStore } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -314,8 +315,8 @@ export function HomeDashboard() {
 
   if (isPending) {
     return (
-      <div className="flex justify-center py-24">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" aria-label="Loading" />
+      <div className="mx-auto w-full max-w-7xl p-4 md:p-8">
+        <LoadingBlocks variant="dashboard" />
       </div>
     );
   }
