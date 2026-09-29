@@ -258,6 +258,8 @@ export interface CreateSimulationRequest {
   bot_model?: string | null;
   /** The saved bot this run uses */
   bot_id?: string | null;
+  /** Judge replies near the pass mark twice more and keep the majority (default on) */
+  recheck_borderline?: boolean;
   /** Your own personas, added to the drafted ones */
   extra_personas?: PersonaInput[];
   documentation: string;
@@ -328,6 +330,11 @@ export interface SimulationStatus {
   summary?: RunSummary | null;
   config: {
     bot_endpoint: string;
+    /** The saved bot this run used */
+    bot_id?: string | null;
+    /** The template it was started from */
+    template_id?: string | null;
+    extra_personas?: string[];
     rag?: { speed: string; use_llm: boolean; require_citations: boolean; tools: number } | null;
     ci?: (CITrigger & { gates: CIGates }) | null;
     mode?: RunMode;
@@ -438,6 +445,8 @@ export interface JudgedTurn {
   overall_label?: string;
   issues?: string[];
   judgments?: JudgeResult[];
+  /** A borderline reply judged more than once; the label is the majority. Not stable: unsure. */
+  recheck?: { labels: string[]; scores: number[]; stable: boolean } | null;
 }
 
 export interface ReportPersona {
@@ -1169,4 +1178,60 @@ export interface SeenPersona extends PersonaInput {
   last_run_id: string | null;
   last_run_at: string | null;
   bots: string[];
+}
+
+// ── Test templates and schedules ──
+
+export interface TemplateSchedule {
+  enabled: boolean;
+  cadence: "daily" | "weekdays" | "weekly";
+  /** HH:MM in the engine's local time */
+  time: string;
+  /** Monday = 0, for weekly */
+  weekday: number;
+}
+
+export interface TestTemplate {
+  id: string;
+  name: string;
+  source_run: string | null;
+  created_at: string;
+  updated_at: string;
+  schedule: TemplateSchedule;
+  schedule_text: string;
+  schedule_warning: string;
+  next_run_at: string | null;
+  last_run_id: string | null;
+  last_run_at: string | null;
+  last_problem: string;
+  bot_name: string | null;
+  key_from_env: boolean;
+  summary: {
+    bot_endpoint: string;
+    bot_id: string | null;
+    mode: string;
+    num_personas: number;
+    max_turns: number;
+    auto_approve: boolean;
+    kind: string;
+    documentation_filename: string | null;
+  };
+  last_run: { id: string; status: string; headline: RunSummary | null } | null;
+}
+
+// ── Bot history (trend) ──
+
+export type RiskCounts = Record<"grounding" | "safety" | "quality" | "relevance" | "workflow" | "stuck", number>;
+
+export interface BotHistoryRun {
+  id: string;
+  name: string;
+  created_at: string;
+  template_id: string | null;
+  pass_rate: number | null;
+  average_score: number | null;
+  critical_failures: number;
+  conversations: number;
+  build: string;
+  risks: RiskCounts;
 }

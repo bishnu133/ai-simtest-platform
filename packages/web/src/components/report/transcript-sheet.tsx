@@ -81,6 +81,14 @@ function BotReply({ turnId, judged, children }: { turnId: string; judged: Judged
             <ChevronDown className={`h-3 w-3 transition-transform ${open ? "rotate-180" : ""}`} aria-hidden />
             <span className="sr-only">{open ? "Hide" : "Show"} the judges&apos; reasoning</span>
           </button>
+          {judged.recheck && !judged.recheck.stable && (
+            <span
+              className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium text-warn ring-1 ring-warn/40"
+              title={`Close to the pass mark, so judged ${judged.recheck.labels.length} times: ${judged.recheck.labels.join(", ")}. The majority is shown.`}
+            >
+              Unsure
+            </span>
+          )}
         </div>
       )}
       {judged && !open && failed && !!judged.issues?.length && (

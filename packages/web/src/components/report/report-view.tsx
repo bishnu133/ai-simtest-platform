@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ChevronDown, Download, FileText, RotateCcw, TriangleAlert } from "lucide-react";
+import { ChevronDown, Download, FileText, Plus, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -24,6 +24,7 @@ import { FailuresTab } from "./failures-tab";
 import { InputsTab } from "./inputs-tab";
 import { OverviewTab } from "./overview-tab";
 import { ReviewTab } from "./review-tab";
+import { RunAgainButton } from "./run-again";
 import { SaveSuiteButton } from "./save-suite";
 import { TranscriptSheet } from "./transcript-sheet";
 
@@ -165,11 +166,12 @@ export function ReportView({
               </DropdownMenuContent>
             </DropdownMenu>
           )}
-          <Button asChild>
+          <Button asChild variant="outline">
             <Link href="/new">
-              <RotateCcw /> New test
+              <Plus /> New test
             </Link>
           </Button>
+          <RunAgainButton status={status} />
         </div>
       </header>
 

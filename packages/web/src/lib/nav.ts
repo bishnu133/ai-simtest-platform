@@ -1,5 +1,6 @@
 import {
   Bot,
+  CalendarClock,
   BookOpenCheck,
   FileClock,
   GitCompareArrows,
@@ -43,6 +44,7 @@ export const NAV: NavGroup[] = [
     heading: "Test library",
     items: [
       { label: "Regression suites", href: "/suites", icon: ListRestart, status: "active" },
+      { label: "Templates & schedules", href: "/templates", icon: CalendarClock, status: "active" },
       { label: "Model comparison", href: "/new?type=compare", icon: GitCompareArrows, status: "active" },
       { label: "Production replay", href: "/new?type=replay", icon: FileClock, status: "active" },
       { label: "Judge calibration", href: "/calibration", icon: BookOpenCheck, status: "active" },
@@ -73,6 +75,7 @@ export function titleFor(pathname: string): string {
   if (pathname.startsWith("/settings")) return "Settings";
   if (pathname.startsWith("/bots")) return "Bots";
   if (pathname.startsWith("/personas")) return "Personas";
+  if (pathname.startsWith("/templates")) return "Templates & schedules";
   if (pathname.startsWith("/simulations/")) return "Run";
   return "AI SimTest";
 }
