@@ -21,7 +21,8 @@ const DELETABLE_ROOTS = new Set(["suites", "bots", "personas", "templates", "lib
 const PUTTABLE_ROOTS = new Set(["notifications", "ai-settings", "bots", "templates", "library"]);
 
 // Headers from the engine response that are safe and useful to pass through.
-const PASSTHROUGH_HEADERS = ["content-type", "content-disposition", "content-length"];
+// cache-control and x-accel-buffering keep the live run stream (text/event-stream) unbuffered.
+const PASSTHROUGH_HEADERS = ["content-type", "content-disposition", "content-length", "cache-control", "x-accel-buffering"];
 
 async function proxy(request: NextRequest, ctx: RouteContext<"/api/engine/[...path]">) {
   const { path } = await ctx.params;
@@ -48,6 +49,8 @@ async function proxy(request: NextRequest, ctx: RouteContext<"/api/engine/[...pa
       headers,
       body: hasBody ? await request.text() : undefined,
       cache: "no-store",
+      // Closing the page ends the engine's side too (the live stream would otherwise run on)
+      signal: request.signal,
     });
   } catch {
     return Response.json(

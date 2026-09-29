@@ -3,13 +3,14 @@
 import { LoadingBlocks } from "@/components/ui/skeleton";
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, CheckCircle2, Cpu, Gavel, KeyRound, Loader2, PlugZap, TriangleAlert, Users, XCircle } from "lucide-react";
+import { Bot, CheckCircle2, Cpu, Gauge, Gavel, KeyRound, Loader2, PlugZap, Sparkles, TriangleAlert, Users, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/lib/toast";
 import { engine, EngineError } from "@/lib/engine/client";
-import type { AIModelCheck, AIProvider, AIProviderId, AIRole, AIRoleId, AISettingsView } from "@/lib/engine/types";
+import type { AIModelCheck, AIProvider, AIProviderId, AIRecommended, AIRole, AIRoleId, AISettingsView } from "@/lib/engine/types";
 
 const ROLE_ICONS: Record<AIRoleId, typeof Users> = { simulator: Users, setup: Bot, judge: Gavel };
 const PROVIDER_LABELS: Record<string, string> = {
@@ -147,6 +148,62 @@ function providerOf(model: string): string {
   return "other";
 }
 
+/** One click to a fast model for the customers and a strong one for setup and judging. */
+function Recommended({
+  options,
+  effective,
+  onUse,
+}: {
+  options: AIRecommended[];
+  /** The model each role would use, as the form stands */
+  effective: Record<AIRoleId, string>;
+  onUse: (models: Record<AIRoleId, string>) => void;
+}) {
+  const ready = options.filter((o) => o.ready);
+  const current = ready.find((o) => (Object.keys(o.models) as AIRoleId[]).every((r) => o.models[r] === effective[r]));
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b bg-primary/5 px-5 py-3">
+      <div className="flex min-w-0 flex-1 items-start gap-2 text-sm">
+        <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
+        <p className="text-foreground">
+          {current ? (
+            <>
+              <span className="font-medium">Using the recommended {current.label} setup.</span>{" "}
+              <span className="text-muted-foreground">A fast model plays the customers; a strong one writes and judges the test.</span>
+            </>
+          ) : ready.length ? (
+            <>
+              <span className="font-medium">Recommended:</span>{" "}
+              <span className="text-muted-foreground">
+                a fast model for the customers, who talk every turn, and a strong one for setup and judging. Faster runs,
+                same accuracy.
+              </span>
+            </>
+          ) : (
+            <span className="text-muted-foreground">Add an API key below to get a recommended set of models in one click.</span>
+          )}
+        </p>
+      </div>
+      {!current && (
+        <div className="flex flex-wrap gap-2">
+          {ready.map((o) => (
+            <Button
+              key={o.provider}
+              type="button"
+              size="sm"
+              variant="outline"
+              title={`Customers: ${o.models.simulator} · Test setup: ${o.models.setup} · Judges: ${o.models.judge}`}
+              onClick={() => onUse(o.models)}
+            >
+              Use {o.label} recommended
+            </Button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function KeySource({ p, clearing }: { p: AIProvider; clearing: boolean }) {
   if (clearing)
     return <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">Removed on save</span>;
@@ -190,6 +247,7 @@ function AIForm({
   const [keys, setKeys] = useState<Partial<Record<AIProviderId, string>>>({});
   const [clear, setClear] = useState<AIProviderId[]>([]);
   const [ollama, setOllama] = useState(data.ollama_base_url);
+  const [parallel, setParallel] = useState(data.parallel_calls);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -197,7 +255,9 @@ function AIForm({
     JSON.stringify(models) !== JSON.stringify(savedModels) ||
     Object.values(keys).some((k) => k?.trim()) ||
     clear.length > 0 ||
-    ollama.trim() !== data.ollama_base_url;
+    ollama.trim() !== data.ollama_base_url ||
+    parallel !== data.parallel_calls;
+  const effective = Object.fromEntries(data.roles.map((r) => [r.id, models[r.id].trim() || r.default])) as Record<AIRoleId, string>;
 
   // Which roles lean on each provider, as the form stands
   const usedBy = (pid: string) =>
@@ -212,6 +272,7 @@ function AIForm({
         models,
         keys: Object.fromEntries(Object.entries(keys).filter(([, v]) => v?.trim())),
         ollama_base_url: ollama.trim(),
+        parallel_calls: parallel,
         clear,
       });
       // Remounts this form with the saved values, then checks them
@@ -265,6 +326,15 @@ function AIForm({
             {checking ? <Loader2 className="animate-spin" /> : <PlugZap />} Test connection
           </Button>
         </div>
+        <Recommended
+          options={data.recommended}
+          effective={effective}
+          onUse={(m) => {
+            // A preset equal to the engine default is left blank, so it follows the .env
+            setModels(Object.fromEntries(data.roles.map((r) => [r.id, m[r.id] === r.default ? "" : m[r.id]])) as Record<AIRoleId, string>);
+            onEdit();
+          }}
+        />
         <ul className="divide-y">
           {data.roles.map((r) => (
             <RoleRow
@@ -279,6 +349,38 @@ function AIForm({
               listId={listId}
             />
           ))}
+          <li className="grid gap-3 p-5 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] md:items-start md:gap-6">
+            <div className="flex gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <Gauge className="h-4 w-4" aria-hidden />
+              </span>
+              <div className="min-w-0">
+                <Label htmlFor="parallel-calls" className="text-sm font-semibold text-foreground">
+                  AI requests at the same time
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Per model. Higher lets big tests finish sooner; lower it if your provider says you&apos;re sending too many
+                  requests.
+                </p>
+              </div>
+            </div>
+            <Select value={String(parallel)} onValueChange={(v) => setParallel(Number(v))}>
+              <SelectTrigger id="parallel-calls" className="h-10 w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="0">Engine default ({data.parallel_default})</SelectItem>
+                {data.parallel_choices
+                  .filter((n) => n !== data.parallel_default)
+                  .map((n) => (
+                    <SelectItem key={n} value={String(n)}>
+                      {n}
+                      {n >= 30 ? " — needs a higher-tier API account" : ""}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </li>
         </ul>
       </section>
 

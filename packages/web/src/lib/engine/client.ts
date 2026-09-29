@@ -106,6 +106,8 @@ export const engine = {
   listSimulations: () => request<{ simulations: SimulationStatus[] }>("/simulations"),
 
   getSimulation: (id: string) => request<SimulationStatus>(`/simulations/${encodeURIComponent(id)}`),
+  /** Server-sent events: the run's status each time it changes, until it ends */
+  simulationEventsUrl: (id: string) => `${BASE}/simulations/${encodeURIComponent(id)}/events`,
 
   getGate: (id: string) => request<PendingGate>(`/simulations/${encodeURIComponent(id)}/gate`),
 
@@ -219,7 +221,7 @@ export const engine = {
       body: JSON.stringify(botApiKey ? { bot_api_key: botApiKey } : {}),
     }),
 
-  listTemplates: () => request<{ templates: TestTemplate[] }>("/templates"),
+  listTemplates: () => request<{ templates: TestTemplate[]; engine_timezone: string }>("/templates"),
 
   createTemplate: (name: string, fromRun: string) =>
     request<TestTemplate>("/templates", { method: "POST", body: JSON.stringify({ name, from_run: fromRun }) }),

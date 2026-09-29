@@ -82,49 +82,85 @@ export function RunView({ id, detailed = false }: { id: string; detailed?: boole
   const [cancelling, setCancelling] = useState(false);
   const gateKeyRef = useRef<string | null>(null);
 
-  const refresh = useCallback(async () => {
-    try {
-      const next = await engine.getSimulation(id);
+  // Shows a status, fetching the gate when a new one is waiting
+  const apply = useCallback(
+    async (next: SimulationStatus) => {
       setStatus(next);
       setError(null);
-
       const pendingKey = next.pending_gate?.gate_key ?? null;
       if (pendingKey && pendingKey !== gateKeyRef.current) {
         gateKeyRef.current = pendingKey;
         try {
           setGate(await engine.getGate(id));
         } catch {
-          // Gate moved on between the two calls — pick it up on the next poll
+          // Gate moved on between the two calls — pick it up on the next update
           gateKeyRef.current = null;
         }
       } else if (!pendingKey) {
         gateKeyRef.current = null;
         setGate(null);
       }
+    },
+    [id],
+  );
+
+  const refresh = useCallback(async () => {
+    try {
+      const next = await engine.getSimulation(id);
+      await apply(next);
       return next;
     } catch (err) {
       setError(err instanceof EngineError ? err : new EngineError(0, "Unexpected error"));
       return null;
     }
-  }, [id]);
+  }, [id, apply]);
 
-  // Poll until the run reaches a terminal state
+  // Live: the engine pushes each change as it happens. If the stream can't be
+  // opened or drops (an old engine, a proxy that buffers), poll instead.
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
     let stopped = false;
-    const tick = async () => {
+    let source: EventSource | null = null;
+    let done = false;
+
+    const poll = async () => {
       const next = await refresh();
       if (stopped) return;
       if (!next || !TERMINAL_STATUSES.includes(next.status)) {
-        timer = setTimeout(tick, POLL_MS);
+        timer = setTimeout(poll, POLL_MS);
       }
     };
-    tick();
+
+    if (typeof EventSource === "undefined") {
+      poll();
+    } else {
+      source = new EventSource(engine.simulationEventsUrl(id));
+      let queue = Promise.resolve();
+      source.onmessage = (e) => {
+        let next: SimulationStatus;
+        try {
+          next = JSON.parse(e.data);
+        } catch {
+          return;
+        }
+        if (TERMINAL_STATUSES.includes(next.status)) {
+          done = true;
+          source?.close();
+        }
+        // In order, so a slow gate fetch can't show an older status over a newer one
+        queue = queue.then(() => (stopped ? undefined : apply(next)));
+      };
+      source.onerror = () => {
+        source?.close();
+        if (!stopped && !done) poll();
+      };
+    }
     return () => {
       stopped = true;
+      source?.close();
       clearTimeout(timer);
     };
-  }, [refresh]);
+  }, [id, apply, refresh]);
 
   // Fetch the report once complete
   useEffect(() => {

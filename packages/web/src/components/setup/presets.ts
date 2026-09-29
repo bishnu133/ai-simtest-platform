@@ -17,8 +17,8 @@ export interface SizePreset {
 
 export const SIZES: SizePreset[] = [
   { id: "quick", label: "Quick check", hint: "5 customers, short chats — a few minutes", personas: 5, minTurns: 2, maxTurns: 6, parallel: 5 },
-  { id: "standard", label: "Standard", hint: "20 customers, up to 10 messages each", personas: 20, minTurns: 3, maxTurns: 10, parallel: 5 },
-  { id: "thorough", label: "Thorough", hint: "100 customers, up to 15 messages — release sign-off", personas: 100, minTurns: 3, maxTurns: 15, parallel: 10 },
+  { id: "standard", label: "Standard", hint: "20 customers, up to 10 messages each", personas: 20, minTurns: 3, maxTurns: 10, parallel: 10 },
+  { id: "thorough", label: "Thorough", hint: "100 customers, up to 15 messages — release sign-off", personas: 100, minTurns: 3, maxTurns: 15, parallel: 20 },
   { id: "custom", label: "Custom", hint: "Choose the numbers yourself", personas: 20, minTurns: 3, maxTurns: 10, parallel: 5 },
 ];
 

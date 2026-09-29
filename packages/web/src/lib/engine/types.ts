@@ -1079,12 +1079,29 @@ export interface AISettingsView {
   ollama_default: string;
   suggestions: Record<string, string[]>;
   problems: string[];
+  /** Each provider's fast-customers / strong-judges trio */
+  recommended: AIRecommended[];
+  /** AI requests at the same time, per model; 0 = the .env value (parallel_default) */
+  parallel_calls: number;
+  parallel_default: number;
+  parallel_choices: number[];
+}
+
+export interface AIRecommended {
+  provider: AIProviderId;
+  label: string;
+  models: Record<AIRoleId, string>;
+  /** Its API key is set */
+  ready: boolean;
+  /** These are the models in use now */
+  in_use: boolean;
 }
 
 export interface AISettingsInput {
   keys: Partial<Record<AIProviderId, string>>;
   models: Partial<Record<AIRoleId, string>>;
   ollama_base_url: string;
+  parallel_calls: number;
   clear?: AIProviderId[];
 }
 
@@ -1186,10 +1203,12 @@ export interface SeenPersona extends PersonaInput {
 export interface TemplateSchedule {
   enabled: boolean;
   cadence: "daily" | "weekdays" | "weekly";
-  /** HH:MM in the engine's local time */
+  /** HH:MM in `timezone` */
   time: string;
   /** Monday = 0, for weekly */
   weekday: number;
+  /** IANA name such as Asia/Kolkata; "" = the engine's local time */
+  timezone: string;
 }
 
 export interface TestTemplate {
