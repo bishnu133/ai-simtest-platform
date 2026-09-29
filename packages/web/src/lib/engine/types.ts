@@ -289,8 +289,9 @@ export interface CreateSimulationRequest {
 }
 
 export interface EngineOptions {
-  workflows: { id: string; name: string; domain: string }[];
-  policies: { id: string; name: string; description: string }[];
+  /** Built-ins, then your own ("custom:<slug>", source "custom") from Policies & workflows */
+  workflows: { id: string; name: string; domain: string; source?: "builtin" | "custom" }[];
+  policies: { id: string; name: string; description: string; source?: "builtin" | "custom" }[];
   request_formats: string[];
   /** Engines before Phase 2 · Step 3 do not send these */
   scenarios?: ScenarioTemplate[];
@@ -1234,4 +1235,27 @@ export interface BotHistoryRun {
   conversations: number;
   build: string;
   risks: RiskCounts;
+}
+
+// ── Policies & workflows library ──
+
+export type LibraryKind = "policies" | "workflows";
+
+export interface LibraryItem {
+  id: string;
+  source: "builtin" | "custom";
+  name: string;
+  description: string;
+  summary: { rules?: number; critical?: number; steps?: number; hard_rules?: number; area: string };
+  /** The parsed YAML: policy rules / controls, or workflow steps, hard rules, success conditions */
+  definition: Record<string, unknown>;
+  yaml: string;
+}
+
+export interface LibraryCheck {
+  ok: boolean;
+  problem?: string;
+  warnings: string[];
+  name?: string;
+  summary?: LibraryItem["summary"];
 }

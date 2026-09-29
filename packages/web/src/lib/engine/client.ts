@@ -10,6 +10,9 @@ import type {
   BotCheckResult,
   PersonaInput,
   BotHistoryRun,
+  LibraryCheck,
+  LibraryItem,
+  LibraryKind,
   SavedBot,
   SavedBotInput,
   SavedPersona,
@@ -232,6 +235,20 @@ export const engine = {
       method: "POST",
       body: JSON.stringify(botApiKey ? { bot_api_key: botApiKey } : {}),
     }),
+
+  listLibrary: (kind: LibraryKind) => request<{ items: LibraryItem[]; starter: string }>(`/library/${kind}`),
+
+  checkLibraryItem: (kind: LibraryKind, yaml: string) =>
+    request<LibraryCheck>(`/library/${kind}/check`, { method: "POST", body: JSON.stringify({ yaml }) }),
+
+  saveLibraryItem: (kind: LibraryKind, yaml: string, replaceId?: string) =>
+    request<LibraryItem & { warnings: string[] }>(
+      replaceId ? `/library/${kind}/${encodeURIComponent(replaceId)}` : `/library/${kind}`,
+      { method: replaceId ? "PUT" : "POST", body: JSON.stringify({ yaml }) },
+    ),
+
+  deleteLibraryItem: (kind: LibraryKind, id: string) =>
+    request<{ deleted: string }>(`/library/${kind}/${encodeURIComponent(id)}`, { method: "DELETE" }),
 
   exportUrl: (id: string, format: string) =>
     `${BASE}/simulations/${encodeURIComponent(id)}/exports/${encodeURIComponent(format)}`,

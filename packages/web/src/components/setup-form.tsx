@@ -143,6 +143,8 @@ export function SetupForm({
   focus = "simulation",
   initialBotId,
   initialPersonaId,
+  initialPolicy,
+  initialWorkflow,
 }: {
   embedded?: boolean;
   focus?: TestFocus;
@@ -150,6 +152,9 @@ export function SetupForm({
   initialBotId?: string;
   /** A saved persona to include (/new?persona=...) */
   initialPersonaId?: string;
+  /** From Policies & workflows: "Use in a test" */
+  initialPolicy?: string;
+  initialWorkflow?: string;
 }) {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -210,9 +215,9 @@ export function SetupForm({
   const ownPersonas = libraryPersonas.filter((p) => ownPersonaIds.includes(p.id));
   // 5. What to check
   const [options, setOptions] = useState<EngineOptions | null>(null);
-  const [workflowMode, setWorkflowMode] = useState<"auto" | "choose" | "off">("auto");
-  const [workflows, setWorkflows] = useState<string[]>([]);
-  const [policy, setPolicy] = useState("");
+  const [workflowMode, setWorkflowMode] = useState<"auto" | "choose" | "off">(initialWorkflow ? "choose" : "auto");
+  const [workflows, setWorkflows] = useState<string[]>(initialWorkflow ? [initialWorkflow] : []);
+  const [policy, setPolicy] = useState(initialPolicy ?? "");
   const [guardrailLlm, setGuardrailLlm] = useState(false);
   const [relevanceLlm, setRelevanceLlm] = useState(false);
   const [trackCost, setTrackCost] = useState(true);
@@ -1010,7 +1015,7 @@ export function SetupForm({
                           onCheckedChange={(on) => setWorkflows((cur) => (on ? [...cur, w.id] : cur.filter((x) => x !== w.id)))}
                         />
                         {w.name}
-                        <span className="text-xs text-muted-foreground">{w.domain}</span>
+                        <span className="text-xs text-muted-foreground">{w.source === "custom" ? "yours" : w.domain}</span>
                       </label>
                     ))
                   ) : (
@@ -1034,9 +1039,15 @@ export function SetupForm({
                 {options?.policies.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}
+                    {p.source === "custom" ? " (yours)" : ""}
                   </option>
                 ))}
               </select>
+              <p className="text-xs text-muted-foreground">
+                <Link href="/policies" className="font-medium text-primary hover:underline">
+                  See or add policies and workflows
+                </Link>
+              </p>
             </div>
             <div className="grid gap-3 md:grid-cols-2">
               <Toggle
