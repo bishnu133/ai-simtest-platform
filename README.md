@@ -1,8 +1,10 @@
 # AI SimTest Platform
 
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
 **Test your AI chatbot the way real customers use it, from the browser.**
 
-AI SimTest Platform is the web dashboard for the open-source
+AI SimTest Platform is the open-source web dashboard for the
 [AI SimTest engine](https://github.com/bishnu133/ai-simtest). It works like this:
 
 1. Point it at your bot and (optionally) its documentation.
@@ -108,5 +110,4 @@ policies, workflows and judge improvements help everyone.
 
 ## License
 
-- **Engine** ([ai-simtest](https://github.com/bishnu133/ai-simtest), and `packages/engine/`): MIT License (open source)
-- **Platform** (everything else): Proprietary
+MIT License, like the [engine](https://github.com/bishnu133/ai-simtest). See [LICENSE](LICENSE).

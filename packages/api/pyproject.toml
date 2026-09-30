@@ -3,6 +3,7 @@ name = "ai-simtest-api"
 version = "0.5.0"
 description = "AI SimTest SaaS Control Plane API — S2 Week 5 (Asset Registry + Hybrid Storage)"
 requires-python = ">=3.11"
+license = { text = "MIT" }
 authors = [
     { name = "Bishnu Prasad Panda" },
 ]

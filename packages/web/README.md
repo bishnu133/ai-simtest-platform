@@ -120,3 +120,7 @@ pnpm lint && pnpm typecheck && pnpm build
 - The engine holds live runs in one process: run one engine per dashboard.
 - `/api/*` (other than `/api/engine/*`) is a second server-side proxy to the platform API
   (`packages/api`, `API_INTERNAL_URL`). No dashboard page depends on it yet.
+
+## License
+
+MIT. See [LICENSE](../../LICENSE).
