@@ -91,12 +91,14 @@ ai-simtest-platform/
 ├── packages/
 │   ├── web/        # The dashboard: Next.js 16, React 19, Tailwind v4 (start here)
 │   ├── api/        # Platform API (FastAPI + PostgreSQL): tenancy, audit, asset registry; not needed to run the dashboard
-│   └── engine/     # An older snapshot of the engine; use github.com/bishnu133/ai-simtest instead
+│   └── engine/     # Engine snapshot the platform API uses for run comparisons; the dashboard uses github.com/bishnu133/ai-simtest
 ├── infra/          # Docker files for the platform API
 └── docs/           # Design notes
 ```
 
 ## Checks
+
+GitHub Actions runs the dashboard checks on every pull request that touches `packages/web`.
 
 ```bash
 cd packages/web && pnpm lint && pnpm typecheck && pnpm build     # dashboard
