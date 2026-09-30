@@ -82,11 +82,15 @@ export function TestLauncher({
   initialSuite,
   initialBot,
   initialPersona,
+  initialPolicy,
+  initialWorkflow,
 }: {
   initialType?: string;
   initialSuite?: string;
   initialBot?: string;
   initialPersona?: string;
+  initialPolicy?: string;
+  initialWorkflow?: string;
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState(() => testType(initialType).id);
@@ -170,7 +174,15 @@ export function TestLauncher({
         ) : type.id === "calibration" ? (
           <CalibrationIntro />
         ) : type.available ? (
-          <SetupForm key={type.id} embedded focus={isFocus(type.id) ? type.id : "simulation"} initialBotId={initialBot} initialPersonaId={initialPersona} />
+          <SetupForm
+            key={type.id}
+            embedded
+            focus={isFocus(type.id) ? type.id : "simulation"}
+            initialBotId={initialBot}
+            initialPersonaId={initialPersona}
+            initialPolicy={initialPolicy}
+            initialWorkflow={initialWorkflow}
+          />
         ) : (
           <ComingSoon type={type} />
         )}

@@ -289,8 +289,9 @@ export interface CreateSimulationRequest {
 }
 
 export interface EngineOptions {
-  workflows: { id: string; name: string; domain: string }[];
-  policies: { id: string; name: string; description: string }[];
+  /** Built-ins, then your own ("custom:<slug>", source "custom") from Policies & workflows */
+  workflows: { id: string; name: string; domain: string; source?: "builtin" | "custom" }[];
+  policies: { id: string; name: string; description: string; source?: "builtin" | "custom" }[];
   request_formats: string[];
   /** Engines before Phase 2 · Step 3 do not send these */
   scenarios?: ScenarioTemplate[];
@@ -1078,12 +1079,29 @@ export interface AISettingsView {
   ollama_default: string;
   suggestions: Record<string, string[]>;
   problems: string[];
+  /** Each provider's fast-customers / strong-judges trio */
+  recommended: AIRecommended[];
+  /** AI requests at the same time, per model; 0 = the .env value (parallel_default) */
+  parallel_calls: number;
+  parallel_default: number;
+  parallel_choices: number[];
+}
+
+export interface AIRecommended {
+  provider: AIProviderId;
+  label: string;
+  models: Record<AIRoleId, string>;
+  /** Its API key is set */
+  ready: boolean;
+  /** These are the models in use now */
+  in_use: boolean;
 }
 
 export interface AISettingsInput {
   keys: Partial<Record<AIProviderId, string>>;
   models: Partial<Record<AIRoleId, string>>;
   ollama_base_url: string;
+  parallel_calls: number;
   clear?: AIProviderId[];
 }
 
@@ -1185,10 +1203,12 @@ export interface SeenPersona extends PersonaInput {
 export interface TemplateSchedule {
   enabled: boolean;
   cadence: "daily" | "weekdays" | "weekly";
-  /** HH:MM in the engine's local time */
+  /** HH:MM in `timezone` */
   time: string;
   /** Monday = 0, for weekly */
   weekday: number;
+  /** IANA name such as Asia/Kolkata; "" = the engine's local time */
+  timezone: string;
 }
 
 export interface TestTemplate {
@@ -1234,4 +1254,27 @@ export interface BotHistoryRun {
   conversations: number;
   build: string;
   risks: RiskCounts;
+}
+
+// ── Policies & workflows library ──
+
+export type LibraryKind = "policies" | "workflows";
+
+export interface LibraryItem {
+  id: string;
+  source: "builtin" | "custom";
+  name: string;
+  description: string;
+  summary: { rules?: number; critical?: number; steps?: number; hard_rules?: number; area: string };
+  /** The parsed YAML: policy rules / controls, or workflow steps, hard rules, success conditions */
+  definition: Record<string, unknown>;
+  yaml: string;
+}
+
+export interface LibraryCheck {
+  ok: boolean;
+  problem?: string;
+  warnings: string[];
+  name?: string;
+  summary?: LibraryItem["summary"];
 }

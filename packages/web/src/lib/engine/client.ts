@@ -10,6 +10,9 @@ import type {
   BotCheckResult,
   PersonaInput,
   BotHistoryRun,
+  LibraryCheck,
+  LibraryItem,
+  LibraryKind,
   SavedBot,
   SavedBotInput,
   SavedPersona,
@@ -103,6 +106,8 @@ export const engine = {
   listSimulations: () => request<{ simulations: SimulationStatus[] }>("/simulations"),
 
   getSimulation: (id: string) => request<SimulationStatus>(`/simulations/${encodeURIComponent(id)}`),
+  /** Server-sent events: the run's status each time it changes, until it ends */
+  simulationEventsUrl: (id: string) => `${BASE}/simulations/${encodeURIComponent(id)}/events`,
 
   getGate: (id: string) => request<PendingGate>(`/simulations/${encodeURIComponent(id)}/gate`),
 
@@ -216,7 +221,7 @@ export const engine = {
       body: JSON.stringify(botApiKey ? { bot_api_key: botApiKey } : {}),
     }),
 
-  listTemplates: () => request<{ templates: TestTemplate[] }>("/templates"),
+  listTemplates: () => request<{ templates: TestTemplate[]; engine_timezone: string }>("/templates"),
 
   createTemplate: (name: string, fromRun: string) =>
     request<TestTemplate>("/templates", { method: "POST", body: JSON.stringify({ name, from_run: fromRun }) }),
@@ -232,6 +237,20 @@ export const engine = {
       method: "POST",
       body: JSON.stringify(botApiKey ? { bot_api_key: botApiKey } : {}),
     }),
+
+  listLibrary: (kind: LibraryKind) => request<{ items: LibraryItem[]; starter: string }>(`/library/${kind}`),
+
+  checkLibraryItem: (kind: LibraryKind, yaml: string) =>
+    request<LibraryCheck>(`/library/${kind}/check`, { method: "POST", body: JSON.stringify({ yaml }) }),
+
+  saveLibraryItem: (kind: LibraryKind, yaml: string, replaceId?: string) =>
+    request<LibraryItem & { warnings: string[] }>(
+      replaceId ? `/library/${kind}/${encodeURIComponent(replaceId)}` : `/library/${kind}`,
+      { method: replaceId ? "PUT" : "POST", body: JSON.stringify({ yaml }) },
+    ),
+
+  deleteLibraryItem: (kind: LibraryKind, id: string) =>
+    request<{ deleted: string }>(`/library/${kind}/${encodeURIComponent(id)}`, { method: "DELETE" }),
 
   exportUrl: (id: string, format: string) =>
     `${BASE}/simulations/${encodeURIComponent(id)}/exports/${encodeURIComponent(format)}`,

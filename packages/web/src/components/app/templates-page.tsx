@@ -79,7 +79,9 @@ export function TemplatesPage() {
       )}
       <Sheet open={scheduling !== null} onOpenChange={(o) => !o && setScheduling(null)}>
         <SheetContent side="right" className="flex w-full flex-col gap-0 overflow-y-auto p-0 sm:max-w-md">
-          {scheduling && <ScheduleForm key={scheduling.id} t={scheduling} onDone={() => setScheduling(null)} />}
+          {scheduling && (
+            <ScheduleForm key={scheduling.id} t={scheduling} engineZone={data?.engine_timezone ?? ""} onDone={() => setScheduling(null)} />
+          )}
         </SheetContent>
       </Sheet>
     </div>
@@ -208,9 +210,47 @@ function TemplateCard({ t, onSchedule }: { t: TestTemplate; onSchedule: () => vo
   );
 }
 
-function ScheduleForm({ t, onDone }: { t: TestTemplate; onDone: () => void }) {
+// Browsers still list some zones by their old names; show today's
+const RENAMED: Record<string, string> = {
+  "Asia/Calcutta": "Asia/Kolkata",
+  "Asia/Katmandu": "Asia/Kathmandu",
+  "Asia/Saigon": "Asia/Ho_Chi_Minh",
+  "Asia/Rangoon": "Asia/Yangon",
+  "Europe/Kiev": "Europe/Kyiv",
+  "America/Buenos_Aires": "America/Argentina/Buenos_Aires",
+  "Atlantic/Faeroe": "Atlantic/Faroe",
+};
+const current = (zone: string) => RENAMED[zone] ?? zone;
+
+function browserZone() {
+  try {
+    return current(Intl.DateTimeFormat().resolvedOptions().timeZone || "");
+  } catch {
+    return "";
+  }
+}
+
+function allZones(): string[] {
+  try {
+    return [...new Set(Intl.supportedValuesOf("timeZone").map(current))].sort();
+  } catch {
+    return [];
+  }
+}
+
+function ScheduleForm({ t, engineZone, onDone }: { t: TestTemplate; engineZone: string; onDone: () => void }) {
   const queryClient = useQueryClient();
-  const [s, setS] = useState<TemplateSchedule>({ ...t.schedule, enabled: true });
+  const mine = browserZone();
+  // A new schedule starts in the tester's own time zone; an existing one keeps what it has
+  const [s, setS] = useState<TemplateSchedule>({
+    ...t.schedule,
+    timezone: t.schedule.enabled ? (t.schedule.timezone ?? "") : t.schedule.timezone || mine,
+    enabled: true,
+  });
+  const [zones] = useState(() => {
+    const list = allZones();
+    return s.timezone && !list.includes(s.timezone) ? [s.timezone, ...list] : list;
+  });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -233,7 +273,7 @@ function ScheduleForm({ t, onDone }: { t: TestTemplate; onDone: () => void }) {
       <div className="border-b p-6">
         <SheetTitle className="text-lg font-semibold text-foreground">Schedule {t.name}</SheetTitle>
         <SheetDescription className="text-sm text-muted-foreground">
-          Runs hands-off at the engine&apos;s local time. Your notification channels hear when it finishes.
+          Runs hands-off at the time you pick. Your notification channels hear when it finishes.
         </SheetDescription>
       </div>
       <div className="flex-1 space-y-5 p-6">
@@ -274,6 +314,30 @@ function ScheduleForm({ t, onDone }: { t: TestTemplate; onDone: () => void }) {
             Time
           </Label>
           <Input id="sched-time" type="time" className="h-10 w-40" value={s.time} onChange={(e) => setS({ ...s, time: e.target.value })} />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="sched-zone" className="text-sm font-semibold">
+            Time zone
+          </Label>
+          <select
+            id="sched-zone"
+            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+            value={s.timezone}
+            onChange={(e) => setS({ ...s, timezone: e.target.value })}
+          >
+            {mine && <option value={mine}>Your time zone ({mine.replaceAll("_", " ")})</option>}
+            <option value="">Engine&apos;s local time{engineZone && ` (${engineZone.replaceAll("_", " ")})`}</option>
+            <optgroup label="All time zones">
+              {zones
+                .filter((z) => z !== mine)
+                .map((z) => (
+                  <option key={z} value={z}>
+                    {z.replaceAll("_", " ")}
+                  </option>
+                ))}
+            </optgroup>
+          </select>
+          <p className="text-xs text-muted-foreground">Daylight saving is handled: 09:00 stays 09:00 all year.</p>
         </div>
         {!t.key_from_env && (
           <p className="flex items-start gap-1.5 rounded-lg bg-warn/10 px-3 py-2 text-xs text-foreground">
